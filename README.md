@@ -8,7 +8,7 @@ This project provides a client that connects to an MCP server and uses Ollama to
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.10+
 - Ollama running locally
 - UV package manager
 
@@ -36,7 +36,7 @@ uv run client.py --mcp-server <path_to_mcp_server> --model <ollama_model>
 ### Example
 
 ```bash
-uv run client.py --mcp-server /path/to/weather.py --model llama3:latest
+uv run client.py --mcp-server server.py --model llama3.2:3b
 ```
 
 ## Features
@@ -44,5 +44,5 @@ uv run client.py --mcp-server /path/to/weather.py --model llama3:latest
 - Connect to any MCP-compliant server
 - Use different Ollama models for processing
 - Support for Python and JavaScript MCP servers
-- Interactive chat interface
+- Simple interactive chat interface
 - Tool usage capabilities
