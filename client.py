@@ -11,10 +11,6 @@ import ollama
 from ollama import ChatResponse
 from rich.console import Console
 from rich.markdown import Markdown
-
-load_dotenv()  # load environment variables from .env
-
-
 class MCPClient:
     def __init__(self, model: str = "qwen2.5:latest"):
         # Initialize session and client objects
