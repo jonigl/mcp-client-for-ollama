@@ -1199,14 +1199,14 @@ async def main():
     parser = argparse.ArgumentParser(description="MCP Client for Ollama")
     
     # Server configuration options
-    server_group = parser.add_argument_group("Server Options")
+    server_group = parser.add_argument_group("server options")
     server_group.add_argument("--mcp-server", help="Path to a server script (.py or .js)", action="append")
     server_group.add_argument("--servers-json", help="Path to a JSON file with server configurations")
     server_group.add_argument("--auto-discovery", action="store_true", default=False,
                             help=f"Auto-discover servers from Claude's config at {DEFAULT_CLAUDE_CONFIG} - Default option")
     # Model options
-    model_group = parser.add_argument_group("Model Options")
-    model_group.add_argument("--model", default="qwen2.5:7b", help="Ollama model to use. For example: 'qwen2.5:7b'")
+    model_group = parser.add_argument_group("model options")
+    model_group.add_argument("--model", default="qwen2.5:7b", help="Ollama model to use. Default: 'qwen2.5:7b'")
     
     # Add version flag
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
