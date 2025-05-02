@@ -29,18 +29,23 @@ from . import __version__
 from .config.manager import ConfigManager 
 from .utils.version import check_for_updates
 from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE, TOKEN_COUNT_PER_CHAR
+from .server.connector import ServerConnector
 
 class MCPClient:
     def __init__(self, model: str):
         # Initialize session and client objects
-        self.sessions = {}  # Dict to store multiple sessions
         self.exit_stack = AsyncExitStack()
         self.ollama = ollama.AsyncClient()
         self.model = model
-        self.available_tools: List[Tool] = []
-        self.enabled_tools: Dict[str, bool] = {}
         self.console = Console()
         self.config_manager = ConfigManager(self.console)
+        # Initialize the server connector
+        self.server_connector = ServerConnector(self.exit_stack, self.console)
+        # Store server and tool data
+        self.sessions = {}  # Dict to store multiple sessions
+        self.available_tools: List[Tool] = []
+        self.enabled_tools: Dict[str, bool] = {}
+        # UI components
         self.chat_history = []  # Add chat history list to store interactions
         self.prompt_session = PromptSession()
         self.prompt_style = Style.from_dict({
@@ -248,218 +253,26 @@ class MCPClient:
             self.console.print(Panel(columns, title="Available Tools", subtitle=subtitle, border_style="green"))
         else:
             self.console.print("[yellow]No tools available from the server[/yellow]")
-
-    @staticmethod
-    def load_server_config(config_path: str) -> Dict[str, Any]:
-        """Load and parse a server configuration file
-        
-        Args:
-            config_path: Path to the JSON config file
-            
-        Returns:
-            Dictionary containing server configurations
-        """
-        try:
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-            return config.get('mcpServers', {})
-        except Exception as e:
-            raise ValueError(f"Error loading server config from {config_path}: {str(e)}")
-
-    @staticmethod
-    def directory_exists(args_list):
-        """Check if a directory specified in args exists
-        
-        Looks for a --directory argument followed by a path and checks if that path exists
-        
-        Args:
-            args_list: List of command line arguments
-            
-        Returns:
-            tuple: (directory_exists, directory_path or None)
-        """
-        if not args_list:
-            return True, None
-            
-        for i, arg in enumerate(args_list):
-            if arg == "--directory" and i + 1 < len(args_list):
-                directory = args_list[i + 1]
-                if os.path.isfile(directory):
-                    # If it's a file (like a Python script), use its parent directory
-                    directory = os.path.dirname(directory)
-                    if os.path.exists(directory):
-                        # Modify the args list to use the directory instead of the file
-                        args_list[i+1] = directory
-                        return True, directory
-                    
-                if not os.path.exists(directory):
-                    return False, directory
-        
-        return True, None
-
-    async def connect_to_servers(self, server_paths=None, config_path=None):
-        """Connect to one or more MCP servers
+    
+    async def connect_to_servers(self, server_paths=None, config_path=None, auto_discovery=False):
+        """Connect to one or more MCP servers using the ServerConnector
         
         Args:
             server_paths: List of paths to server scripts (.py or .js)
             config_path: Path to JSON config file with server configurations
+            auto_discovery: Whether to automatically discover servers
         """
-        all_servers = []
+        # Connect to servers using the server connector
+        sessions, available_tools, enabled_tools = await self.server_connector.connect_to_servers(
+            server_paths=server_paths,
+            config_path=config_path,
+            auto_discovery=auto_discovery
+        )
         
-        # Add individual server paths if provided
-        if server_paths:
-            if isinstance(server_paths, str):
-                server_paths = [server_paths]
-                
-            for path in server_paths:
-                # Check if the path exists and is a file
-                if not os.path.exists(path):
-                    self.console.print(f"[yellow]Warning: Server path '{path}' does not exist. Skipping.[/yellow]")
-                    continue
-                    
-                if not os.path.isfile(path):
-                    self.console.print(f"[yellow]Warning: Server path '{path}' is not a file. Skipping.[/yellow]")
-                    continue
-                
-                all_servers.append({
-                    "type": "script",
-                    "path": path,
-                    "name": os.path.basename(path).split('.')[0]  # Use filename without extension as name
-                })
-        
-        # Add servers from config file if provided
-        if config_path:
-            try:
-                server_configs = self.load_server_config(config_path)
-                for name, config in server_configs.items():
-                    # Skip disabled servers
-                    if config.get('disabled', False):
-                        continue
-                    
-                    # Check if required directory exists
-                    args = config.get("args", [])
-                    
-                    # Fix common issues with directory arguments
-                    for i, arg in enumerate(args):
-                        if arg == "--directory" and i + 1 < len(args):
-                            dir_path = args[i+1]
-                            # If the path is a Python file, use its directory instead
-                            if os.path.isfile(dir_path) and (dir_path.endswith('.py') or dir_path.endswith('.js')):
-                                self.console.print(f"[yellow]Warning: Server '{name}' specifies a file as directory: {dir_path}[/yellow]")
-                                self.console.print(f"[green]Automatically fixing to use parent directory instead[/green]")
-                                args[i+1] = os.path.dirname(dir_path) or '.'
-                    
-                    # Now check if directory exists with possibly fixed paths
-                    dir_exists, missing_dir = self.directory_exists(args)
-                    
-                    if not dir_exists:
-                        self.console.print(f"[yellow]Warning: Server '{name}' specifies a directory that doesn't exist: {missing_dir}[/yellow]")
-                        self.console.print(f"[yellow]Skipping server '{name}'[/yellow]")
-                        continue
-                        
-                    all_servers.append({
-                        "type": "config",
-                        "name": name,
-                        "config": config
-                    })
-            except Exception as e:
-                self.console.print(f"[red]Error loading server configurations: {str(e)}[/red]")
-        
-        if not all_servers:
-            self.console.print("[yellow]No servers specified or all servers were invalid. The client will continue without tool support.[/yellow]")
-            return
-            
-        # Connect to each server
-        for server in all_servers:
-            server_name = server["name"]
-            self.console.print(f"[cyan]Connecting to server: {server_name}[/cyan]")
-            
-            try:
-                if server["type"] == "script":
-                    # Handle direct script path
-                    path = server["path"]
-                    is_python = path.endswith('.py')
-                    is_js = path.endswith('.js')
-                    
-                    if not (is_python or is_js):
-                        self.console.print(f"[yellow]Warning: Server script {path} must be a .py or .js file. Skipping.[/yellow]")
-                        continue
-                        
-                    command = "python" if is_python else "node"
-                    server_params = StdioServerParameters(
-                        command=command,
-                        args=[path],
-                        env=None
-                    )
-                else:
-                    # Handle config-based server
-                    server_config = server["config"]
-                    command = server_config.get("command")
-                    
-                    # Validate the command exists in PATH
-                    if not shutil.which(command):
-                        self.console.print(f"[yellow]Warning: Command '{command}' for server '{server_name}' not found in PATH. Skipping.[/yellow]")
-                        continue
-                        
-                    args = server_config.get("args", [])
-                    env = server_config.get("env")
-                    
-                    server_params = StdioServerParameters(
-                        command=command,
-                        args=args,
-                        env=env
-                    )
-                
-                # Connect to this server
-                stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
-                stdio, write = stdio_transport
-                session = await self.exit_stack.enter_async_context(ClientSession(stdio, write))
-                await session.initialize()
-                
-                # Store the session
-                self.sessions[server_name] = {
-                    "session": session,
-                    "tools": []
-                }
-                
-                # Get tools from this server
-                response = await session.list_tools()
-                
-                # Store and merge tools, prepending server name to avoid conflicts
-                server_tools = []
-                for tool in response.tools:
-                    # Create a qualified name for the tool that includes the server
-                    qualified_name = f"{server_name}.{tool.name}"
-                    # Clone the tool but update the name
-                    tool_copy = Tool(
-                        name=qualified_name,
-                        description=f"[{server_name}] {tool.description}" if hasattr(tool, 'description') else f"Tool from {server_name}",
-                        inputSchema=tool.inputSchema,
-                        outputSchema=tool.outputSchema if hasattr(tool, 'outputSchema') else None
-                    )
-                    server_tools.append(tool_copy)
-                    self.enabled_tools[qualified_name] = True
-                
-                self.sessions[server_name]["tools"] = server_tools
-                self.available_tools.extend(server_tools)
-                
-                self.console.print(f"[green]Successfully connected to {server_name} with {len(server_tools)} tools[/green]")
-                
-            except FileNotFoundError as e:
-                self.console.print(f"[red]Error connecting to {server_name}: File not found - {str(e)}[/red]")
-            except PermissionError:
-                self.console.print(f"[red]Error connecting to {server_name}: Permission denied[/red]")
-            except Exception as e:
-                self.console.print(f"[red]Error connecting to {server_name}: {str(e)}[/red]")
-        
-        if not self.sessions:
-            self.console.print("[bold red]Warning: Could not connect to any MCP servers![/bold red]")
-            if config_path:
-                self.console.print(f"[yellow]Check if paths in {config_path} exist and are accessible[/yellow]")
-
-    async def connect_to_server(self, server_script_path: str):
-        """Connect to a single MCP server (legacy support)"""
-        await self.connect_to_servers([server_script_path])
+        # Store the results
+        self.sessions = sessions
+        self.available_tools = available_tools
+        self.enabled_tools = enabled_tools
 
     def select_tools(self):
         """Let the user select which tools to enable using interactive prompts with server-based grouping"""
@@ -596,15 +409,19 @@ class MCPClient:
                 return
             
             if selection in ['a', 'all']:
-                for tool in self.available_tools:
-                    self.enabled_tools[tool.name] = True
+                # Use the server connector to enable all tools
+                self.server_connector.enable_all_tools()
+                # Update our local copy
+                self.enabled_tools = self.server_connector.get_enabled_tools()
                 self.clear_console()
                 result_message = "[green]All tools enabled![/green]"                
                 continue
             
             if selection in ['n', 'none']:
-                for tool in self.available_tools:
-                    self.enabled_tools[tool.name] = False
+                # Use the server connector to disable all tools
+                self.server_connector.disable_all_tools()
+                # Update our local copy
+                self.enabled_tools = self.server_connector.get_enabled_tools()
                 self.clear_console()
                 result_message = "[yellow]All tools disabled![/yellow]"                
                 continue
@@ -629,6 +446,8 @@ class MCPClient:
                     new_state = not all_enabled
                     for tool in server_tools:
                         self.enabled_tools[tool.name] = new_state
+                        # Also update in the server connector
+                        self.server_connector.set_tool_status(tool.name, new_state)
                     
                     self.clear_console()
                     status = "enabled" if new_state else "disabled"
@@ -669,7 +488,10 @@ class MCPClient:
                 for idx in selections:
                     if idx in index_to_tool:
                         tool = index_to_tool[idx]
-                        self.enabled_tools[tool.name] = not self.enabled_tools[tool.name]
+                        new_state = not self.enabled_tools[tool.name]
+                        self.enabled_tools[tool.name] = new_state
+                        # Also update in the server connector
+                        self.server_connector.set_tool_status(tool.name, new_state)
                         valid_toggle = True
                         toggled_tools_count += 1
                     else:
@@ -1057,6 +879,8 @@ class MCPClient:
             for tool_name, enabled in loaded_tools.items():
                 if tool_name in available_tool_names:
                     self.enabled_tools[tool_name] = enabled
+                    # Also update in the server connector
+                    self.server_connector.set_tool_status(tool_name, enabled)
                     
         # Load context settings if specified
         if "contextSettings" in config_data and "retainContext" in config_data["contextSettings"]:
@@ -1069,9 +893,10 @@ class MCPClient:
         # Use the ConfigManager to get the default configuration
         config_data = self.config_manager.reset_configuration()
         
-        # Enable all tools
-        for tool in self.available_tools:
-            self.enabled_tools[tool.name] = True
+        # Enable all tools in the server connector
+        self.server_connector.enable_all_tools()
+        # Update our local copy
+        self.enabled_tools = self.server_connector.get_enabled_tools()
             
         # Reset context settings from the default configuration
         if "contextSettings" in config_data and "retainContext" in config_data["contextSettings"]:
@@ -1123,22 +948,35 @@ async def main():
         ))
         return
 
-    # Determine which server config to use
+    # Handle server configuration options - only use one source to prevent duplicates
     config_path = None
-    if args.auto_discovery:
-        if os.path.exists(DEFAULT_CLAUDE_CONFIG):
-            config_path = DEFAULT_CLAUDE_CONFIG
-        else:
-            console.print(f"[yellow]Warning: Claude config not found at {DEFAULT_CLAUDE_CONFIG}[/yellow]")
-    elif args.servers_json:
+    auto_discovery = False
+    
+    if args.servers_json:
+        # If --servers-json is provided, use that and disable auto-discovery
         if os.path.exists(args.servers_json):
             config_path = args.servers_json
         else:
             console.print(f"[bold red]Error: Specified JSON config file not found: {args.servers_json}[/bold red]")
             return
+    elif args.auto_discovery:
+        # If --auto-discovery is provided, use that and set config_path to None
+        auto_discovery = True
+        if os.path.exists(DEFAULT_CLAUDE_CONFIG):
+            console.print(f"[cyan]Auto-discovering servers from Claude's config at {DEFAULT_CLAUDE_CONFIG}[/cyan]")
+        else:
+            console.print(f"[yellow]Warning: Claude config not found at {DEFAULT_CLAUDE_CONFIG}[/yellow]")
+    else:
+        # If neither is provided, check if DEFAULT_CLAUDE_CONFIG exists and use auto_discovery
+        if not args.mcp_server:
+            if os.path.exists(DEFAULT_CLAUDE_CONFIG):
+                console.print(f"[cyan]Auto-discovering servers from Claude's config at {DEFAULT_CLAUDE_CONFIG}[/cyan]")
+                auto_discovery = True
+            else:
+                console.print(f"[yellow]Warning: No servers specified and Claude config not found.[/yellow]")
 
     # Validate that we have at least one server source
-    if not args.mcp_server and not config_path:
+    if not args.mcp_server and not config_path and not auto_discovery:
         parser.error("At least one of --mcp-server, --servers-json, or --auto-discovery must be provided")
 
     # Validate mcp-server paths exist
@@ -1148,7 +986,7 @@ async def main():
                 console.print(f"[bold red]Error: Server script not found: {server_path}[/bold red]")
                 return
     try:
-        await client.connect_to_servers(args.mcp_server, config_path)
+        await client.connect_to_servers(args.mcp_server, config_path, auto_discovery)
         await client.chat_loop()
     finally:
         await client.cleanup()
