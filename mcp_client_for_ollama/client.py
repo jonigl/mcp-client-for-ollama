@@ -31,6 +31,7 @@ from .utils.version import check_for_updates
 from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE, TOKEN_COUNT_PER_CHAR, DEFAULT_MODEL
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
+from .tools.manager import ToolManager
 
 class MCPClient:
     def __init__(self, model: str = DEFAULT_MODEL):
@@ -43,10 +44,10 @@ class MCPClient:
         self.server_connector = ServerConnector(self.exit_stack, self.console)
         # Initialize the model manager
         self.model_manager = ModelManager(console=self.console, default_model=model)
+        # Initialize the tool manager with server connector reference
+        self.tool_manager = ToolManager(console=self.console, server_connector=self.server_connector)
         # Store server and tool data
         self.sessions = {}  # Dict to store multiple sessions
-        self.available_tools: List[Tool] = []
-        self.enabled_tools: Dict[str, bool] = {}
         # UI components
         self.chat_history = []  # Add chat history list to store interactions
         self.prompt_session = PromptSession()
@@ -85,24 +86,7 @@ class MCPClient:
 
     def display_available_tools(self):
         """Display available tools with their enabled/disabled status"""
-        
-        # Create a list of styled tool names
-        tool_texts = []
-        enabled_count = 0
-        for tool in self.available_tools:
-            is_enabled = self.enabled_tools.get(tool.name, True)
-            if is_enabled:
-                enabled_count += 1
-            status = "[green]✓[/green]" if is_enabled else "[red]✗[/red]"
-            tool_texts.append(f"{status} {tool.name}")
-        
-        # Display tools in columns for better readability
-        if tool_texts:
-            columns = Columns(tool_texts, equal=True, expand=True)
-            subtitle = f"{enabled_count}/{len(self.available_tools)} tools enabled"
-            self.console.print(Panel(columns, title="Available Tools", subtitle=subtitle, border_style="green"))
-        else:
-            self.console.print("[yellow]No tools available from the server[/yellow]")
+        self.tool_manager.display_available_tools()
     
     async def connect_to_servers(self, server_paths=None, config_path=None, auto_discovery=False):
         """Connect to one or more MCP servers using the ServerConnector
@@ -121,245 +105,24 @@ class MCPClient:
         
         # Store the results
         self.sessions = sessions
-        self.available_tools = available_tools
-        self.enabled_tools = enabled_tools
+        
+        # Set up the tool manager with the available tools and their enabled status
+        self.tool_manager.set_available_tools(available_tools)
+        self.tool_manager.set_enabled_tools(enabled_tools)
 
     def select_tools(self):
         """Let the user select which tools to enable using interactive prompts with server-based grouping"""
-        # Save the original tool states in case the user cancels
-        original_states = self.enabled_tools.copy()
-        show_descriptions = False  # Default: don't show descriptions
-        result_message = None      # Store the result message to display in a panel
-        result_style = "green"     # Style for the result message panel
+        # Save original states
+        original_states = self.tool_manager.get_enabled_tools().copy()
         
-        # Group tools by server
-        servers = {}
-        for tool in self.available_tools:
-            server_name, tool_name = tool.name.split('.', 1) if '.' in tool.name else ("default", tool.name)
-            if server_name not in servers:
-                servers[server_name] = []
-            servers[server_name].append(tool)
+        # Call the tool manager's select_tools method
+        self.tool_manager.select_tools(clear_console_func=self.clear_console)
         
-        # Sort servers by name for consistent display
-        sorted_servers = sorted(servers.items(), key=lambda x: x[0])
         
-        # Clear the console to create a "new console" effect
-        self.clear_console()
-        
-        while True:
-            # Show the tool selection interface
-            self.console.print(Panel(Text.from_markup("[bold]Tool Selection[/bold]", justify="center"), expand=True, border_style="green"))
-            
-            # Display the server groups and their tools
-            self.console.print(Panel("[bold]Available Servers and Tools[/bold]", border_style="blue", expand=False))
-            
-            tool_index = 1  # Global tool index across all servers
-            
-            # Create a mapping of display indices to tools for accurate selection
-            index_to_tool = {}
-            
-            # Calculate and display server stats and tools
-            for server_idx, (server_name, server_tools) in enumerate(sorted_servers):
-                enabled_count = sum(1 for tool in server_tools if self.enabled_tools[tool.name])
-                total_count = len(server_tools)
-                
-                # Determine server status indicator
-                if enabled_count == total_count:
-                    server_status = "[green]✓[/green]"  # All enabled
-                elif enabled_count == 0:
-                    server_status = "[red]✗[/red]"      # None enabled
-                else:
-                    server_status = "[yellow]~[/yellow]"  # Some enabled
-                
-                # Create panel title with server number, status and name
-                panel_title = f"[bold orange3]S{server_idx+1}. {server_status} {server_name}[/bold orange3]"
-                # Create panel subtitle with tools count
-                panel_subtitle = f"[green]{enabled_count}/{total_count} tools enabled[/green]"
-                
-                # Different display mode based on whether descriptions are shown
-                if show_descriptions:
-                    # Simple list format for when descriptions are shown
-                    tool_list = []
-                    for tool in server_tools:
-                        status = "[green]✓[/green]" if self.enabled_tools[tool.name] else "[red]✗[/red]"
-                        tool_text = f"[magenta]{tool_index}[/magenta]. {status} {tool.name}"
-                        
-                        # Add description if available
-                        if hasattr(tool, 'description') and tool.description:
-                            # Indent description for better readability
-                            description = f"\n      {tool.description}"
-                            tool_text += description
-                            
-                        tool_list.append(tool_text)
-                        
-                        # Store the mapping from display index to tool
-                        index_to_tool[tool_index] = tool
-                        tool_index += 1
-                    
-                    # Join tool texts with newlines
-                    panel_content = "\n".join(tool_list)
-                    self.console.print(Panel(panel_content, padding=(1,1), title=panel_title, 
-                                          subtitle=panel_subtitle, border_style="blue", 
-                                          title_align="left", subtitle_align="right"))
-                else:
-                    # Original columns format for when descriptions are hidden
-                    # Display individual tools for this server in columns
-                    server_tool_texts = []
-                    for tool in server_tools:
-                        status = "[green]✓[/green]" if self.enabled_tools[tool.name] else "[red]✗[/red]"
-                        tool_text = f"[magenta]{tool_index}[/magenta]. {status} {tool.name}"
-                        
-                        # Store the mapping from display index to tool
-                        index_to_tool[tool_index] = tool
-                        tool_index += 1
-                        
-                        server_tool_texts.append(tool_text)
-                    
-                    # Display tools in columns inside a panel if there are any
-                    if server_tool_texts:
-                        columns = Columns(server_tool_texts, padding=(0, 2), equal=False, expand=False)
-                        self.console.print(Panel(columns, padding=(1,1), title=panel_title, subtitle=panel_subtitle, border_style="blue", title_align="left", subtitle_align="right"))
-                
-                self.console.print()  # Add space between servers
-            
-            # Display the result message if there is one
-            if result_message:
-                self.console.print(Panel(result_message, border_style=result_style, expand=False))
-                result_message = None  # Clear the message after displaying it
-                                
-            # Display the command panel
-            self.console.print(Panel("[bold yellow]Commands[/bold yellow]", expand=False))
-            self.console.print(f"• Enter [bold magenta]numbers[/bold magenta][bold yellow] separated by commas or ranges[/bold yellow] to toggle tools (e.g. [bold]1,3,5-8[/bold])")
-            self.console.print(f"• Enter [bold orange3]S + number[/bold orange3] to toggle all tools in a server (e.g. [bold]S1[/bold] or [bold]s2[/bold])")
-            self.console.print("• [bold]a[/bold] or [bold]all[/bold] - Enable all tools")
-            self.console.print("• [bold]n[/bold] or [bold]none[/bold] - Disable all tools")
-            self.console.print(f"• [bold]d[/bold] or [bold]desc[/bold] - {'Hide' if show_descriptions else 'Show'} descriptions")
-            self.console.print("• [bold]s[/bold] or [bold]save[/bold] - Save changes and return")
-            self.console.print("• [bold]q[/bold] or [bold]quit[/bold] - Cancel and return")
-            
-            selection = Prompt.ask("> ")
-            selection = selection.strip().lower()
-            
-            if selection in ['s', 'save']:
-                self.clear_console()
-                # Instead of printing directly, display the chat history and tools
-                self._display_chat_history()
-                self.display_available_tools()      
-                self.display_current_model()
-                return
-            
-            if selection in ['q', 'quit']:
-                # Restore original tool states
-                self.enabled_tools = original_states.copy()
-                self.clear_console()
-                # Instead of printing directly, display the chat history and tools
-                self._display_chat_history()
-                self.display_available_tools()
-                self.display_current_model()
-                return
-            
-            if selection in ['a', 'all']:
-                # Use the server connector to enable all tools
-                self.server_connector.enable_all_tools()
-                # Update our local copy
-                self.enabled_tools = self.server_connector.get_enabled_tools()
-                self.clear_console()
-                result_message = "[green]All tools enabled![/green]"                
-                continue
-            
-            if selection in ['n', 'none']:
-                # Use the server connector to disable all tools
-                self.server_connector.disable_all_tools()
-                # Update our local copy
-                self.enabled_tools = self.server_connector.get_enabled_tools()
-                self.clear_console()
-                result_message = "[yellow]All tools disabled![/yellow]"                
-                continue
-                
-            if selection in ['d', 'desc']:
-                show_descriptions = not show_descriptions
-                self.clear_console()
-                status = "shown" if show_descriptions else "hidden"
-                result_message = f"[blue]Tool descriptions {status}![/blue]"                
-                continue
-            
-            # Check for server toggle (S1, S2, etc.)
-            if selection.startswith('s') and len(selection) > 1 and selection[1:].isdigit():
-                server_idx = int(selection[1:]) - 1
-                if 0 <= server_idx < len(sorted_servers):
-                    server_name, server_tools = sorted_servers[server_idx]
-                    
-                    # Check if all tools in this server are currently enabled
-                    all_enabled = all(self.enabled_tools[tool.name] for tool in server_tools)
-                    
-                    # Toggle accordingly: if all are enabled, disable all; otherwise enable all
-                    new_state = not all_enabled
-                    for tool in server_tools:
-                        self.enabled_tools[tool.name] = new_state
-                        # Also update in the server connector
-                        self.server_connector.set_tool_status(tool.name, new_state)
-                    
-                    self.clear_console()
-                    status = "enabled" if new_state else "disabled"
-                    result_message = f"[{'green' if new_state else 'yellow'}]All tools in server '{server_name}' {status}![/{'green' if new_state else 'yellow'}]"                    
-                else:
-                    self.clear_console()
-                    result_message = f"[red]Invalid server number: S{server_idx+1}. Must be between S1 and S{len(sorted_servers)}[/red]"
-                    result_style = "red"
-                continue
-            
-            # Process individual tool selections and ranges
-            try:
-                valid_toggle = False
-                
-                # Split the input by commas to handle multiple selections
-                parts = [part.strip() for part in selection.split(',') if part.strip()]
-                selections = []
-                
-                for part in parts:
-                    # Check if this part is a range (e.g., "5-8")
-                    if '-' in part:
-                        try:
-                            start, end = map(int, part.split('-', 1))
-                            selections.extend(range(start, end + 1))
-                        except ValueError:
-                            self.console.print(f"[red]Invalid range: {part}[/red]")
-                    else:
-                        # Otherwise, treat as a single number
-                        try:
-                            selections.append(int(part))
-                        except ValueError:
-                            self.console.print(f"[red]Invalid selection: {part}[/red]")
-                
-                # Process the selections using our accurate mapping
-                toggled_tools_count = 0
-                invalid_indices = []
-                
-                for idx in selections:
-                    if idx in index_to_tool:
-                        tool = index_to_tool[idx]
-                        new_state = not self.enabled_tools[tool.name]
-                        self.enabled_tools[tool.name] = new_state
-                        # Also update in the server connector
-                        self.server_connector.set_tool_status(tool.name, new_state)
-                        valid_toggle = True
-                        toggled_tools_count += 1
-                    else:
-                        invalid_indices.append(idx)
-                
-                self.clear_console()
-                if valid_toggle:
-                    result_message = f"[green]Successfully toggled {toggled_tools_count} tool{'s' if toggled_tools_count != 1 else ''}![/green]"
-                    if invalid_indices:
-                        result_message += f"\n[yellow]Warning: Invalid indices ignored: {', '.join(map(str, invalid_indices))}[/yellow]"
-                else:
-                    result_message = "[yellow]No valid tool numbers provided.[/yellow]"
-                    result_style = "yellow"
-            
-            except ValueError:
-                self.clear_console()
-                result_message = "[red]Invalid input. Please enter numbers, ranges, or server designators.[/red]"
-                result_style = "red"
+        # Display the chat history and current state after selection
+        self._display_chat_history()
+        self.display_available_tools()      
+        self.display_current_model()
 
     def _display_chat_history(self):
         """Display chat history when returning to the main chat interface"""
@@ -411,8 +174,8 @@ class MCPClient:
             # No context retention - just use current query
             messages = [current_message]
 
-        # Filter tools based on user selection
-        enabled_tool_objects = [tool for tool in self.available_tools if self.enabled_tools.get(tool.name, False)]
+        # Get enabled tools from the tool manager
+        enabled_tool_objects = self.tool_manager.get_enabled_tool_objects()
         
         if not enabled_tool_objects:
             self.console.print("[yellow]Warning: No tools are enabled. Model will respond without tool access.[/yellow]")
@@ -695,7 +458,7 @@ class MCPClient:
         # Build config data
         config_data = {
             "model": self.model_manager.get_current_model(),
-            "enabledTools": self.enabled_tools,
+            "enabledTools": self.tool_manager.get_enabled_tools(),
             "contextSettings": {
                 "retainContext": self.retain_context
             }
@@ -728,10 +491,11 @@ class MCPClient:
             loaded_tools = config_data["enabledTools"]
             
             # Only apply tools that actually exist in our available tools
-            available_tool_names = {tool.name for tool in self.available_tools}
+            available_tool_names = {tool.name for tool in self.tool_manager.get_available_tools()}
             for tool_name, enabled in loaded_tools.items():
                 if tool_name in available_tool_names:
-                    self.enabled_tools[tool_name] = enabled
+                    # Update in the tool manager
+                    self.tool_manager.set_tool_status(tool_name, enabled)
                     # Also update in the server connector
                     self.server_connector.set_tool_status(tool_name, enabled)
                     
@@ -746,10 +510,10 @@ class MCPClient:
         # Use the ConfigManager to get the default configuration
         config_data = self.config_manager.reset_configuration()
         
+        # Enable all tools in the tool manager
+        self.tool_manager.enable_all_tools()
         # Enable all tools in the server connector
         self.server_connector.enable_all_tools()
-        # Update our local copy
-        self.enabled_tools = self.server_connector.get_enabled_tools()
             
         # Reset context settings from the default configuration
         if "contextSettings" in config_data and "retainContext" in config_data["contextSettings"]:
