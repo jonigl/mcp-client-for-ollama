@@ -6,7 +6,6 @@ initialization, and communication.
 
 import os
 import shutil
-import asyncio
 from contextlib import AsyncExitStack
 from typing import Dict, List, Any, Optional, Tuple
 from rich.console import Console
@@ -214,11 +213,8 @@ class ServerConnector:
         args = server_config.get("args", [])
         env = server_config.get("env")
         
-        # Fix common issues with directory arguments
-        fixed_args = self._fix_directory_args(args)
-        
-        # Check if directory exists with possibly fixed paths
-        dir_exists, missing_dir = self.directory_exists(fixed_args)
+        # Fix and validate directory arguments
+        fixed_args, dir_exists, missing_dir = self._fix_directory_args(args)
         
         if not dir_exists:
             self.console.print(f"[yellow]Warning: Server '{server['name']}' specifies a directory that doesn't exist: {missing_dir}[/yellow]")
@@ -231,63 +227,39 @@ class ServerConnector:
             env=env
         )
     
-    def _fix_directory_args(self, args: List[str]) -> List[str]:
-        """Fix common issues with directory arguments
+    def _fix_directory_args(self, args: List[str]) -> Tuple[List[str], bool, Optional[str]]:
+        """Fix common issues with directory arguments and validate directory existence
         
         Args:
             args: List of command line arguments
             
         Returns:
-            List of fixed arguments
+            Tuple containing:
+            - List of fixed arguments
+            - bool indicating if all directories exist
+            - Optional[str] containing the first missing directory path if any
         """
+        if not args:
+            return args, True, None
+
         fixed_args = args.copy()
         
         for i, arg in enumerate(fixed_args):
             if arg == "--directory" and i + 1 < len(fixed_args):
                 dir_path = fixed_args[i+1]
-                # If the path is a Python file, use its directory instead
+                
+                # If the path is a file, use its parent directory
                 if os.path.isfile(dir_path) and (dir_path.endswith('.py') or dir_path.endswith('.js')):
                     self.console.print(f"[yellow]Warning: Server specifies a file as directory: {dir_path}[/yellow]")
                     self.console.print(f"[green]Automatically fixing to use parent directory instead[/green]")
-                    fixed_args[i+1] = os.path.dirname(dir_path) or '.'
+                    dir_path = os.path.dirname(dir_path) or '.'
+                    fixed_args[i+1] = dir_path
+                
+                # Check if directory exists
+                if not os.path.exists(dir_path):
+                    return fixed_args, False, dir_path
         
-        return fixed_args
-    
-    @staticmethod
-    def directory_exists(args_list: List[str]) -> Tuple[bool, Optional[str]]:
-        """Check if a directory specified in args exists
-        
-        Looks for a --directory argument followed by a path and checks if that path exists
-        
-        Args:
-            args_list: List of command line arguments
-            
-        Returns:
-            tuple: (directory_exists, directory_path or None)
-        """
-        if not args_list:
-            return True, None
-            
-        for i, arg in enumerate(args_list):
-            if arg == "--directory" and i + 1 < len(args_list):
-                directory = args_list[i + 1]
-                if os.path.isfile(directory):
-                    # If it's a file (like a Python script), use its parent directory
-                    directory = os.path.dirname(directory)
-                    if os.path.exists(directory):
-                        # Modify the args list to use the directory instead of the file
-                        args_list[i+1] = directory
-                        return True, directory
-                    
-                if not os.path.exists(directory):
-                    return False, directory
-        
-        return True, None
-        
-    async def cleanup(self):
-        """Clean up resources by closing all server connections"""
-        # AsyncExitStack will handle closing all sessions when it's closed
-        pass
+        return fixed_args, True, None
     
     def get_sessions(self) -> Dict[str, Any]:
         """Get the current server sessions

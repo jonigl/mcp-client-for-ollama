@@ -9,22 +9,6 @@ import json
 from typing import Dict, List, Any, Optional
 from ..utils.constants import DEFAULT_CLAUDE_CONFIG
 
-def discover_claude_servers() -> Dict[str, Any]:
-    """Discover MCP servers from Claude's configuration.
-    
-    Returns:
-        Dict containing discovered server configurations
-    """
-    if not os.path.exists(DEFAULT_CLAUDE_CONFIG):
-        return {}
-        
-    try:
-        with open(DEFAULT_CLAUDE_CONFIG, 'r') as f:
-            config = json.load(f)
-        return config.get('mcpServers', {})
-    except Exception:
-        return {}
-
 def process_server_paths(server_paths) -> List[Dict[str, Any]]:
     """Process individual server script paths and validate them.
     
@@ -103,18 +87,5 @@ def auto_discover_servers() -> List[Dict[str, Any]]:
     Returns:
         List of server configurations found automatically
     """
-    claude_servers = discover_claude_servers()
-    
-    all_servers = []
-    for name, config in claude_servers.items():
-        # Skip disabled servers
-        if config.get('disabled', False):
-            continue
-            
-        all_servers.append({
-            "type": "config",
-            "name": name,
-            "config": config
-        })
-        
-    return all_servers
+    # Use parse_server_configs to process Claude's config
+    return parse_server_configs(DEFAULT_CLAUDE_CONFIG)
