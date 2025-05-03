@@ -1,34 +1,20 @@
 import argparse
 import asyncio
-import json
 import os
-import shutil
-import sys
 from contextlib import AsyncExitStack
-from mcp import ClientSession, StdioServerParameters, Tool
-from mcp.client.stdio import stdio_client
-from pathlib import Path
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
-from rich import print as rprint
-from rich.columns import Columns
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.prompt import Prompt
 from rich.text import Text
-from typing import List, Dict, Any, Tuple
-import aiohttp
-from datetime import datetime
-import dateutil.parser
-import re
 import ollama
 from ollama import ChatResponse
 
 from . import __version__
 from .config.manager import ConfigManager 
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE, TOKEN_COUNT_PER_CHAR, DEFAULT_MODEL
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, TOKEN_COUNT_PER_CHAR, DEFAULT_MODEL
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .tools.manager import ToolManager
