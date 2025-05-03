@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from rich.prompt import Prompt
+from ..utils.constants import DEFAULT_MODEL, DEFAULT_OLLAMA_LOCAL_URL
 
 class ModelManager:
     """Manages Ollama models.
@@ -18,7 +19,7 @@ class ModelManager:
     Ollama is running, and selecting models to use with the client.
     """
     
-    def __init__(self, console: Optional[Console] = None, default_model: str = "qwen2.5:7b"):
+    def __init__(self, console: Optional[Console] = None, default_model: str = DEFAULT_MODEL):
         """Initialize the ModelManager.
         
         Args:
@@ -37,7 +38,7 @@ class ModelManager:
         try:
             # Try to make a simple request to the Ollama API
             async with aiohttp.ClientSession() as session:
-                async with session.get("http://localhost:11434/api/tags") as response:
+                async with session.get(f"{DEFAULT_OLLAMA_LOCAL_URL}/api/tags") as response:
                     if response.status == 200:
                         return True
                     return False
@@ -53,7 +54,7 @@ class ModelManager:
         try:
             # Get models from Ollama API
             async with aiohttp.ClientSession() as session:
-                async with session.get("http://localhost:11434/api/tags") as response:
+                async with session.get(f"{DEFAULT_OLLAMA_LOCAL_URL}/api/tags") as response:
                     if response.status == 200:
                         data = await response.json()
                         if "models" in data:
@@ -86,19 +87,6 @@ class ModelManager:
         """Display the currently selected model in the console."""
         self.console.print(Panel(f"[bold blue]Current model:[/bold blue] [green]{self.model}[/green]", 
                               border_style="blue", expand=False))
-    
-    def validate_model_exists(self, model_name: str, models: List[Dict[str, Any]]) -> bool:
-        """Check if a model exists in the list of available models.
-        
-        Args:
-            model_name: Name of the model to check
-            models: List of available models
-            
-        Returns:
-            bool: True if the model exists, False otherwise
-        """
-        model_names = [model.get("name", "") for model in models]
-        return model_name in model_names
         
     def format_model_display_info(self, model: Dict[str, Any]) -> Tuple[str, str, str]:
         """Format model information for display.
@@ -155,6 +143,8 @@ class ModelManager:
         original_model = self.model
         # Track currently selected model (which might not be saved yet)
         selected_model = self.model
+        result_message = None
+        result_style = "red"
             
         # Get available models
         with self.console.status("[cyan]Getting available models from Ollama...[/cyan]"):
@@ -169,7 +159,7 @@ class ModelManager:
             # Clear console for a clean interface
             if clear_console_func:
                 clear_console_func()
-            
+                                    
             # Display model selection interface
             self.console.print(Panel(Text.from_markup("[bold]Select a Model[/bold]", justify="center"), expand=True, border_style="green"))        
             
@@ -193,6 +183,11 @@ class ModelManager:
                 self.console.print(f"Selected model: [bold yellow]{selected_model}[/bold yellow] (not saved yet)")
             self.console.print()
             
+            # Display the result message if there is one
+            if result_message:
+                self.console.print(Panel(result_message, border_style=result_style, expand=False))
+                result_message = None  # Clear the message after displaying it
+
             # Show the command panel
             self.console.print(Panel("[bold yellow]Commands[/bold yellow]", expand=False))
             self.console.print("• Enter [bold magenta]number[/bold magenta] to select a model")
@@ -222,21 +217,22 @@ class ModelManager:
                 if 0 <= idx < len(models):
                     # Update the selected model (but don't save it yet)
                     model_data = models[idx]
-                    # Try multiple fields that might contain the model name
                     for key in ["name", "model", "tag", "id"]:
                         if key in model_data and model_data[key]:
                             selected_model = model_data[key]
                             break
                     else:
-                        # If we couldn't find a name, inform the user
                         if clear_console_func:
                             clear_console_func()
-                        self.console.print("[red]Error: Could not determine the model name from the API response.[/red]")
+                        result_message = "[red]Error: Could not determine the model name from the API response.[/red]"
+                        result_style = "red"
                 else:
                     if clear_console_func:
                         clear_console_func()
-                    self.console.print(f"[red]Invalid number: {idx + 1}. Must be between 1 and {len(models)}[/red]")
+                    result_message = f"[red]Invalid number: {idx + 1}. Must be between 1 and {len(models)}[/red]"
+                    result_style = "red"
             except ValueError:
                 if clear_console_func:
                     clear_console_func()
-                self.console.print("[red]Invalid input. Please enter a number.[/red]")
+                result_message = "[red]Invalid input. Please enter a number.[/red]"
+                result_style = "red"

@@ -344,8 +344,8 @@ class ToolManager:
                     if invalid_indices:
                         result_message += f"\n[yellow]Warning: Invalid indices ignored: {', '.join(map(str, invalid_indices))}[/yellow]"
                 else:
-                    result_message = "[yellow]No valid tool numbers provided.[/yellow]"
-                    result_style = "yellow"
+                    result_message = "[red]No valid tool numbers provided.[/red]"
+                    result_style = "red"
             
             except ValueError:
                 if clear_console_func:

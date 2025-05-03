@@ -15,5 +15,8 @@ DEFAULT_CONFIG_FILE = "config.json"
 # Default model
 DEFAULT_MODEL = "qwen2.5:7b"
 
+# Default ollama lcoal url for API requests
+DEFAULT_OLLAMA_LOCAL_URL = "http://localhost:11434"
+
 # Approximate token count per character (rough estimation)
 TOKEN_COUNT_PER_CHAR = 0.25
