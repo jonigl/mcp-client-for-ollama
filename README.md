@@ -56,7 +56,7 @@ git clone https://github.com/jonigl/mcp-client-for-ollama.git
 cd mcp-client-for-ollama
 uv venv && source .venv/bin/activate
 uv pip install .
-uv run mcp_client_for_ollama/client.py
+uv run -m mcp_client_for_ollama.client
 ```
 
 ## Usage
