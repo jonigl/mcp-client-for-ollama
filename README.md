@@ -55,3 +55,9 @@ uv run client.py --mcp-server server.py --model llama3.2:3b
 #### Server
 
 This repository includes a sample MCP server implementation in [`server.py`](./server.py) that you can use for testing or as a reference implementation.
+
+## Relation to Official MCP Client guide
+
+While this project was inspired by the [official MCP client quickstart guide](https://modelcontextprotocol.io/quickstart/client), it has been adapted specifically for Ollama models rather than Anthropic models. The official guide focuses on Claude and other Anthropic models, whereas this implementation provides a similar experience but tailored for open-source models running through Ollama.
+
+If you're looking for the official MCP implementation for Anthropic models, please refer to the official documentation.
