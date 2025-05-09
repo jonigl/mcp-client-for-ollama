@@ -40,7 +40,6 @@ Run the client with:
 uv run client.py --mcp-server <path_to_mcp_server> --model <ollama_model>
 ```
 
-
 ### Arguments
 
 - `--mcp-server`: Path to the MCP server script (.py or .js)
