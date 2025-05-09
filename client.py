@@ -53,8 +53,8 @@ class MCPClient:
                 # Call the tool
                 result = await self.session.call_tool(tc.function.name, tc.function.arguments)
                 messages.append({"role": "tool", "name": tc.function.name, "content": result.content[0].text})                
-                # Call the model again with the tool result, so we can get the final answer
-                resp = await self.ollama.chat(model=self.model, messages=messages, tools=tools_meta)
+                # Call the model again with the tool result, so we can get the final answer. Max tokens is set to 500 speed up the process. Adjust as needed.
+                resp = await self.ollama.chat(model=self.model, messages=messages, tools=tools_meta, options={"max_tokens": 500})
                 final.append(resp.message.content)
         return "".join(final)
 
