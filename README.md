@@ -6,10 +6,22 @@ A simple client implementation for interacting with Model Context Protocol (MCP)
 
 This project provides a client that connects to an MCP server and uses Ollama to process queries, enabling tool use capabilities. The client establishes a connection to an MCP server, sends queries to Ollama, and handles any tool calls that the model might make.
 
+## Features
+
+- Connect to any MCP-compliant server
+- Use different Ollama models for processing
+- Support for Python and JavaScript MCP servers
+- Simple interactive chat interface
+- Tool usage capabilities
+- Easy to extend and modify for custom use cases
+- Example MCP server implementation included
+- Support for multiple Ollama models
+
 ## Requirements
 
 - Python 3.10+
 - Ollama running locally
+  - llama3.2:3b (if using default model)
 - UV package manager
 
 ## Installation
@@ -28,6 +40,7 @@ Run the client with:
 uv run client.py --mcp-server <path_to_mcp_server> --model <ollama_model>
 ```
 
+
 ### Arguments
 
 - `--mcp-server`: Path to the MCP server script (.py or .js)
@@ -39,10 +52,6 @@ uv run client.py --mcp-server <path_to_mcp_server> --model <ollama_model>
 uv run client.py --mcp-server server.py --model llama3.2:3b
 ```
 
-## Features
+#### Server
 
-- Connect to any MCP-compliant server
-- Use different Ollama models for processing
-- Support for Python and JavaScript MCP servers
-- Simple interactive chat interface
-- Tool usage capabilities
+This repository includes a sample MCP server implementation in [`server.py`](./server.py) that you can use for testing or as a reference implementation.

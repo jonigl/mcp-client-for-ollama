@@ -1,13 +1,11 @@
 [project]
-name = "mcp-local-client-poc"
+name = "mcp-client-ollama"
 version = "0.1.0"
-description = "Add your description here"
+description = "MCP Client for Ollama"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.6.0",
     "ollama>=0.4.8",
-    "prompt-toolkit>=3.0.51",
-    "python-dotenv>=1.1.0",
     "rich>=14.0.0",
 ]
