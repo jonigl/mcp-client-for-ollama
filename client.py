@@ -60,15 +60,15 @@ class MCPClient:
 
     # Main loop for user interaction
     async def chat_loop(self):
-        self.console.print("[bold green]MCP Client Started![/bold green] Model: [cyan]{}[/cyan]".format(self.model))
-        self.console.print("[italic]Type your queries below or [bold]'quit'[/bold] to exit.[/italic]")
+        self.console.print("[bold green]MCP Client Started![/bold green] [cyan]Model: {}[/cyan]".format(self.model))
+        self.console.print("[yellow]Type your queries below or [bold]'quit'[/bold] to exit.[/yellow]")
         while True:
-            q = input("Query: ").strip()
+            q = self.console.input("[bold blue]Query:[/bold blue] ").strip()
             if q.lower() == 'quit':
                 break
             try:
                 ans = await self.process_query(q)
-                self.console.print(Markdown(ans))
+                self.console.print(Markdown(ans, style="orange3"))
             except Exception as e:
                 self.console.print("Error:", e, style="bold red")
 
