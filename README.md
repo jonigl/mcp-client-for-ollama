@@ -6,6 +6,8 @@ A simple client implementation for interacting with Model Context Protocol (MCP)
 
 This project provides a client that connects to an MCP server and uses Ollama to process queries, enabling tool use capabilities. The client establishes a connection to an MCP server, sends queries to Ollama, and handles any tool calls that the model might make.
 
+> This branch provides an example implementation of the MCP client. For a more feature-rich and advanced version, including additional enhancements and capabilities, please refer to the [main branch](https://github.com/jonigl/mcp-client-for-ollama).
+
 ## Features
 
 - Connect to any MCP-compliant server
