@@ -39,6 +39,11 @@ This command will start the client with the default `llama3.2:3b` model and conn
 uv run client.py --mcp-server server.py
 ```
 
+## Demo
+
+[![asciicast](https://asciinema.org/a/718592.svg)](https://asciinema.org/a/718592)
+
+
 ## Usage
 
 Run the client with:
@@ -68,7 +73,6 @@ Using a JavaScript MCP server:
 ```bash
 uv run client.py --mcp-server server.js --model llama3.2:3b
 ```
-
 
 #### Server
 
