@@ -66,12 +66,32 @@ def parse_server_configs(config_path: str) -> List[Dict[str, Any]]:
             # Skip disabled servers
             if config.get('disabled', False):
                 continue
-                
-            all_servers.append({
-                "type": "config",
+            
+            # Determine server type
+            server_type = "config"  # Default type for STDIO servers
+            
+            # Check for URL-based server types (sse or streamable_http)
+            if "type" in config:
+                # Type is explicitly specified in config
+                server_type = config["type"]
+            elif "url" in config:
+                # URL exists but no type, default to streamable_http
+                server_type = "streamable_http"
+            
+            # Create server config object
+            server = {
+                "type": server_type,
                 "name": name,
                 "config": config
-            })
+            }
+            
+            # For URL-based servers, add direct access to URL and headers
+            if server_type in ["sse", "streamable_http"]:
+                server["url"] = config.get("url")
+                if "headers" in config:
+                    server["headers"] = config.get("headers")
+                
+            all_servers.append(server)
             
         return all_servers
         

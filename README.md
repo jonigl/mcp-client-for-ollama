@@ -20,12 +20,13 @@ This implementation was adapted from the [Model Context Protocol quickstart guid
 ## Features
 
 - 🌐 **Multi-Server Support**: Connect to multiple MCP servers simultaneously
+- 🚀 **Multiple Transport Types**: Supports STDIO, SSE, and Streamable HTTP server connections
 - 🎨 **Rich Terminal Interface**: Interactive console UI
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
 - 🧠 **Context Management**: Control conversation memory with configurable retention settings
 - 🔄 **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
 - 🔍 **Auto-Discovery**: Automatically find and use Claude's existing MCP server configurations
-- 🚀 **Dynamic Model Switching**: Switch between any installed Ollama model without restarting
+- 🎛️ **Dynamic Model Switching**: Switch between any installed Ollama model without restarting
 - 💾 **Configuration Persistence**: Save and load tool preferences between sessions
 - 📊 **Usage Analytics**: Track token consumption and conversation history metrics
 - 🔌 **Plug-and-Play**: Works immediately with standard MCP-compliant tool servers
@@ -74,6 +75,9 @@ If you don't provide any options, the client will use auto-discovery mode to fin
 - `--mcp-server`: Path to one or more MCP server scripts (.py or .js). Can be specified multiple times.
 - `--servers-json`: Path to a JSON file with server configurations.
 - `--auto-discovery`: Auto-discover servers from Claude's default config file (default behavior if no other options provided).
+
+> Note: Claude's configuration file is typically located at:
+`~/Library/Application Support/Claude/claude_desktop_config.json`
 
 #### Model Options:
 - `--model`: Ollama model to use (default: "qwen2.5:7b")
@@ -157,12 +161,13 @@ The configuration saves:
 
 ## Server Configuration Format
 
-The JSON configuration file should follow this format:
+The JSON configuration file supports STDIO, SSE, and Streamable HTTP server types:
+
 
 ```json
 {
   "mcpServers": {
-    "server-name": {
+    "stdio-server": {
       "command": "command-to-run",
       "args": ["arg1", "arg2", "..."],
       "env": {
@@ -170,22 +175,37 @@ The JSON configuration file should follow this format:
         "ENV_VAR2": "value2"
       },
       "disabled": false
+    },
+    "sse-server": {
+      "type": "sse",
+      "url": "http://localhost:8000/sse",
+      "headers": {
+        "Authorization": "Bearer your-token-here"
+      },
+      "disabled": false
+    },
+    "http-server": {
+      "type": "streamable_http",
+      "url": "http://localhost:8000/mcp",
+      "headers": {
+        "X-API-Key": "your-api-key-here"
+      },
+      "disabled": false
     }
   }
 }
 ```
 
-Claude's configuration file is typically located at:
-`~/Library/Application Support/Claude/claude_desktop_config.json`
+> Note: If you specify a URL without a type, the client will default to using Streamable HTTP transport.
 
 ## Compatible Models
 
 The following Ollama models work well with tool use:
 
 - qwen2.5
-- llama3.3
-- llama3.2
+- qwen3
 - llama3.1
+- llama3.2
 - mistral
 
 For a complete list of Ollama models with tool use capabilities, visit the [official Ollama models page](https://ollama.com/search?c=tools).

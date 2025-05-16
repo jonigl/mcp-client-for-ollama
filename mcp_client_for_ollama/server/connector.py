@@ -6,12 +6,15 @@ initialization, and communication.
 
 import os
 import shutil
+import os
+import shutil
 from contextlib import AsyncExitStack
 from typing import Dict, List, Any, Optional, Tuple
 from rich.console import Console
 from rich.panel import Panel
-from mcp import ClientSession, StdioServerParameters, Tool
-from mcp.client.stdio import stdio_client
+from mcp import ClientSession, Tool
+from mcp.client.stdio import stdio_client, StdioServerParameters
+from mcp.client.sse import sse_client
 
 from .discovery import process_server_paths, parse_server_configs, auto_discover_servers
 
@@ -107,20 +110,61 @@ class ServerConnector:
         self.console.print(f"[cyan]Connecting to server: {server_name}[/cyan]")
         
         try:
-            # Create server parameters based on server type
-            if server["type"] == "script":
+            server_type = server.get("type", "script")
+            session = None
+            
+            # Connect based on server type
+            if server_type == "sse":
+                # Connect to SSE server
+                url = self._get_url_from_server(server)
+                if not url:
+                    self.console.print(f"[red]Error: SSE server {server_name} missing URL[/red]")
+                    return False
+                
+                headers = self._get_headers_from_server(server)
+                
+                # Connect using SSE transport
+                sse_transport = await self.exit_stack.enter_async_context(sse_client(url, headers=headers))
+                read_stream, write_stream = sse_transport
+                session = await self.exit_stack.enter_async_context(ClientSession(read_stream, write_stream))
+                
+            elif server_type == "streamable_http":
+                # Connect to Streamable HTTP server
+                url = self._get_url_from_server(server)
+                if not url:
+                    self.console.print(f"[red]Error: HTTP server {server_name} missing URL[/red]")
+                    return False
+                
+                headers = self._get_headers_from_server(server)
+                
+                # In MCP 1.9.0, use SSE client for HTTP connections as well
+                # since the dedicated HTTP client is no longer available
+                self.console.print(f"[yellow]Note: Using SSE client for HTTP connection to {server_name}[/yellow]")
+                transport = await self.exit_stack.enter_async_context(sse_client(url, headers=headers))
+                read_stream, write_stream = transport
+                session = await self.exit_stack.enter_async_context(ClientSession(read_stream, write_stream))
+                
+            elif server_type == "script":
+                # Connect to script-based server using STDIO
                 server_params = self._create_script_params(server)
                 if server_params is None:
                     return False
+                
+                stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
+                read_stream, write_stream = stdio_transport
+                session = await self.exit_stack.enter_async_context(ClientSession(read_stream, write_stream))
+                
             else:
+                # Connect to config-based server using STDIO
                 server_params = self._create_config_params(server)
                 if server_params is None:
                     return False
+                
+                stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
+                read_stream, write_stream = stdio_transport
+                session = await self.exit_stack.enter_async_context(ClientSession(read_stream, write_stream))
             
-            # Connect to this server
-            stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
-            stdio, write = stdio_transport
-            session = await self.exit_stack.enter_async_context(ClientSession(stdio, write))
+            # Initialize the session
             await session.initialize()
             
             # Store the session
@@ -304,3 +348,39 @@ class ServerConnector:
         """Disable all available tools"""
         for tool_name in self.enabled_tools:
             self.enabled_tools[tool_name] = False
+    
+    def _get_url_from_server(self, server: Dict[str, Any]) -> Optional[str]:
+        """Extract URL from server configuration.
+        
+        Args:
+            server: Server configuration dictionary
+            
+        Returns:
+            URL string or None if not found
+        """
+        # Try to get URL directly from server dict
+        url = server.get("url")
+        
+        # If not there, try the config subdict
+        if not url and "config" in server:
+            url = server["config"].get("url")
+            
+        return url
+    
+    def _get_headers_from_server(self, server: Dict[str, Any]) -> Dict[str, str]:
+        """Extract headers from server configuration.
+        
+        Args:
+            server: Server configuration dictionary
+            
+        Returns:
+            Dictionary of headers
+        """
+        # Try to get headers directly from server dict
+        headers = server.get("headers", {})
+        
+        # If not there, try the config subdict
+        if not headers and "config" in server:
+            headers = server["config"].get("headers", {})
+            
+        return headers
