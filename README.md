@@ -22,6 +22,7 @@ This implementation was adapted from the [Model Context Protocol quickstart guid
 - 🌐 **Multi-Server Support**: Connect to multiple MCP servers simultaneously
 - 🚀 **Multiple Transport Types**: Supports STDIO, SSE, and Streamable HTTP server connections
 - 🎨 **Rich Terminal Interface**: Interactive console UI
+- 🖥️ **Streaming Responses**: View model outputs in real-time as they're generated
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
 - 🧠 **Context Management**: Control conversation memory with configurable retention settings
 - 🔄 **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
@@ -57,7 +58,7 @@ git clone https://github.com/jonigl/mcp-client-for-ollama.git
 cd mcp-client-for-ollama
 uv venv && source .venv/bin/activate
 uv pip install .
-uv run -m mcp_client_for_ollama.client
+uv run -m mcp_client_for_ollama
 ```
 
 ## Usage

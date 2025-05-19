@@ -18,6 +18,7 @@ from .utils.constants import DEFAULT_CLAUDE_CONFIG, TOKEN_COUNT_PER_CHAR, DEFAUL
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .tools.manager import ToolManager
+from .utils.streaming import StreamingManager
 
 class MCPClient:
     def __init__(self, model: str = DEFAULT_MODEL):
@@ -32,6 +33,8 @@ class MCPClient:
         self.model_manager = ModelManager(console=self.console, default_model=model)
         # Initialize the tool manager with server connector reference
         self.tool_manager = ToolManager(console=self.console, server_connector=self.server_connector)
+        # Initialize the streaming manager
+        self.streaming_manager = StreamingManager(console=self.console)
         # Store server and tool data
         self.sessions = {}  # Dict to store multiple sessions
         # UI components
@@ -177,24 +180,20 @@ class MCPClient:
 
         # Get current model from the model manager
         model = self.model_manager.get_current_model()
-
-        # Initial Ollama API call
-        with self.console.status("[cyan]Thinking...[/cyan]"):
-            response: ChatResponse = await self.ollama.chat(
-                model=model,
-                messages=messages,
-                tools=available_tools,
-                options={"num_predict": 1000}
-            )
-
-        # Process response and handle tool calls
-        final_text = []
-        
-        if hasattr(response.message, 'content') and response.message.content:
-            final_text.append(response.message.content)            
-
-        elif response.message.tool_calls:
-            for tool in response.message.tool_calls:
+        # Initial Ollama API call with the query and available tools
+        stream = await self.ollama.chat(
+            model=model,
+            messages=messages,
+            stream=True,
+            tools=available_tools            
+        )
+        # Process the streaming response
+        response_text = ""
+        tool_calls = []        
+        response_text, tool_calls = await self.streaming_manager.process_streaming_response(stream)
+        # Check if there are any tool calls in the response
+        if len(tool_calls) > 0:
+            for tool in tool_calls:
                 tool_name = tool.function.name
                 tool_args = tool.function.arguments
 
@@ -209,12 +208,9 @@ class MCPClient:
                 self.console.print(Panel(f"[bold]Calling tool[/bold]: [blue]{tool_name}[/blue]", 
                                        subtitle=f"[dim]{tool_args}[/dim]", 
                                        expand=True))
-                self.console.print()
                 
                 with self.console.status(f"[cyan]Running {tool_name}...[/cyan]"):
                     result = await self.sessions[server_name]["session"].call_tool(actual_tool_name, tool_args)
-                
-                self.console.print()
                 
                 messages.append({
                     "role": "tool",
@@ -222,20 +218,19 @@ class MCPClient:
                     "name": tool_name
                 })            
 
-                # Get next response from Ollama with the tool results
-                with self.console.status("[cyan]Processing results...[/cyan]"):
-                    response = await self.ollama.chat(
-                        model=model,
-                        messages=messages,
-                        tools=available_tools,
-                    )
+                # Get stream response from Ollama with the tool results                                
+                stream = await self.ollama.chat(
+                    model=model,
+                    messages=messages,
+                    stream=True,
+                )
+                # Process the streaming response
+                response_text, _ = await self.streaming_manager.process_streaming_response(stream)
 
-                self.console.print() 
-                final_text.append(response.message.content)
+        if not response_text:
+            self.console.print("[red]No response received.[/red]")
+            response_text = ""
 
-        # Create the final response text
-        response_text = "\n".join(final_text)
-        
         # Append query and response to chat history
         self.chat_history.append({"query": query, "response": response_text})
         
@@ -279,7 +274,7 @@ class MCPClient:
 
     async def chat_loop(self):
         """Run an interactive chat loop"""
-        self.clear_console()        
+        self.clear_console()
         self.console.print(Panel(Text.from_markup("[bold green]Welcome to the MCP Client for Ollama[/bold green]", justify="center"), expand=True, border_style="green"))
         self.display_available_tools()
         self.display_current_model()
@@ -357,11 +352,7 @@ class MCPClient:
                     continue
 
                 try:
-                    response = await self.process_query(query)
-                    if response:
-                        self.console.print(Markdown(response))                                                
-                    else:
-                        self.console.print("[red]No response received.[/red]")
+                    await self.process_query(query)
                 except ollama.ResponseError as e:
                     # Extract error message without the traceback
                     error_msg = str(e)
