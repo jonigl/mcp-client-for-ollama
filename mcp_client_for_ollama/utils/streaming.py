@@ -28,7 +28,7 @@ class StreamingManager:
             Table: Rich table object
         """
          # Create a table with spinner in first row and content in second
-        table = Table.grid(expand=True)
+        table = Table.grid()
         spinner = Spinner("dots")
         spinner.style = "cyan"  # Make the spinner cyan
         thinking_text = Text("Thinking...", style="cyan")
@@ -60,7 +60,7 @@ class StreamingManager:
         
         # Process the streaming response chunks with live updating markdown
         if print_response:            
-            with Live(console=self.console, refresh_per_second=10) as live:
+            with Live(console=self.console, refresh_per_second=10, vertical_overflow='visible')  as live:
                     table = self.get_table()
                     live.update(table)
                     async for chunk in stream:
