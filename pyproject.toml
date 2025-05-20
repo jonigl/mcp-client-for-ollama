@@ -9,12 +9,9 @@ authors = [
     {name = "Jonathan Löwenstern"}
 ]
 dependencies = [
-    "aiohttp>=3.11.18",
     "mcp>=1.6.0",
     "ollama>=0.4.8",
     "prompt-toolkit>=3.0.51",
-    "python-dateutil>=2.9.0.post0",
-    "python-dotenv>=1.1.0",
     "rich>=14.0.0",
 ]
 
