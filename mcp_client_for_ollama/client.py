@@ -30,7 +30,7 @@ class MCPClient:
         # Initialize the server connector
         self.server_connector = ServerConnector(self.exit_stack, self.console)
         # Initialize the model manager
-        self.model_manager = ModelManager(console=self.console, default_model=model)
+        self.model_manager = ModelManager(console=self.console, default_model=model, ollama=self.ollama)
         # Initialize the tool manager with server connector reference
         self.tool_manager = ToolManager(console=self.console, server_connector=self.server_connector)
         # Initialize the streaming manager

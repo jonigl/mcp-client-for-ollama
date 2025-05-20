@@ -2,15 +2,12 @@
 
 This module handles listing, selecting, and managing Ollama models.
 """
-
-import aiohttp
-import dateutil.parser
 from typing import List, Dict, Any, Optional, Tuple
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from rich.prompt import Prompt
-from ..utils.constants import DEFAULT_MODEL, DEFAULT_OLLAMA_LOCAL_URL
+from ..utils.constants import DEFAULT_MODEL
 
 class ModelManager:
     """Manages Ollama models.
@@ -19,7 +16,7 @@ class ModelManager:
     Ollama is running, and selecting models to use with the client.
     """
     
-    def __init__(self, console: Optional[Console] = None, default_model: str = DEFAULT_MODEL):
+    def __init__(self, console: Optional[Console] = None, default_model: str = DEFAULT_MODEL, ollama: Optional[Any] = None):
         """Initialize the ModelManager.
         
         Args:
@@ -28,6 +25,7 @@ class ModelManager:
         """
         self.console = console or Console()
         self.model = default_model
+        self.ollama = ollama  
         
     async def check_ollama_running(self) -> bool:
         """Check if Ollama is running by making a request to its API.
@@ -36,12 +34,9 @@ class ModelManager:
             bool: True if Ollama is running, False otherwise
         """
         try:
-            # Try to make a simple request to the Ollama API
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{DEFAULT_OLLAMA_LOCAL_URL}/api/tags") as response:
-                    if response.status == 200:
-                        return True
-                    return False
+            result = await self.ollama.list()
+            if result:
+                return True
         except Exception:
             return False
             
@@ -52,17 +47,10 @@ class ModelManager:
             List[Dict[str, Any]]: List of model objects each with name and other metadata
         """
         try:
-            # Get models from Ollama API
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{DEFAULT_OLLAMA_LOCAL_URL}/api/tags") as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if "models" in data:
-                            return data["models"]
-                        return []
-                    else:
-                        self.console.print(f"[red]Error getting models from Ollama API: {response.status}[/red]")
-                        return []
+            result = await self.ollama.list()
+            if result:
+                models = result.get("models", [])                
+                return models                
         except Exception as e:
             self.console.print(f"[red]Error getting models from Ollama: {str(e)}[/red]")
             return []
@@ -114,7 +102,8 @@ class ModelManager:
         modified_at = model.get("modified_at", "Unknown")
         if modified_at != "Unknown":
             try:
-                modified_at = dateutil.parser.parse(modified_at).strftime("%Y-%m-%d %H:%M:%S")                                        
+                # Directly format the datetime object
+                modified_at = modified_at.strftime("%Y-%m-%d %H:%M:%S")
             except Exception:
                 modified_at = "Unknown date"
                 
