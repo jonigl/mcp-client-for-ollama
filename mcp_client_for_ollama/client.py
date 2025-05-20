@@ -14,17 +14,17 @@ from ollama import ChatResponse
 from . import __version__
 from .config.manager import ConfigManager 
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, TOKEN_COUNT_PER_CHAR, DEFAULT_MODEL
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, TOKEN_COUNT_PER_CHAR, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .tools.manager import ToolManager
 from .utils.streaming import StreamingManager
 
 class MCPClient:
-    def __init__(self, model: str = DEFAULT_MODEL):
+    def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST):
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
-        self.ollama = ollama.AsyncClient()
+        self.ollama = ollama.AsyncClient(host=host)
         self.console = Console()
         self.config_manager = ConfigManager(self.console)
         # Initialize the server connector
@@ -515,6 +515,7 @@ async def main():
     # Model options
     model_group = parser.add_argument_group("model options")
     model_group.add_argument("--model", default=DEFAULT_MODEL, help=f"Ollama model to use. Default: '{DEFAULT_MODEL}'")
+    model_group.add_argument("--host", default=DEFAULT_OLLAMA_HOST, help=f"Ollama host URL. Default: '{DEFAULT_OLLAMA_HOST}'")
     
     # Add version flag
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -532,7 +533,7 @@ async def main():
     console = Console()
 
     # Create a temporary client to check if Ollama is running
-    client = MCPClient(model=args.model)
+    client = MCPClient(model=args.model, host=args.host)
     if not await client.check_ollama_running():
         console.print(Panel(
             "[bold red]Error: Ollama is not running![/bold red]\n\n"
