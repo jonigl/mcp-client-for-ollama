@@ -18,5 +18,8 @@ DEFAULT_MODEL = "qwen2.5:7b"
 # Default ollama lcoal url for API requests
 DEFAULT_OLLAMA_LOCAL_URL = "http://localhost:11434"
 
+# URL for checking package updates on PyPI
+PYPI_PACKAGE_URL = "https://pypi.org/pypi/mcp-client-for-ollama/json"
+
 # Approximate token count per character (rough estimation)
 TOKEN_COUNT_PER_CHAR = 0.25
