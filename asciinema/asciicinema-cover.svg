@@ -1,0 +1,370 @@
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1187.68999953" height="765.3331420000001" font-family="Consolas, Menlo, 'Bitstream Vera Sans Mono', monospace, 'Powerline Symbols'" font-size="14px">
+  <style>
+    .br { font-weight: bold }
+    .fa { fill-opacity: 0.5 }
+    .it { font-style: italic }
+    .un { text-decoration: underline }
+  </style>
+
+  <rect width="100%" height="100%" style="fill: #282a36" rx="4" ry="4"></rect>
+
+  <svg x="8.42333333" y="9.333331000000001" class="default-text-fill">
+    <g style="shape-rendering: optimizeSpeed">
+
+        <rect x="0.0" y="503.99987400000003" width="25.269999990000002" height="18.666662000000002" style="fill: #444444"></rect><rect x="25.269999990000002" y="503.99987400000003" width="8.42333333" height="18.666662000000002" style="fill: #444444"></rect><rect x="33.69333332" y="503.99987400000003" width="25.269999990000002" height="18.666662000000002" style="fill: #444444"></rect><rect x="58.96333331" y="503.99987400000003" width="8.42333333" height="18.666662000000002" style="fill: #444444"></rect><rect x="67.38666664" y="503.99987400000003" width="126.34999995" height="18.666662000000002" style="fill: #444444"></rect><rect x="193.73666659" y="503.99987400000003" width="176.88999993000002" height="18.666662000000002" style="fill: #444444"></rect><rect x="370.62666652" y="503.99987400000003" width="8.42333333" height="18.666662000000002" style="fill: #444444"></rect><rect x="379.04999985" y="503.99987400000003" width="8.42333333" height="18.666662000000002" style="fill: #444444"></rect><rect x="387.47333318" y="503.99987400000003" width="160.04333327" height="18.666662000000002" style="fill: #444444"></rect><rect x="547.51666645" y="503.99987400000003" width="16.84666666" height="18.666662000000002" style="fill: #444444"></rect><rect x="564.36333311" y="503.99987400000003" width="8.42333333" height="18.666662000000002" style="fill: #444444"></rect><rect x="985.52999961" y="503.99987400000003" width="67.38666664" height="18.666662000000002" style="fill: #444444"></rect><rect x="1052.91666625" y="503.99987400000003" width="8.42333333" height="18.666662000000002" style="fill: #444444"></rect><rect x="1061.33999958" y="503.99987400000003" width="101.07999996000001" height="18.666662000000002" style="fill: #444444"></rect>
+
+        <rect x="58.96333331" y="727.999818" width="8.42333333" height="18.666662000000002" style="fill: #f8f8f2"></rect>
+
+
+
+          <polyline points="25.269999990000002 503.99987400000003, 33.69333332 513.333205, 25.269999990000002 522.6665360000001" fill="none" stroke="#949494"></polyline>
+
+          <polyline points="379.04999985 503.99987400000003, 387.47333318 513.333205, 379.04999985 522.6665360000001" fill="none" stroke="#949494"></polyline>
+
+          <polygon points="572.78666644 503.99987400000003, 581.20999977 513.333205, 572.78666644 522.6665360000001" fill="#444444"></polygon>
+
+          <polygon points="985.52999961 503.99987400000003, 977.10666628 513.333205, 985.52999961 522.6665360000001" fill="#444444"></polygon>
+
+          <polyline points="1061.33999958 503.99987400000003, 1052.91666625 513.333205, 1061.33999958 522.6665360000001" fill="none" stroke="#949494"></polyline>
+
+
+    </g>
+
+    <text style="fill: #f8f8f2">
+      <tspan y="0.0">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          certifi
+        </tspan><tspan x="84.2333333" class="fa">
+          ==2025.4.26
+        </tspan>
+      </tspan><tspan y="18.666662000000002">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          click
+        </tspan><tspan x="67.38666664" class="fa">
+          ==8.1.8
+        </tspan>
+      </tspan><tspan y="37.333324000000005">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          exceptiongroup
+        </tspan><tspan x="143.19666661" class="fa">
+          ==1.2.2
+        </tspan>
+      </tspan><tspan y="55.99998600000001">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          h11
+        </tspan><tspan x="50.539999980000005" class="fa">
+          ==0.16.0
+        </tspan>
+      </tspan><tspan y="74.66664800000001">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          httpcore
+        </tspan><tspan x="92.65666663" class="fa">
+          ==1.0.9
+        </tspan>
+      </tspan><tspan y="93.33331000000001">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          httpx
+        </tspan><tspan x="67.38666664" class="fa">
+          ==0.28.1
+        </tspan>
+      </tspan><tspan y="111.99997200000001">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          httpx-sse
+        </tspan><tspan x="101.07999996000001" class="fa">
+          ==0.4.0
+        </tspan>
+      </tspan><tspan y="130.66663400000002">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          idna
+        </tspan><tspan x="58.96333331" class="fa">
+          ==3.10
+        </tspan>
+      </tspan><tspan y="149.33329600000002">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          markdown-it-py
+        </tspan><tspan x="143.19666661" class="fa">
+          ==3.0.0
+        </tspan>
+      </tspan><tspan y="167.99995800000002">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          mcp
+        </tspan><tspan x="50.539999980000005" class="fa">
+          ==1.8.0
+        </tspan>
+      </tspan><tspan y="186.66662000000002">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          mcp-client-ollama
+        </tspan><tspan x="168.4666666" class="fa">
+          ==0.1.0 (from file:///Users/jlowenstern/jonigl/ai/mcp/mcp-client-for-ollama)
+        </tspan>
+      </tspan><tspan y="205.33328200000003">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          mdurl
+        </tspan><tspan x="67.38666664" class="fa">
+          ==0.1.2
+        </tspan>
+      </tspan><tspan y="223.99994400000003">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          ollama
+        </tspan><tspan x="75.80999997" class="fa">
+          ==0.4.8
+        </tspan>
+      </tspan><tspan y="242.66660600000003">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          pydantic
+        </tspan><tspan x="92.65666663" class="fa">
+          ==2.11.4
+        </tspan>
+      </tspan><tspan y="261.33326800000003">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          pydantic-core
+        </tspan><tspan x="134.77333328" class="fa">
+          ==2.33.2
+        </tspan>
+      </tspan><tspan y="279.99993">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          pydantic-settings
+        </tspan><tspan x="168.4666666" class="fa">
+          ==2.9.1
+        </tspan>
+      </tspan><tspan y="298.66659200000004">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          pygments
+        </tspan><tspan x="92.65666663" class="fa">
+          ==2.19.1
+        </tspan>
+      </tspan><tspan y="317.333254">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          python-dotenv
+        </tspan><tspan x="134.77333328" class="fa">
+          ==1.1.0
+        </tspan>
+      </tspan><tspan y="335.99991600000004">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          python-multipart
+        </tspan><tspan x="160.04333327" class="fa">
+          ==0.0.20
+        </tspan>
+      </tspan><tspan y="354.666578">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          rich
+        </tspan><tspan x="58.96333331" class="fa">
+          ==14.0.0
+        </tspan>
+      </tspan><tspan y="373.33324000000005">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          sniffio
+        </tspan><tspan x="84.2333333" class="fa">
+          ==1.3.1
+        </tspan>
+      </tspan><tspan y="391.999902">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          sse-starlette
+        </tspan><tspan x="134.77333328" class="fa">
+          ==2.3.4
+        </tspan>
+      </tspan><tspan y="410.66656400000005">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          starlette
+        </tspan><tspan x="101.07999996000001" class="fa">
+          ==0.46.2
+        </tspan>
+      </tspan><tspan y="429.333226">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          typing-extensions
+        </tspan><tspan x="168.4666666" class="fa">
+          ==4.13.2
+        </tspan>
+      </tspan><tspan y="447.99988800000006">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          typing-inspection
+        </tspan><tspan x="168.4666666" class="fa">
+          ==0.4.0
+        </tspan>
+      </tspan><tspan y="466.66655000000003">
+        <tspan dy="1em" x="8.42333333" style="fill: #50fa7b">
+          +
+        </tspan><tspan x="25.269999990000002" class="br">
+          uvicorn
+        </tspan><tspan x="84.2333333" class="fa">
+          ==0.34.2
+        </tspan>
+      </tspan><tspan y="485.33321200000006">
+        <tspan dy="1em" x="0.0">
+          ..nt-for-ollama
+        </tspan>
+      </tspan><tspan y="503.99987400000003">
+        <tspan dy="1em" x="8.42333333" style="fill: #EEEEEE">
+           
+        </tspan><tspan x="42.11666665" style="fill: #0087AF">
+           
+        </tspan><tspan x="58.96333331" class="br" style="fill: #00AFFF">
+          ~
+        </tspan><tspan x="67.38666664" style="fill: #0087AF">
+          /jonigl/ai/mcp/
+        </tspan><tspan x="193.73666659" class="br" style="fill: #00AFFF">
+          mcp-client-for-ollama
+        </tspan><tspan x="395.89666651" style="fill: #5FD700">
+            simple-client 
+        </tspan><tspan x="547.51666645" style="fill: #00AFFF">
+          ?1
+        </tspan><tspan x="581.20999977" style="fill: #6C6C6C">
+          ···············································
+        </tspan><tspan x="993.95333294" style="fill: #00AFAF">
+          3.10  
+        </tspan><tspan x="1069.76333291" style="fill: #5F8787">
+          15:31:55  
+        </tspan>
+      </tspan><tspan y="522.6665360000001">
+        <tspan dy="1em" x="0.0" style="fill: #5FD700">
+          ❯
+        </tspan><tspan x="16.84666666">
+          uv run client.py --mcp-server server.py
+        </tspan>
+      </tspan><tspan y="541.333198">
+        <tspan dy="1em" x="0.0">
+          uv
+        </tspan><tspan x="16.84666666" class="fa" style="fill: #8be9fd">
+          [05/09/25 15:32:03] 
+        </tspan><tspan x="185.31333326" style="fill: #bd93f9">
+          INFO
+        </tspan><tspan x="261.12333323">
+          Processing request of type ListToolsRequest
+        </tspan><tspan x="1078.18666624" class="fa">
+          server.py:5
+        </tspan>
+      </tspan><tspan y="559.99986">
+        <tspan dy="1em" x="0.0" class="fa">
+          45
+        </tspan>
+      </tspan><tspan y="578.6665220000001">
+        <tspan dy="1em" x="0.0" class="fa" style="fill: #50fa7b">
+          Server connected. Tools:
+        </tspan>
+      </tspan><tspan y="597.3331840000001">
+        <tspan dy="1em" x="0.0" class="fa" style="fill: #50fa7b">
+          [&#39;get_weather&#39;]
+        </tspan>
+      </tspan><tspan y="615.999846">
+        <tspan dy="1em" x="0.0" class="br" style="fill: #69ff94">
+          MCP Client Started!
+        </tspan><tspan x="168.4666666" style="fill: #8be9fd">
+          Model: llama3.
+        </tspan><tspan x="286.39333322" class="br" style="fill: #a4ffff">
+          2:3b
+        </tspan>
+      </tspan><tspan y="634.666508">
+        <tspan dy="1em" x="0.0" style="fill: #f1fa8c">
+          Type your queries below or 
+        </tspan><tspan x="227.42999991" class="br" style="fill: #ffffa5">
+          &#39;quit&#39;
+        </tspan><tspan x="286.39333322" style="fill: #f1fa8c">
+          to exit.
+        </tspan>
+      </tspan><tspan y="653.33317">
+        <tspan dy="1em" x="0.0" class="br" style="fill: #d6acff">
+          Query:
+        </tspan><tspan x="58.96333331">
+          what is the weather in miami?
+        </tspan>
+      </tspan><tspan y="671.9998320000001">
+        <tspan dy="1em" x="0.0" class="fa" style="fill: #8be9fd">
+          [05/09/25 15:32:08] 
+        </tspan><tspan x="168.4666666" style="fill: #bd93f9">
+          INFO
+        </tspan><tspan x="244.27666657">
+          Processing request of type ListToolsRequest
+        </tspan><tspan x="1061.33999958" class="fa">
+          server.py:545
+        </tspan>
+      </tspan><tspan y="690.6664940000001">
+        <tspan dy="1em" x="0.0" class="fa" style="fill: #8be9fd">
+          [05/09/25 15:32:10] 
+        </tspan><tspan x="168.4666666" style="fill: #bd93f9">
+          INFO
+        </tspan><tspan x="244.27666657">
+          Processing request of type CallToolRequest
+        </tspan><tspan x="1061.33999958" class="fa">
+          server.py:545
+        </tspan>
+      </tspan><tspan y="709.333156">
+        <tspan dy="1em" x="0.0" style="fill: #D78700">
+          The current weather in Miami is partly cloudy, with a temperature of 26 degrees Celsius (about 79 degrees Fahrenheit).
+        </tspan>
+      </tspan><tspan y="727.999818">
+        <tspan dy="1em" x="0.0" class="br" style="fill: #d6acff">
+          Query:
+        </tspan>
+      </tspan>
+    </text>
+  </svg>
+
+  <g transform="translate(-40 -40)">
+    <svg x="50%" y="50%" width="80" height="80">
+      <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000.0 1000.0" style="filter: drop-shadow(0px 0px 5px rgba(0, 0, 0, 0.4))">
+  <defs>
+    <mask id="small-triangle-mask">
+      <rect width="100%" height="100%" fill="white"></rect>
+      <polygon points="700.0 500.0, 400.00000000000006 326.7949192431122, 399.9999999999999 673.2050807568877" fill="black">
+      </polygon>
+    </mask>
+  </defs>
+  <polygon points="1000.0 500.0, 250.0000000000001 66.98729810778059, 249.99999999999977 933.0127018922192" mask="url(#small-triangle-mask)" fill="white">
+  </polygon>
+  <polyline points="673.2050807568878 400.0, 326.7949192431123 600.0" stroke="white" stroke-width="90">
+  </polyline>
+</svg>
+    </svg>
+  </g>
+</svg>

@@ -43,7 +43,7 @@ uv run client.py --mcp-server server.py
 
 ## Demo
 
-[![asciicast](https://asciinema.org/a/718592.svg)](https://asciinema.org/a/718592)
+[![asciicast](./asciinema/asciicinema-cover.svg)](https://asciinema.org/a/718592)
 
 
 ## Usage
