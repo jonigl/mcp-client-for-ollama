@@ -68,7 +68,7 @@ Run with default settings:
 ollmcp
 ```
 
-If you don't provide any options, the client will use auto-discovery mode to find MCP servers from Claude's configuration.
+> If you don't provide any options, the client will use `auto-discovery` mode to find MCP servers from Claude's configuration.
 
 ### Command-line Arguments
 
@@ -81,7 +81,8 @@ If you don't provide any options, the client will use auto-discovery mode to fin
 `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 #### Model Options:
-- `--model`: Ollama model to use (default: "qwen2.5:7b")
+- `--model MODEL`: Ollama model to use. Default: `qwen2.5:7b`
+- `--host HOST`: Ollama host URL. Default: `http://localhost:11434`
 
 ### Usage Examples
 
@@ -99,6 +100,11 @@ ollmcp --mcp-server /path/to/weather.py --mcp-server /path/to/filesystem.js --mo
 Use a JSON configuration file:
 ```bash
 ollmcp --servers-json /path/to/servers.json --model llama3.2:1b
+```
+
+Use a custom Ollama host:
+```bash
+ollmcp --host http://localhost:22545 --servers-json /path/to/servers.json --model qwen3:latest
 ```
 
 ## Interactive Commands
