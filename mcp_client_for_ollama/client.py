@@ -259,7 +259,7 @@ class MCPClient:
     async def display_check_for_updates(self):
         # Check for updates
         try:
-            update_available, current_version, latest_version = await check_for_updates()
+            update_available, current_version, latest_version = check_for_updates()
             if update_available:
                 self.console.print(Panel(
                     f"[bold yellow]New version available![/bold yellow]\n\n"
