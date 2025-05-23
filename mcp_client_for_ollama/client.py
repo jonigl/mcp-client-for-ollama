@@ -216,16 +216,16 @@ class MCPClient:
                     "role": "tool",
                     "content": result.content[0].text,
                     "name": tool_name
-                })            
+                })
 
-        # Get stream response from Ollama with the tool results                                
-        stream = await self.ollama.chat(
-            model=model,
-            messages=messages,
-            stream=True,
-        )
-        # Process the streaming response
-        response_text, _ = await self.streaming_manager.process_streaming_response(stream)
+            # Get stream response from Ollama with the tool results                                
+            stream = await self.ollama.chat(
+                model=model,
+                messages=messages,
+                stream=True,
+            )
+            # Process the streaming response
+            response_text, _ = await self.streaming_manager.process_streaming_response(stream)
 
         if not response_text:
             self.console.print("[red]No response received.[/red]")
