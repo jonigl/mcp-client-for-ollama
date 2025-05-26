@@ -1,11 +1,9 @@
-<html>
-    <p align="center">
-      <img src="./misc/ollmcp-logo-512.png" width="256" />
-    </p>
-    <p align="center">
-    <i>A simple yet powerful Python client for interacting with Model Context Protocol (MCP) servers using Ollama, allowing local LLMs to use tools.</i>
-    </p>
-</html>
+<p align="center">
+  <img src="./misc/ollmcp-logo-512.png" width="256" />
+</p>
+<p align="center">
+<i>A simple yet powerful Python client for interacting with Model Context Protocol (MCP) servers using Ollama, allowing local LLMs to use tools.</i>
+</p>
 
 ---
 
@@ -16,7 +14,10 @@
 [![PyPI - Python Version](https://img.shields.io/pypi/v/mcp-client-for-ollama?label=mcp-client-for-ollama-pypi)](https://pypi.org/project/mcp-client-for-ollama/)
 [![Build, Publish and Release](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/publish.yml/badge.svg)](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/publish.yml)
 [![CI](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml/badge.svg)](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml)
-![ollmpc usage demo gif](https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/v0.2.5/misc/ollmcp-demo.gif)
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/v0.2.5/misc/ollmcp-demo.gif" alt="MCP Client for Ollama Demo">
+</p>
 
 ## Overview
 
