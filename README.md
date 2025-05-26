@@ -1,14 +1,21 @@
-# MCP Client for Ollama
+<html>
+    <p align="center">
+      <img src="./misc/ollmcp-logo-512.png" width="256" />
+    </p>
+    <p align="center">
+    <i>A simple yet powerful Python client for interacting with Model Context Protocol (MCP) servers using Ollama, allowing local LLMs to use tools.</i>
+    </p>
+</html>
+
+---
+
+# MCP Client for Ollama (ollmcp)
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI - Python Version](https://img.shields.io/pypi/v/ollmcp?label=ollmcp-pypi)](https://pypi.org/project/ollmcp/)
 [![PyPI - Python Version](https://img.shields.io/pypi/v/mcp-client-for-ollama?label=mcp-client-for-ollama-pypi)](https://pypi.org/project/mcp-client-for-ollama/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build, Publish and Release](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/publish.yml/badge.svg)](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/publish.yml)
 [![CI](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml/badge.svg)](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml)
-
-A simple yet powerful Python client for interacting with Model Context Protocol (MCP) servers using Ollama, allowing local LLMs to use tools.
-
 ![ollmpc usage demo gif](https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/v0.2.5/misc/ollmcp-demo.gif)
 
 ## Overview
@@ -42,17 +49,20 @@ This implementation was adapted from the [Model Context Protocol quickstart guid
 ## Quick Start
 
 **Option 1:** Install with pip and run
+
 ```bash
 pip install ollmcp
 ollmcp
 ```
 
 **Option 2:** One-step install and run
+
 ```bash
 uvx ollmcp
 ```
 
 **Option 3:** Install from source and run using virtual environment
+
 ```bash
 git clone https://github.com/jonigl/mcp-client-for-ollama.git
 cd mcp-client-for-ollama
@@ -64,6 +74,7 @@ uv run -m mcp_client_for_ollama
 ## Usage
 
 Run with default settings:
+
 ```bash
 ollmcp
 ```
@@ -73,36 +84,42 @@ ollmcp
 ### Command-line Arguments
 
 #### Server Options:
+
 - `--mcp-server`: Path to one or more MCP server scripts (.py or .js). Can be specified multiple times.
 - `--servers-json`: Path to a JSON file with server configurations.
 - `--auto-discovery`: Auto-discover servers from Claude's default config file (default behavior if no other options provided).
 
 > Note: Claude's configuration file is typically located at:
-`~/Library/Application Support/Claude/claude_desktop_config.json`
+> `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 #### Model Options:
+
 - `--model MODEL`: Ollama model to use. Default: `qwen2.5:7b`
 - `--host HOST`: Ollama host URL. Default: `http://localhost:11434`
 
 ### Usage Examples
 
 Connect to a single server:
+
 ```bash
 ollmcp --mcp-server /path/to/weather.py --model llama3.2:3b
 ```
 
 Connect to multiple servers:
+
 ```bash
 ollmcp --mcp-server /path/to/weather.py --mcp-server /path/to/filesystem.js --model qwen2.5:latest
 
 ```
 
 Use a JSON configuration file:
+
 ```bash
 ollmcp --servers-json /path/to/servers.json --model llama3.2:1b
 ```
 
 Use a custom Ollama host:
+
 ```bash
 ollmcp --host http://localhost:22545 --servers-json /path/to/servers.json --model qwen3:latest
 ```
@@ -113,19 +130,19 @@ During chat, use these commands:
 
 ![ollmcp main interface](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-welcome.jpg?raw=true)
 
-| Command | Shortcut | Description |
-|---------|----------|-------------|
-| `help` | `h` | Display help and available commands |
-| `tools` | `t` | Open the tool selection interface |
-| `model` | `m` | List and select a different Ollama model |
-| `context` | `c` | Toggle context retention (on/off) |
-| `clear` | `cc` | Clear conversation history and context |
-| `context-info` | `ci` | Display context statistics |
-| `cls` | `clear-screen` | Clear the terminal screen |
-| `save-config` | `sc` | Save current tool and model configuration to a file |
-| `load-config` | `lc` | Load tool and model configuration from a file |
-| `reset-config` | `rc` | Reset configuration to defaults (all tools enabled) |
-| `quit` | `q` | Exit the client |
+| Command        | Shortcut       | Description                                         |
+| -------------- | -------------- | --------------------------------------------------- |
+| `help`         | `h`            | Display help and available commands                 |
+| `tools`        | `t`            | Open the tool selection interface                   |
+| `model`        | `m`            | List and select a different Ollama model            |
+| `context`      | `c`            | Toggle context retention (on/off)                   |
+| `clear`        | `cc`           | Clear conversation history and context              |
+| `context-info` | `ci`           | Display context statistics                          |
+| `cls`          | `clear-screen` | Clear the terminal screen                           |
+| `save-config`  | `sc`           | Save current tool and model configuration to a file |
+| `load-config`  | `lc`           | Load tool and model configuration from a file       |
+| `reset-config` | `rc`           | Reset configuration to defaults (all tools enabled) |
+| `quit`         | `q`            | Exit the client                                     |
 
 ### Tool and Server Selection
 
@@ -162,6 +179,7 @@ The client supports saving and loading tool configurations between sessions:
 - Named configurations are saved as `~/.config/ollmcp/{name}.json`
 
 The configuration saves:
+
 - Current model selection
 - Enabled/disabled status of all tools
 - Context retention settings
@@ -169,7 +187,6 @@ The configuration saves:
 ## Server Configuration Format
 
 The JSON configuration file supports STDIO, SSE, and Streamable HTTP server types:
-
 
 ```json
 {
@@ -216,7 +233,6 @@ The following Ollama models work well with tool use:
 - mistral
 
 For a complete list of Ollama models with tool use capabilities, visit the [official Ollama models page](https://ollama.com/search?c=tools).
-
 
 ### How Tool Calls Work
 
