@@ -90,7 +90,8 @@ ollmcp
 - `--servers-json`: Path to a JSON file with server configurations.
 - `--auto-discovery`: Auto-discover servers from Claude's default config file (default behavior if no other options provided).
 
-> Note: Claude's configuration file is typically located at:
+> [!TIP]
+> Claude's configuration file is typically located at:
 > `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 #### Model Options:
@@ -220,8 +221,8 @@ The JSON configuration file supports STDIO, SSE, and Streamable HTTP server type
   }
 }
 ```
-
-> Note: If you specify a URL without a type, the client will default to using Streamable HTTP transport.
+> [!NOTE]
+> If you specify a URL without a type, the client will default to using Streamable HTTP transport.
 
 ## Compatible Models
 
