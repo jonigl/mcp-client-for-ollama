@@ -328,7 +328,7 @@ class MCPClient:
                 # Use await to call the async method
                 query = await self.get_user_input("Query")
 
-                if query.lower() in ['quit', 'q']:
+                if query.lower() in ['quit', 'q', 'exit']:
                     self.console.print("[yellow]Exiting...[/yellow]")
                     break
 
@@ -445,10 +445,12 @@ class MCPClient:
 
             "[bold cyan]Context and Thinking:[/bold cyan]\n"
             "• Type [bold]context[/bold] or [bold]c[/bold] to toggle context retention\n"
-            "• Type [bold]thinking[/bold] or [bold]th[/bold] to toggle thinking mode (deepseek-r1, qwen3 only)\n"
-            "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n"
             "• Type [bold]clear[/bold] or [bold]cc[/bold] to clear conversation context\n"
             "• Type [bold]context-info[/bold] or [bold]ci[/bold] to display context info\n\n"
+
+            "[bold cyan]Thinking Mode:[/bold cyan]\n"
+            f"• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode ({', '.join(THINKING_MODELS)} only)\n"
+            "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n\n"
 
             "[bold cyan]Configuration:[/bold cyan]\n"
             "• Type [bold]save-config[/bold] or [bold]sc[/bold] to save the current configuration\n"
@@ -458,7 +460,7 @@ class MCPClient:
             "[bold cyan]Basic Commands:[/bold cyan]\n"
             "• Type [bold]help[/bold] or [bold]h[/bold] to show this help message\n"
             "• Type [bold]clear-screen[/bold] or [bold]cls[/bold] to clear the terminal screen\n"
-            "• Type [bold]quit[/bold] or [bold]q[/bold] to exit",
+            "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], or [bold]Ctrl+D[/bold] to exit",
             title="Help", border_style="yellow", expand=False))
 
     def toggle_context_retention(self):
