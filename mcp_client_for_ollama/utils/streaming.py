@@ -34,16 +34,19 @@ class StreamingManager:
     def _create_content_display(self, content, thinking_content="", show_thinking=True, has_tool_calls=False):
         """Create a display for content with optional thinking section"""
         if thinking_content and show_thinking:
-            # Use markdown horizontal rule for better rendering
-            # Don't add "Answer:" label when tools are being called
-            if has_tool_calls:
-                combined_content = thinking_content + "\n\n---\n\n" + content
+            # Only add separator and Answer label if there's actual content
+            if content:
+                if has_tool_calls:
+                    combined_content = thinking_content + "\n\n---\n\n" + content
+                else:
+                    combined_content = thinking_content + "\n\n---\n\n**Answer:**\n\n" + content
             else:
-                combined_content = thinking_content + "\n\n---\n\n**Answer:**\n\n" + content
+                # No content, just show thinking
+                combined_content = thinking_content
             return Markdown(combined_content)
         else:
-            # Don't add "Answer:" label when tools are being called
-            if has_tool_calls:
+            # Don't add "Answer:" label when tools are being called or when content is empty
+            if has_tool_calls or not content:
                 return Markdown(content)
             else:
                 return Markdown("**Answer:**\n\n" + content)

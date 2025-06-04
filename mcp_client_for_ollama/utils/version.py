@@ -8,7 +8,7 @@ from .constants import PYPI_PACKAGE_URL
 
 def check_for_updates():
     """Check if a newer version of the package is available on PyPI.
-    
+
     Returns:
         Tuple[bool, str, str]: (update_available, current_version, latest_version)
     """

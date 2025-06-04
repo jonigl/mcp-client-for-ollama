@@ -50,6 +50,7 @@ class MCPClient:
         # Thinking mode settings
         self.thinking_mode = True  # By default, thinking mode is enabled for models that support it
         self.show_thinking = False   # By default, thinking text is hidden after completion
+        self.default_configuration_status = False  # Track if default configuration was loaded successfully
 
     async def check_ollama_running(self) -> bool:
         """Check if Ollama is running by making a request to its API
@@ -123,9 +124,9 @@ class MCPClient:
 
 
         # Display the chat history and current state after selection
-        self._display_chat_history()
         self.display_available_tools()
         self.display_current_model()
+        self._display_chat_history()
 
     def _display_chat_history(self):
         """Display chat history when returning to the main chat interface"""
@@ -141,7 +142,7 @@ class MCPClient:
                 query_number = len(self.chat_history) - len(history_to_show) + i + 1
                 self.console.print(f"[bold green]Query {query_number}:[/bold green]")
                 self.console.print(Text(entry["query"].strip(), style="green"))
-                self.console.print(f"[bold blue]Response:[/bold blue]")
+                self.console.print("[bold blue]Answer:[/bold blue]")
                 self.console.print(Markdown(entry["response"].strip()))
                 self.console.print()
 
@@ -321,6 +322,7 @@ class MCPClient:
         self.display_available_tools()
         self.display_current_model()
         self.print_help()
+        self.print_auto_load_default_config_status()
         await self.display_check_for_updates()
 
         while True:
@@ -555,6 +557,18 @@ class MCPClient:
             title="Context Window", border_style="cyan", expand=False
         ))
 
+    def auto_load_default_config(self):
+        """Automatically load the default configuration if it exists."""
+        if self.config_manager.config_exists("default"):
+            # self.console.print("[cyan]Default configuration found, loading...[/cyan]")
+            self.default_configuration_status = self.load_configuration("default")
+
+    def print_auto_load_default_config_status(self):
+        """Print the status of the auto-load default configuration."""
+        if self.default_configuration_status:
+            self.console.print("[green]Default configuration loaded successfully![/green]")
+
+
     def save_configuration(self, config_name=None):
         """Save current tool configuration and model settings to a file
 
@@ -566,7 +580,9 @@ class MCPClient:
             "model": self.model_manager.get_current_model(),
             "enabledTools": self.tool_manager.get_enabled_tools(),
             "contextSettings": {
-                "retainContext": self.retain_context,
+                "retainContext": self.retain_context
+            },
+            "modelSettings": {
                 "thinkingMode": self.thinking_mode,
                 "showThinking": self.show_thinking
             }
@@ -611,10 +627,13 @@ class MCPClient:
         if "contextSettings" in config_data:
             if "retainContext" in config_data["contextSettings"]:
                 self.retain_context = config_data["contextSettings"]["retainContext"]
-            if "thinkingMode" in config_data["contextSettings"]:
-                self.thinking_mode = config_data["contextSettings"]["thinkingMode"]
-            if "showThinking" in config_data["contextSettings"]:
-                self.show_thinking = config_data["contextSettings"]["showThinking"]
+
+        # Load model settings if specified
+        if "modelSettings" in config_data:
+            if "thinkingMode" in config_data["modelSettings"]:
+                self.thinking_mode = config_data["modelSettings"]["thinkingMode"]
+            if "showThinking" in config_data["modelSettings"]:
+                self.show_thinking = config_data["modelSettings"]["showThinking"]
 
         return True
 
@@ -632,13 +651,16 @@ class MCPClient:
         if "contextSettings" in config_data:
             if "retainContext" in config_data["contextSettings"]:
                 self.retain_context = config_data["contextSettings"]["retainContext"]
-            if "thinkingMode" in config_data["contextSettings"]:
-                self.thinking_mode = config_data["contextSettings"]["thinkingMode"]
+
+        # Reset model settings from the default configuration
+        if "modelSettings" in config_data:
+            if "thinkingMode" in config_data["modelSettings"]:
+                self.thinking_mode = config_data["modelSettings"]["thinkingMode"]
             else:
                 # Default thinking mode to False if not specified
                 self.thinking_mode = False
-            if "showThinking" in config_data["contextSettings"]:
-                self.show_thinking = config_data["contextSettings"]["showThinking"]
+            if "showThinking" in config_data["modelSettings"]:
+                self.show_thinking = config_data["modelSettings"]["showThinking"]
             else:
                 # Default show thinking to True if not specified
                 self.show_thinking = True
@@ -729,6 +751,7 @@ async def main():
                 return
     try:
         await client.connect_to_servers(args.mcp_server, config_path, auto_discovery)
+        client.auto_load_default_config()
         await client.chat_loop()
     finally:
         await client.cleanup()
