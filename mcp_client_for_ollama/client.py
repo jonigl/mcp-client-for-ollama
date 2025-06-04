@@ -12,9 +12,9 @@ import ollama
 from ollama import ChatResponse
 
 from . import __version__
-from .config.manager import ConfigManager 
+from .config.manager import ConfigManager
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, TOKEN_COUNT_PER_CHAR, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, TOKEN_COUNT_PER_CHAR, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, THINKING_MODELS
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .tools.manager import ToolManager
@@ -44,13 +44,16 @@ class MCPClient:
             'prompt': 'ansibrightyellow bold',
         })
         # Context retention settings
-        self.retain_context = True  # By default, retain conversation context        
+        self.retain_context = True  # By default, retain conversation context
         self.approx_token_count = 0  # Approximate token count for the conversation
         self.token_count_per_char = TOKEN_COUNT_PER_CHAR  # Rough approximation of tokens per character
-        
+        # Thinking mode settings
+        self.thinking_mode = True  # By default, thinking mode is enabled for models that support it
+        self.show_thinking = False   # By default, thinking text is hidden after completion
+
     async def check_ollama_running(self) -> bool:
         """Check if Ollama is running by making a request to its API
-        
+
         Returns:
             bool: True if Ollama is running, False otherwise
         """
@@ -59,11 +62,22 @@ class MCPClient:
     def display_current_model(self):
         """Display the currently selected model"""
         self.model_manager.display_current_model()
-                               
+
+    def supports_thinking_mode(self) -> bool:
+        """Check if the current model supports thinking mode
+
+        Returns:
+            bool: True if the current model supports thinking mode, False otherwise
+        """
+        current_model = self.model_manager.get_current_model()
+        # Check if the model name (before the colon) matches any thinking model
+        model_base_name = current_model.split(":")[0]
+        return model_base_name in THINKING_MODELS
+
     async def select_model(self):
         """Let the user select an Ollama model from the available ones"""
         await self.model_manager.select_model_interactive(clear_console_func=self.clear_console)
-        
+
         # After model selection, redisplay context
         self.display_available_tools()
         self.display_current_model()
@@ -76,10 +90,10 @@ class MCPClient:
     def display_available_tools(self):
         """Display available tools with their enabled/disabled status"""
         self.tool_manager.display_available_tools()
-    
+
     async def connect_to_servers(self, server_paths=None, config_path=None, auto_discovery=False):
         """Connect to one or more MCP servers using the ServerConnector
-        
+
         Args:
             server_paths: List of paths to server scripts (.py or .js)
             config_path: Path to JSON config file with server configurations
@@ -91,10 +105,10 @@ class MCPClient:
             config_path=config_path,
             auto_discovery=auto_discovery
         )
-        
+
         # Store the results
         self.sessions = sessions
-        
+
         # Set up the tool manager with the available tools and their enabled status
         self.tool_manager.set_available_tools(available_tools)
         self.tool_manager.set_enabled_tools(enabled_tools)
@@ -103,25 +117,25 @@ class MCPClient:
         """Let the user select which tools to enable using interactive prompts with server-based grouping"""
         # Save original states
         original_states = self.tool_manager.get_enabled_tools().copy()
-        
+
         # Call the tool manager's select_tools method
         self.tool_manager.select_tools(clear_console_func=self.clear_console)
-        
-        
+
+
         # Display the chat history and current state after selection
         self._display_chat_history()
-        self.display_available_tools()      
+        self.display_available_tools()
         self.display_current_model()
 
     def _display_chat_history(self):
         """Display chat history when returning to the main chat interface"""
         if self.chat_history:
             self.console.print(Panel("[bold]Chat History[/bold]", border_style="blue", expand=False))
-            
+
             # Display the last few conversations (limit to keep the interface clean)
             max_history = 3
             history_to_show = self.chat_history[-max_history:]
-            
+
             for i, entry in enumerate(history_to_show):
                 # Calculate query number starting from 1 for the first query
                 query_number = len(self.chat_history) - len(history_to_show) + i + 1
@@ -130,7 +144,7 @@ class MCPClient:
                 self.console.print(f"[bold blue]Response:[/bold blue]")
                 self.console.print(Markdown(entry["response"].strip()))
                 self.console.print()
-                
+
             if len(self.chat_history) > max_history:
                 self.console.print(f"[dim](Showing last {max_history} of {len(self.chat_history)} conversations)[/dim]")
 
@@ -141,7 +155,7 @@ class MCPClient:
             "role": "user",
             "content": query
         }
-        
+
         # Build messages array based on context retention setting
         if self.retain_context and self.chat_history:
             # Include previous messages for context
@@ -152,7 +166,7 @@ class MCPClient:
                     "role": "user",
                     "content": entry["query"]
                 })
-                # Add assistant response 
+                # Add assistant response
                 messages.append({
                     "role": "assistant",
                     "content": entry["response"]
@@ -165,10 +179,10 @@ class MCPClient:
 
         # Get enabled tools from the tool manager
         enabled_tool_objects = self.tool_manager.get_enabled_tool_objects()
-        
+
         if not enabled_tool_objects:
             self.console.print("[yellow]Warning: No tools are enabled. Model will respond without tool access.[/yellow]")
-        
+
         available_tools = [{
             "type": "function",
             "function": {
@@ -176,21 +190,34 @@ class MCPClient:
                 "description": tool.description,
                 "parameters": tool.inputSchema
             }
-        } for tool in enabled_tool_objects]        
+        } for tool in enabled_tool_objects]
 
         # Get current model from the model manager
         model = self.model_manager.get_current_model()
+
+        # Prepare chat parameters
+        chat_params = {
+            "model": model,
+            "messages": messages,
+            "stream": True,
+            "tools": available_tools
+        }
+
+        # Add thinking parameter if thinking mode is enabled and model supports it
+        if self.thinking_mode and self.supports_thinking_mode():
+            chat_params["think"] = True
+
         # Initial Ollama API call with the query and available tools
-        stream = await self.ollama.chat(
-            model=model,
-            messages=messages,
-            stream=True,
-            tools=available_tools            
-        )
-        # Process the streaming response
+        stream = await self.ollama.chat(**chat_params)
+
+        # Process the streaming response with thinking mode support
         response_text = ""
-        tool_calls = []        
-        response_text, tool_calls = await self.streaming_manager.process_streaming_response(stream)
+        tool_calls = []
+        response_text, tool_calls = await self.streaming_manager.process_streaming_response(
+            stream,
+            thinking_mode=self.thinking_mode and self.supports_thinking_mode(),
+            show_thinking=self.show_thinking
+        )
         # Check if there are any tool calls in the response
         if len(tool_calls) > 0:
             for tool in tool_calls:
@@ -199,33 +226,48 @@ class MCPClient:
 
                 # Parse server name and actual tool name from the qualified name
                 server_name, actual_tool_name = tool_name.split('.', 1) if '.' in tool_name else (None, tool_name)
-                
+
                 if not server_name or server_name not in self.sessions:
                     self.console.print(f"[red]Error: Unknown server for tool {tool_name}[/red]")
                     continue
-                
+
                 # Execute tool call
-                self.console.print(Panel(f"[bold]Calling tool[/bold]: [blue]{tool_name}[/blue]", 
-                                       subtitle=f"[dim]{tool_args}[/dim]", 
+                self.console.print(Panel(f"[bold]Calling tool[/bold]: [blue]{tool_name}[/blue]",
+                                       subtitle=f"[dim]{tool_args}[/dim]",
                                        expand=True))
-                
+
                 with self.console.status(f"[cyan]Running {tool_name}...[/cyan]"):
                     result = await self.sessions[server_name]["session"].call_tool(actual_tool_name, tool_args)
-                
+                tool_and_result = f"{tool_name} with args {tool_args} returned: {result.content[0].text}"
+                self.console.print(Panel(f"[green]Tool result:[/green] {tool_and_result}",
+                                        title=f"Tool: {tool_name}",
+                                        border_style="green",
+                                        expand=False))
                 messages.append({
                     "role": "tool",
-                    "content": result.content[0].text,
+                    "content": tool_and_result,
                     "name": tool_name
                 })
 
-            # Get stream response from Ollama with the tool results                                
-            stream = await self.ollama.chat(
-                model=model,
-                messages=messages,
-                stream=True,
+            # Get stream response from Ollama with the tool results
+            chat_params_followup = {
+                "model": model,
+                "messages": messages,
+                "stream": True,
+            }
+
+            # Add thinking parameter if thinking mode is enabled and model supports it
+            if self.thinking_mode and self.supports_thinking_mode():
+                chat_params_followup["think"] = True
+
+            stream = await self.ollama.chat(**chat_params_followup)
+
+            # Process the streaming response with thinking mode support
+            response_text, _ = await self.streaming_manager.process_streaming_response(
+                stream,
+                thinking_mode=self.thinking_mode and self.supports_thinking_mode(),
+                show_thinking=self.show_thinking
             )
-            # Process the streaming response
-            response_text, _ = await self.streaming_manager.process_streaming_response(stream)
 
         if not response_text:
             self.console.print("[red]No response received.[/red]")
@@ -233,7 +275,7 @@ class MCPClient:
 
         # Append query and response to chat history
         self.chat_history.append({"query": query, "response": response_text})
-        
+
         # Update token count estimation (rough approximation)
         query_chars = len(query)
         response_chars = len(response_text)
@@ -255,7 +297,7 @@ class MCPClient:
             return "quit"
         except EOFError:
             return "quit"
-        
+
     async def display_check_for_updates(self):
         # Check for updates
         try:
@@ -289,23 +331,31 @@ class MCPClient:
                 if query.lower() in ['quit', 'q']:
                     self.console.print("[yellow]Exiting...[/yellow]")
                     break
-                
+
                 if query.lower() in ['tools', 't']:
                     self.select_tools()
                     continue
-                    
+
                 if query.lower() in ['help', 'h']:
                     self.print_help()
                     continue
-                
+
                 if query.lower() in ['model', 'm']:
                     await self.select_model()
                     continue
-                
+
                 if query.lower() in ['context', 'c']:
                     self.toggle_context_retention()
                     continue
-                
+
+                if query.lower() in ['thinking-mode', 'tm']:
+                    self.toggle_thinking_mode()
+                    continue
+
+                if query.lower() in ['show-thinking', 'st']:
+                    self.toggle_show_thinking()
+                    continue
+
                 if query.lower() in ['clear', 'cc']:
                     self.clear_context()
                     continue
@@ -313,13 +363,13 @@ class MCPClient:
                 if query.lower() in ['context-info', 'ci']:
                     self.display_context_stats()
                     continue
-                    
+
                 if query.lower() in ['cls', 'clear-screen']:
                     self.clear_console()
                     self.display_available_tools()
                     self.display_current_model()
                     continue
-                    
+
                 if query.lower() in ['save-config', 'sc']:
                     # Ask for config name, defaulting to "default"
                     config_name = await self.get_user_input("Config name (or press Enter for default)")
@@ -327,7 +377,7 @@ class MCPClient:
                         config_name = "default"
                     self.save_configuration(config_name)
                     continue
-                    
+
                 if query.lower() in ['load-config', 'lc']:
                     # Ask for config name, defaulting to "default"
                     config_name = await self.get_user_input("Config name to load (or press Enter for default)")
@@ -338,7 +388,7 @@ class MCPClient:
                     self.display_available_tools()
                     self.display_current_model()
                     continue
-                    
+
                 if query.lower() in ['reset-config', 'rc']:
                     self.reset_configuration()
                     # Update display after resetting
@@ -356,25 +406,35 @@ class MCPClient:
                 except ollama.ResponseError as e:
                     # Extract error message without the traceback
                     error_msg = str(e)
-                    self.console.print(Panel(f"[bold red]Ollama Error:[/bold red] {error_msg}", 
-                                          border_style="red", expand=False))
-                    
+                    if "does not support tools" in error_msg.lower():
+                        model_name = self.model_manager.get_current_model()
+                        self.console.print(Panel(
+                            f"[bold red]Model Error:[/bold red] The model [bold blue]{model_name}[/bold blue] does not support tools.\n\n"
+                            "To use tools, switch to a model that supports them by typing [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan]\n\n"
+                            "You can still use this model without tools by [bold]disabling all tools[/bold] with [bold cyan]tools[/bold cyan] or [bold cyan]t[/bold cyan]",
+                            title="Tools Not Supported",
+                            border_style="red", expand=False
+                        ))
+                    else:
+                        self.console.print(Panel(f"[bold red]Ollama Error:[/bold red] {error_msg}",
+                                              border_style="red", expand=False))
+
                     # If it's a "model not found" error, suggest how to fix it
                     if "not found" in error_msg.lower() and "try pulling it first" in error_msg.lower():
-                        model_name = self.model_manager.get_current_model()                       
-                        self.console.print(f"\n[yellow]To download this model, run the following command in a new terminal window:[/yellow]")
-                        self.console.print(f"[bold cyan]ollama pull {model_name}[/bold cyan]\n")
-                        self.console.print(f"[yellow]Or, you can use a different model by typing[/yellow] [bold cyan]model[/bold cyan] [yellow]or[/yellow] [bold cyan]m[/bold cyan] [yellow]to select from available models[/yellow]\n")                        
+                        model_name = self.model_manager.get_current_model()
+                        self.console.print(Panel(
+                            "[bold yellow]Model Not Found[/bold yellow]\n\n"
+                            "To download this model, run the following command in a new terminal window:\n"
+                            f"[bold cyan]ollama pull {model_name}[/bold cyan]\n\n"
+                            "Or, you can use a different model by typing [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan] to select from available models",
+                            title="Model Not Available",
+                            border_style="yellow", expand=False
+                        ))
 
-            except ollama.ConnectionError as e:
-                self.console.print(Panel(f"[bold red]Connection Error:[/bold red] {str(e)}", 
-                                      border_style="red", expand=False))
-                self.console.print("[yellow]Make sure Ollama is running with 'ollama serve'[/yellow]")
-                
             except Exception as e:
-                self.console.print(f"[bold red]Error:[/bold red] {str(e)}")
+                self.console.print(Panel(f"[bold red]Error:[/bold red] {str(e)}", title="Exception", border_style="red", expand=False))
                 self.console.print_exception()
-                
+
     def print_help(self):
         """Print available commands"""
         self.console.print(Panel(
@@ -382,21 +442,23 @@ class MCPClient:
             "[bold cyan]Model and Tools:[/bold cyan]\n"
             "• Type [bold]model[/bold] or [bold]m[/bold] to select a model\n"
             "• Type [bold]tools[/bold] or [bold]t[/bold] to configure tools\n\n"
-            
-            "[bold cyan]Context Management:[/bold cyan]\n"
+
+            "[bold cyan]Context and Thinking:[/bold cyan]\n"
             "• Type [bold]context[/bold] or [bold]c[/bold] to toggle context retention\n"
+            "• Type [bold]thinking[/bold] or [bold]th[/bold] to toggle thinking mode (deepseek-r1, qwen3 only)\n"
+            "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n"
             "• Type [bold]clear[/bold] or [bold]cc[/bold] to clear conversation context\n"
             "• Type [bold]context-info[/bold] or [bold]ci[/bold] to display context info\n\n"
-            
+
             "[bold cyan]Configuration:[/bold cyan]\n"
             "• Type [bold]save-config[/bold] or [bold]sc[/bold] to save the current configuration\n"
             "• Type [bold]load-config[/bold] or [bold]lc[/bold] to load a configuration\n"
             "• Type [bold]reset-config[/bold] or [bold]rc[/bold] to reset configuration to defaults\n\n"
-            
+
             "[bold cyan]Basic Commands:[/bold cyan]\n"
             "• Type [bold]help[/bold] or [bold]h[/bold] to show this help message\n"
             "• Type [bold]clear-screen[/bold] or [bold]cls[/bold] to clear the terminal screen\n"
-            "• Type [bold]quit[/bold] or [bold]q[/bold] to exit", 
+            "• Type [bold]quit[/bold] or [bold]q[/bold] to exit",
             title="Help", border_style="yellow", expand=False))
 
     def toggle_context_retention(self):
@@ -406,21 +468,86 @@ class MCPClient:
         self.console.print(f"[green]Context retention {status}![/green]")
         # Display current context stats
         self.display_context_stats()
-        
+
+    def toggle_thinking_mode(self):
+        """Toggle thinking mode on/off (only for supported models)"""
+        if not self.supports_thinking_mode():
+            current_model = self.model_manager.get_current_model()
+            model_base_name = current_model.split(":")[0]
+            self.console.print(Panel(
+                f"[bold red]Thinking mode is not supported for model '{model_base_name}'[/bold red]\n\n"
+                f"Thinking mode is only available for these models:\n"
+                + "\n".join(f"• {model}" for model in THINKING_MODELS) +
+                f"\n\nCurrent model: [yellow]{current_model}[/yellow]\n"
+                f"Use [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan] to switch to a supported model.",
+                title="Thinking Mode Not Available", border_style="red", expand=False
+            ))
+            return
+
+        self.thinking_mode = not self.thinking_mode
+        status = "enabled" if self.thinking_mode else "disabled"
+        self.console.print(f"[green]Thinking mode {status}![/green]")
+
+        if self.thinking_mode:
+            self.console.print("[cyan]🤔 The model will now show its reasoning process.[/cyan]")
+        else:
+            self.console.print("[cyan]The model will now provide direct responses.[/cyan]")
+
+    def toggle_show_thinking(self):
+        """Toggle whether thinking text remains visible after completion"""
+        if not self.thinking_mode:
+            self.console.print(Panel(
+                f"[bold yellow]Thinking mode is currently disabled[/bold yellow]\n\n"
+                f"Enable thinking mode first using [bold cyan]thinking[/bold cyan] or [bold cyan]th[/bold cyan] command.\n"
+                f"This setting only applies when thinking mode is active.",
+                title="Show Thinking Setting", border_style="yellow", expand=False
+            ))
+            return
+
+        if not self.supports_thinking_mode():
+            current_model = self.model_manager.get_current_model()
+            model_base_name = current_model.split(":")[0]
+            self.console.print(Panel(
+                f"[bold red]Thinking mode is not supported for model '{model_base_name}'[/bold red]\n\n"
+                f"This setting only applies to thinking-capable models:\n"
+                + "\n".join(f"• {model}" for model in THINKING_MODELS),
+                title="Show Thinking Not Available", border_style="red", expand=False
+            ))
+            return
+
+        self.show_thinking = not self.show_thinking
+        status = "visible" if self.show_thinking else "hidden"
+        self.console.print(f"[green]Thinking text will be {status} after completion![/green]")
+
+        if self.show_thinking:
+            self.console.print("[cyan]💭 The reasoning process will remain visible in the final response.[/cyan]")
+        else:
+            self.console.print("[cyan]🧹 The reasoning process will be hidden, showing only the final answer.[/cyan]")
+
     def clear_context(self):
         """Clear conversation history and token count"""
         original_history_length = len(self.chat_history)
         self.chat_history = []
         self.approx_token_count = 0
         self.console.print(f"[green]Context cleared! Removed {original_history_length} conversation entries.[/green]")
-        
+
     def display_context_stats(self):
         """Display information about the current context window usage"""
         history_count = len(self.chat_history)
-        
+
+        # Check if thinking mode is available for current model
+        thinking_status = ""
+        if self.supports_thinking_mode():
+            thinking_status = f"Thinking mode: [{'green' if self.thinking_mode else 'red'}]{'Enabled' if self.thinking_mode else 'Disabled'}[/{'green' if self.thinking_mode else 'red'}]\n"
+            if self.thinking_mode:
+                thinking_status += f"Show thinking text: [{'green' if self.show_thinking else 'red'}]{'Visible' if self.show_thinking else 'Hidden'}[/{'green' if self.show_thinking else 'red'}]\n"
+        else:
+            thinking_status = f"Thinking mode: [yellow]Not available for current model[/yellow]\n"
+
         self.console.print(Panel(
             f"[bold]Context Statistics[/bold]\n"
             f"Context retention: [{'green' if self.retain_context else 'red'}]{'Enabled' if self.retain_context else 'Disabled'}[/{'green' if self.retain_context else 'red'}]\n"
+            f"{thinking_status}"
             f"Conversation entries: {history_count}\n"
             f"Approximate token count: {self.approx_token_count:,}",
             title="Context Window", border_style="cyan", expand=False
@@ -428,7 +555,7 @@ class MCPClient:
 
     def save_configuration(self, config_name=None):
         """Save current tool configuration and model settings to a file
-        
+
         Args:
             config_name: Optional name for the config (defaults to 'default')
         """
@@ -437,36 +564,38 @@ class MCPClient:
             "model": self.model_manager.get_current_model(),
             "enabledTools": self.tool_manager.get_enabled_tools(),
             "contextSettings": {
-                "retainContext": self.retain_context
+                "retainContext": self.retain_context,
+                "thinkingMode": self.thinking_mode,
+                "showThinking": self.show_thinking
             }
         }
-        
+
         # Use the ConfigManager to save the configuration
         return self.config_manager.save_configuration(config_data, config_name)
-    
+
     def load_configuration(self, config_name=None):
         """Load tool configuration and model settings from a file
-        
+
         Args:
             config_name: Optional name of the config to load (defaults to 'default')
-            
+
         Returns:
             bool: True if loaded successfully, False otherwise
         """
         # Use the ConfigManager to load the configuration
         config_data = self.config_manager.load_configuration(config_name)
-        
+
         if not config_data:
             return False
-            
+
         # Apply the loaded configuration
         if "model" in config_data:
             self.model_manager.set_model(config_data["model"])
-            
+
         # Load enabled tools if specified
         if "enabledTools" in config_data:
             loaded_tools = config_data["enabledTools"]
-            
+
             # Only apply tools that actually exist in our available tools
             available_tool_names = {tool.name for tool in self.tool_manager.get_available_tools()}
             for tool_name, enabled in loaded_tools.items():
@@ -475,27 +604,43 @@ class MCPClient:
                     self.tool_manager.set_tool_status(tool_name, enabled)
                     # Also update in the server connector
                     self.server_connector.set_tool_status(tool_name, enabled)
-                    
+
         # Load context settings if specified
-        if "contextSettings" in config_data and "retainContext" in config_data["contextSettings"]:
-            self.retain_context = config_data["contextSettings"]["retainContext"]
-        
+        if "contextSettings" in config_data:
+            if "retainContext" in config_data["contextSettings"]:
+                self.retain_context = config_data["contextSettings"]["retainContext"]
+            if "thinkingMode" in config_data["contextSettings"]:
+                self.thinking_mode = config_data["contextSettings"]["thinkingMode"]
+            if "showThinking" in config_data["contextSettings"]:
+                self.show_thinking = config_data["contextSettings"]["showThinking"]
+
         return True
-        
+
     def reset_configuration(self):
         """Reset tool configuration to default (all tools enabled)"""
         # Use the ConfigManager to get the default configuration
         config_data = self.config_manager.reset_configuration()
-        
+
         # Enable all tools in the tool manager
         self.tool_manager.enable_all_tools()
         # Enable all tools in the server connector
         self.server_connector.enable_all_tools()
-            
+
         # Reset context settings from the default configuration
-        if "contextSettings" in config_data and "retainContext" in config_data["contextSettings"]:
-            self.retain_context = config_data["contextSettings"]["retainContext"]
-        
+        if "contextSettings" in config_data:
+            if "retainContext" in config_data["contextSettings"]:
+                self.retain_context = config_data["contextSettings"]["retainContext"]
+            if "thinkingMode" in config_data["contextSettings"]:
+                self.thinking_mode = config_data["contextSettings"]["thinkingMode"]
+            else:
+                # Default thinking mode to False if not specified
+                self.thinking_mode = False
+            if "showThinking" in config_data["contextSettings"]:
+                self.show_thinking = config_data["contextSettings"]["showThinking"]
+            else:
+                # Default show thinking to True if not specified
+                self.show_thinking = True
+
         return True
 
     async def cleanup(self):
@@ -505,7 +650,7 @@ class MCPClient:
 
 async def main():
     parser = argparse.ArgumentParser(description="MCP Client for Ollama")
-    
+
     # Server configuration options
     server_group = parser.add_argument_group("server options")
     server_group.add_argument("--mcp-server", help="Path to a server script (.py or .js)", action="append")
@@ -516,10 +661,10 @@ async def main():
     model_group = parser.add_argument_group("model options")
     model_group.add_argument("--model", default=DEFAULT_MODEL, help=f"Ollama model to use. Default: '{DEFAULT_MODEL}'")
     model_group.add_argument("--host", default=DEFAULT_OLLAMA_HOST, help=f"Ollama host URL. Default: '{DEFAULT_OLLAMA_HOST}'")
-    
+
     # Add version flag
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    
+
      # Add a function to modify args after parsing
     def parse_args_with_defaults():
         args = parser.parse_args()
@@ -527,7 +672,7 @@ async def main():
         if not (args.mcp_server or args.servers_json or args.auto_discovery):
             args.auto_discovery = True
         return args
-    
+
     args = parse_args_with_defaults()
 
     console = Console()
@@ -546,7 +691,7 @@ async def main():
     # Handle server configuration options - only use one source to prevent duplicates
     config_path = None
     auto_discovery = False
-    
+
     if args.servers_json:
         # If --servers-json is provided, use that and disable auto-discovery
         if os.path.exists(args.servers_json):

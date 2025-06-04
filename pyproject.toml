@@ -10,7 +10,7 @@ authors = [
 ]
 dependencies = [
     "mcp>=1.6.0",
-    "ollama>=0.4.8",
+    "ollama==0.5.1",
     "prompt-toolkit>=3.0.51",
     "rich>=14.0.0",
 ]

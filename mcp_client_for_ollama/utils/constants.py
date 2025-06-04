@@ -23,3 +23,6 @@ PYPI_PACKAGE_URL = "https://pypi.org/pypi/mcp-client-for-ollama/json"
 
 # Approximate token count per character (rough estimation)
 TOKEN_COUNT_PER_CHAR = 0.25
+
+# Thinking mode models - these models support the thinking parameter
+THINKING_MODELS = ["deepseek-r1", "qwen3"]
