@@ -175,6 +175,9 @@ The model selection interface shows all available models in your Ollama installa
 
 ## Configuration Management
 
+> [!TIP]
+> It will automatically load the default configuration from `~/.config/ollmcp/config.json` if it exists.
+
 The client supports saving and loading tool configurations between sessions:
 
 - When using `save-config`, you can provide a name for the configuration or use the default
@@ -187,6 +190,7 @@ The configuration saves:
 - Current model selection
 - Enabled/disabled status of all tools
 - Context retention settings
+- Thinking mode settings
 
 ## Server Configuration Format
 
