@@ -1,6 +1,6 @@
 [project]
 name = "mcp-client-for-ollama"
-version = "0.6.3"
+version = "0.7.0"
 description = "MCP Client for Ollama - A client for connecting to Model Context Protocol servers using Ollama"
 readme = "README.md"
 requires-python = ">=3.10"
