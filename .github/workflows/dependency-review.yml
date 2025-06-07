@@ -35,5 +35,6 @@ jobs:
         with:
           comment-summary-in-pr: always
           fail-on-severity: high
+          show-openssf-scorecard: false
         #   deny-licenses: GPL-1.0-or-later, LGPL-2.0-or-later
         #   retry-on-snapshot-warnings: true
