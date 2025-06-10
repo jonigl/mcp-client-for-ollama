@@ -9,7 +9,6 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
 import ollama
-from ollama import ChatResponse
 
 from . import __version__
 from .config.manager import ConfigManager
@@ -19,6 +18,7 @@ from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .tools.manager import ToolManager
 from .utils.streaming import StreamingManager
+from .utils.tool_display import ToolDisplayManager
 
 class MCPClient:
     def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST):
@@ -35,6 +35,8 @@ class MCPClient:
         self.tool_manager = ToolManager(console=self.console, server_connector=self.server_connector)
         # Initialize the streaming manager
         self.streaming_manager = StreamingManager(console=self.console)
+        # Initialize the tool display manager
+        self.tool_display_manager = ToolDisplayManager(console=self.console)
         # Store server and tool data
         self.sessions = {}  # Dict to store multiple sessions
         # UI components
@@ -116,9 +118,6 @@ class MCPClient:
 
     def select_tools(self):
         """Let the user select which tools to enable using interactive prompts with server-based grouping"""
-        # Save original states
-        original_states = self.tool_manager.get_enabled_tools().copy()
-
         # Call the tool manager's select_tools method
         self.tool_manager.select_tools(clear_console_func=self.clear_console)
 
@@ -233,20 +232,21 @@ class MCPClient:
                     continue
 
                 # Execute tool call
-                self.console.print(Panel(f"[bold]Calling tool[/bold]: [blue]{tool_name}[/blue]",
-                                       subtitle=f"[dim]{tool_args}[/dim]",
-                                       expand=True))
+                self.tool_display_manager.display_tool_execution(tool_name, tool_args)
 
-                with self.console.status(f"[cyan]Running {tool_name}...[/cyan]"):
+                # Call the tool on the specified server
+                result = None
+                with self.console.status(f"[cyan]⏳ Running {tool_name}...[/cyan]"):
                     result = await self.sessions[server_name]["session"].call_tool(actual_tool_name, tool_args)
-                tool_and_result = f"{tool_name} with args {tool_args} returned: {result.content[0].text}"
-                self.console.print(Panel(f"[green]Tool result:[/green] {tool_and_result}",
-                                        title=f"Tool: {tool_name}",
-                                        border_style="green",
-                                        expand=False))
+
+                tool_response = f"{result.content[0].text}"
+
+                # Display the tool response
+                self.tool_display_manager.display_tool_response(tool_name, tool_args, tool_response)
+
                 messages.append({
                     "role": "tool",
-                    "content": tool_and_result,
+                    "content": tool_response,
                     "name": tool_name
                 })
 
