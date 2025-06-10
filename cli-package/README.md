@@ -1,6 +1,15 @@
+<p align="center">
+
+  <img src="https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-logo-512.png?raw=true" width="256" />
+</p>
+<p align="center">
+<i>A simple yet powerful Python client for interacting with Model Context Protocol (MCP) servers using Ollama, allowing local LLMs to use tools.</i>
+</p>
+
+---
 # ollmcp
 
-A command-line interface for connecting to MCP servers using Ollama.
+`ollmcp` is a command-line interface for connecting to MCP servers using Ollama.
 
 ![ollmpc usage demo gif](https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/v0.2.5/misc/ollmcp-demo.gif)
 
