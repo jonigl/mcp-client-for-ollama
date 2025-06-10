@@ -33,6 +33,7 @@ This implementation was adapted from the [Model Context Protocol quickstart guid
 - 🎨 **Rich Terminal Interface**: Interactive console UI
 - 🖥️ **Streaming Responses**: View model outputs in real-time as they're generated
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
+- 🎨 **Enhanced Tool Display**: Beautiful, structured visualization of tool executions with JSON syntax highlighting
 - 🧠 **Context Management**: Control conversation memory with configurable retention settings
 - 🤔 **Thinking Mode**: Advanced reasoning capabilities with visible thought processes for supported models (deepseek-r1, qwen3)
 - 🔄 **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
@@ -247,10 +248,12 @@ For a complete list of Ollama models with tool use capabilities, visit the [offi
 
 1. The client sends your query to Ollama with a list of available tools
 2. If Ollama decides to use a tool, the client:
-   - Extracts the tool name and arguments
+   - Displays the tool execution with formatted arguments and syntax highlighting
+   - Extracts the tool name and arguments from the model response
    - Calls the appropriate MCP server with these arguments
-   - Sends the tool result back to Ollama
-   - Shows the final response
+   - Shows the tool response in a structured, easy-to-read format
+   - Sends the tool result back to Ollama for final processing
+   - Displays the model's final response incorporating the tool results
 
 ## Where Can I Find More MCP Servers?
 
