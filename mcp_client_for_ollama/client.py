@@ -54,6 +54,13 @@ class MCPClient:
         self.show_thinking = False   # By default, thinking text is hidden after completion
         self.default_configuration_status = False  # Track if default configuration was loaded successfully
 
+        # Store server connection parameters for reloading
+        self.server_connection_params = {
+            'server_paths': None,
+            'config_path': None,
+            'auto_discovery': False
+        }
+
     async def check_ollama_running(self) -> bool:
         """Check if Ollama is running by making a request to its API
 
@@ -102,6 +109,13 @@ class MCPClient:
             config_path: Path to JSON config file with server configurations
             auto_discovery: Whether to automatically discover servers
         """
+        # Store connection parameters for potential reload
+        self.server_connection_params = {
+            'server_paths': server_paths,
+            'config_path': config_path,
+            'auto_discovery': auto_discovery
+        }
+
         # Connect to servers using the server connector
         sessions, available_tools, enabled_tools = await self.server_connector.connect_to_servers(
             server_paths=server_paths,
@@ -398,6 +412,10 @@ class MCPClient:
                     self.display_current_model()
                     continue
 
+                if query.lower() in ['reload-servers', 'rs']:
+                    await self.reload_servers()
+                    continue
+
                 # Check if query is too short and not a special command
                 if len(query.strip()) < 5:
                     self.console.print("[yellow]Query must be at least 5 characters long.[/yellow]")
@@ -440,30 +458,33 @@ class MCPClient:
     def print_help(self):
         """Print available commands"""
         self.console.print(Panel(
-            "[yellow]Available Commands:[/yellow]\n\n"
-            "[bold cyan]Model and Tools:[/bold cyan]\n"
-            "• Type [bold]model[/bold] or [bold]m[/bold] to select a model\n"
-            "• Type [bold]tools[/bold] or [bold]t[/bold] to configure tools\n\n"
+            "[bold yellow]Available Commands:[/bold yellow]\n\n"
 
-            "[bold cyan]Context and Thinking:[/bold cyan]\n"
+            "[bold cyan]Model:[/bold cyan]\n"
+            "• Type [bold]model[/bold] or [bold]m[/bold] to select a model\n"
+            f"• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode [{', '.join(THINKING_MODELS)}]\n"
+            "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n\n"
+
+            "[bold cyan]MCP Servers and Tools:[/bold cyan]\n"
+            "• Type [bold]tools[/bold] or [bold]t[/bold] to configure tools\n"
+            "• Type [bold]reload-servers[/bold] or [bold]rs[/bold] to reload MCP servers\n\n"
+
+            "[bold cyan]Context:[/bold cyan]\n"
             "• Type [bold]context[/bold] or [bold]c[/bold] to toggle context retention\n"
             "• Type [bold]clear[/bold] or [bold]cc[/bold] to clear conversation context\n"
             "• Type [bold]context-info[/bold] or [bold]ci[/bold] to display context info\n\n"
-
-            "[bold cyan]Thinking Mode:[/bold cyan]\n"
-            f"• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode ({', '.join(THINKING_MODELS)} only)\n"
-            "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n\n"
 
             "[bold cyan]Configuration:[/bold cyan]\n"
             "• Type [bold]save-config[/bold] or [bold]sc[/bold] to save the current configuration\n"
             "• Type [bold]load-config[/bold] or [bold]lc[/bold] to load a configuration\n"
             "• Type [bold]reset-config[/bold] or [bold]rc[/bold] to reset configuration to defaults\n\n"
 
+
             "[bold cyan]Basic Commands:[/bold cyan]\n"
             "• Type [bold]help[/bold] or [bold]h[/bold] to show this help message\n"
             "• Type [bold]clear-screen[/bold] or [bold]cls[/bold] to clear the terminal screen\n"
-            "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], or [bold]Ctrl+D[/bold] to exit",
-            title="Help", border_style="yellow", expand=False))
+            "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], or [bold]Ctrl+D[/bold] to exit the client\n",
+            title="[bold]Help[/bold]", border_style="yellow", expand=False))
 
     def toggle_context_retention(self):
         """Toggle whether to retain previous conversation context when sending queries"""
@@ -566,7 +587,8 @@ class MCPClient:
     def print_auto_load_default_config_status(self):
         """Print the status of the auto-load default configuration."""
         if self.default_configuration_status:
-            self.console.print("[green]Default configuration loaded successfully![/green]")
+            self.console.print("[green]✅ Default configuration loaded successfully![/green]")
+            self.console.print()
 
 
     def save_configuration(self, config_name=None):
@@ -671,6 +693,49 @@ class MCPClient:
         """Clean up resources"""
         await self.exit_stack.aclose()
 
+    async def reload_servers(self):
+        """Reload all MCP servers with the same connection parameters"""
+        if not any(self.server_connection_params.values()):
+            self.console.print("[yellow]No server connection parameters stored. Cannot reload.[/yellow]")
+            return
+
+        self.console.print("[cyan]🔄 Reloading MCP servers...[/cyan]")
+
+        try:
+            # Store current tool enabled states
+            current_enabled_tools = self.tool_manager.get_enabled_tools().copy()
+
+            # Disconnect from all current servers
+            await self.server_connector.disconnect_all_servers()
+
+            # Update our exit_stack reference to the new one created by ServerConnector
+            self.exit_stack = self.server_connector.exit_stack
+
+            # Reconnect using stored parameters
+            await self.connect_to_servers(
+                server_paths=self.server_connection_params['server_paths'],
+                config_path=self.server_connection_params['config_path'],
+                auto_discovery=self.server_connection_params['auto_discovery']
+            )
+
+            # Restore enabled tool states for tools that still exist
+            available_tool_names = {tool.name for tool in self.tool_manager.get_available_tools()}
+            for tool_name, enabled in current_enabled_tools.items():
+                if tool_name in available_tool_names:
+                    self.tool_manager.set_tool_status(tool_name, enabled)
+                    self.server_connector.set_tool_status(tool_name, enabled)
+
+            self.console.print("[green]✅ MCP servers reloaded successfully![/green]")
+
+            # Display updated status
+            self.display_available_tools()
+
+        except Exception as e:
+            self.console.print(Panel(
+                f"[bold red]Error reloading servers:[/bold red] {str(e)}\n\n"
+                "You may need to restart the application if servers are not working properly.",
+                title="Reload Failed", border_style="red", expand=False
+            ))
 
 async def main():
     parser = argparse.ArgumentParser(description="MCP Client for Ollama")

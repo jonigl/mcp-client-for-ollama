@@ -73,7 +73,7 @@ class ModelManager:
 
     def display_current_model(self) -> None:
         """Display the currently selected model in the console."""
-        self.console.print(Panel(f"[bold blue]Current model:[/bold blue] [green]{self.model}[/green]",
+        self.console.print(Panel(f"[bold blue]Current model:[/bold blue] [bold green]{self.model}[/bold green]",
                               border_style="blue", expand=False))
 
     def format_model_display_info(self, model: Dict[str, Any]) -> Tuple[str, str, str]:

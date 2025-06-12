@@ -384,3 +384,16 @@ class ServerConnector:
             headers = server["config"].get("headers", {})
 
         return headers
+
+    async def disconnect_all_servers(self):
+        """Disconnect from all servers and reset state"""
+        # Close all existing connections
+        await self.exit_stack.aclose()
+
+        # Create a new exit stack for future connections
+        self.exit_stack = AsyncExitStack()
+
+        # Clear all state
+        self.sessions = {}
+        self.available_tools = []
+        self.enabled_tools = {}

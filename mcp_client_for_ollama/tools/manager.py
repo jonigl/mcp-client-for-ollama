@@ -153,8 +153,8 @@ class ToolManager:
         # Display tools in columns for better readability
         if tool_texts:
             columns = Columns(tool_texts, equal=True, expand=True)
-            subtitle = f"{enabled_count}/{len(self.available_tools)} tools enabled"
-            self.console.print(Panel(columns, title="Available Tools", subtitle=subtitle, border_style="green"))
+            subtitle = f"[bold]{enabled_count}/{len(self.available_tools)} tools enabled[/bold]"
+            self.console.print(Panel(columns, title="[bold]Available Tools[/bold]", subtitle=subtitle, border_style="green"))
         else:
             self.console.print("[yellow]No tools available from the server[/yellow]")
 

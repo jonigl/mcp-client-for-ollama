@@ -40,6 +40,7 @@ This implementation was adapted from the [Model Context Protocol quickstart guid
 - 🔍 **Auto-Discovery**: Automatically find and use Claude's existing MCP server configurations
 - 🎛️ **Dynamic Model Switching**: Switch between any installed Ollama model without restarting
 - 💾 **Configuration Persistence**: Save and load tool preferences between sessions
+- 🔄 **Server Reloading**: Hot-reload MCP servers during development without restarting the client
 - 📊 **Usage Analytics**: Track token consumption and conversation history metrics
 - 🔌 **Plug-and-Play**: Works immediately with standard MCP-compliant tool servers
 - 🔔 **Update Notifications**: Automatically detects when a new version is available
@@ -148,6 +149,7 @@ During chat, use these commands:
 | `save-config`    | `sc`             | Save current tool and model configuration to a file |
 | `load-config`    | `lc`             | Load tool and model configuration from a file       |
 | `reset-config`   | `rc`             | Reset configuration to defaults (all tools enabled) |
+| `reload-servers` | `rs`             | Reload all MCP servers with current configuration   |
 | `quit`, `exit`   | `q` or `Ctrl+D`  | Exit the client                                     |
 
 ### Tool and Server Selection
@@ -174,6 +176,31 @@ The model selection interface shows all available models in your Ollama installa
 - Enter the **number** of the model you want to use
 - `s` or `save` - Save the model selection and return to chat
 - `q` or `quit` - Cancel the model selection and return to chat
+
+### Server Reloading for Development
+
+The `reload-servers` command (`rs`) is particularly useful during MCP server development. It allows you to reload all connected servers without restarting the entire client application.
+
+**Key Benefits:**
+- 🔄 **Hot Reload**: Instantly apply changes to your MCP server code
+- 🛠️ **Development Workflow**: Perfect for iterative development and testing
+- 📝 **Configuration Updates**: Automatically picks up changes in server JSON configs or Claude configs
+- 🎯 **State Preservation**: Maintains your tool enabled/disabled preferences across reloads
+- ⚡️ **Time Saving**: No need to restart the client and reconfigure everything
+
+**When to Use:**
+- After modifying your MCP server implementation
+- When you've updated server configurations in JSON files
+- After changing Claude's MCP configuration
+- During debugging to ensure you're testing the latest server version
+
+Simply type `reload-servers` or `rs` in the chat interface, and the client will:
+1. Disconnect from all current MCP servers
+2. Reconnect using the same parameters (server paths, config files, auto-discovery)
+3. Restore your previous tool enabled/disabled settings
+4. Display the updated server and tool status
+
+This feature dramatically improves the development experience when building and testing MCP servers.
 
 ## Configuration Management
 
