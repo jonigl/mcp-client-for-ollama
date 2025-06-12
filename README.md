@@ -143,6 +143,7 @@ During chat, use these commands:
 | `context`        | `c`              | Toggle context retention                            |
 | `thinking-mode`  | `tm`             | Toggle thinking mode (deepseek-r1, qwen3 only)      |
 | `show-thinking`  | `st`             | Toggle thinking text visibility                     |
+| `show-tool-execution` | `ste`       | Toggle tool execution display visibility            |
 | `clear`          | `cc`             | Clear conversation history and context              |
 | `context-info`   | `ci`             | Display context statistics                          |
 | `cls`            | `clear-screen`   | Clear the terminal screen                           |
@@ -220,6 +221,7 @@ The configuration saves:
 - Enabled/disabled status of all tools
 - Context retention settings
 - Thinking mode settings
+- Tool execution display preferences
 
 ## Server Configuration Format
 

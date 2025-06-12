@@ -217,4 +217,8 @@ class ConfigManager:
             if "showThinking" in config_data["modelSettings"]:
                 validated["modelSettings"]["showThinking"] = bool(config_data["modelSettings"]["showThinking"])
 
+        if "displaySettings" in config_data and isinstance(config_data["displaySettings"], dict):
+            if "showToolExecution" in config_data["displaySettings"]:
+                validated["displaySettings"]["showToolExecution"] = bool(config_data["displaySettings"]["showToolExecution"])
+
         return validated

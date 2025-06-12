@@ -52,6 +52,8 @@ class MCPClient:
         # Thinking mode settings
         self.thinking_mode = True  # By default, thinking mode is enabled for models that support it
         self.show_thinking = False   # By default, thinking text is hidden after completion
+        # Tool display settings
+        self.show_tool_execution = True  # By default, show tool execution displays
         self.default_configuration_status = False  # Track if default configuration was loaded successfully
 
         # Store server connection parameters for reloading
@@ -246,7 +248,7 @@ class MCPClient:
                     continue
 
                 # Execute tool call
-                self.tool_display_manager.display_tool_execution(tool_name, tool_args)
+                self.tool_display_manager.display_tool_execution(tool_name, tool_args, show=self.show_tool_execution)
 
                 # Call the tool on the specified server
                 result = None
@@ -256,7 +258,7 @@ class MCPClient:
                 tool_response = f"{result.content[0].text}"
 
                 # Display the tool response
-                self.tool_display_manager.display_tool_response(tool_name, tool_args, tool_response)
+                self.tool_display_manager.display_tool_response(tool_name, tool_args, tool_response, show=self.show_tool_execution)
 
                 messages.append({
                     "role": "tool",
@@ -332,7 +334,7 @@ class MCPClient:
     async def chat_loop(self):
         """Run an interactive chat loop"""
         self.clear_console()
-        self.console.print(Panel(Text.from_markup("[bold green]Welcome to the MCP Client for Ollama[/bold green]", justify="center"), expand=True, border_style="green"))
+        self.console.print(Panel(Text.from_markup("[bold green]Welcome to the MCP Client for Ollama 🦙[/bold green]", justify="center"), expand=True, border_style="green"))
         self.display_available_tools()
         self.display_current_model()
         self.print_help()
@@ -370,6 +372,10 @@ class MCPClient:
 
                 if query.lower() in ['show-thinking', 'st']:
                     self.toggle_show_thinking()
+                    continue
+
+                if query.lower() in ['show-tool-execution', 'ste']:
+                    self.toggle_show_tool_execution()
                     continue
 
                 if query.lower() in ['clear', 'cc']:
@@ -467,6 +473,7 @@ class MCPClient:
 
             "[bold cyan]MCP Servers and Tools:[/bold cyan]\n"
             "• Type [bold]tools[/bold] or [bold]t[/bold] to configure tools\n"
+            "• Type [bold]show-tool-execution[/bold] or [bold]ste[/bold] to toggle tool execution display\n"
             "• Type [bold]reload-servers[/bold] or [bold]rs[/bold] to reload MCP servers\n\n"
 
             "[bold cyan]Context:[/bold cyan]\n"
@@ -549,6 +556,17 @@ class MCPClient:
         else:
             self.console.print("[cyan]🧹 The reasoning process will be hidden, showing only the final answer.[/cyan]")
 
+    def toggle_show_tool_execution(self):
+        """Toggle whether tool execution displays are shown"""
+        self.show_tool_execution = not self.show_tool_execution
+        status = "visible" if self.show_tool_execution else "hidden"
+        self.console.print(f"[green]Tool execution displays will be {status}![/green]")
+
+        if self.show_tool_execution:
+            self.console.print("[cyan]🔧 Tool execution details will be displayed when tools are called.[/cyan]")
+        else:
+            self.console.print("[cyan]🔇 Tool execution details will be hidden for a cleaner output.[/cyan]")
+
     def clear_context(self):
         """Clear conversation history and token count"""
         original_history_length = len(self.chat_history)
@@ -570,12 +588,12 @@ class MCPClient:
             thinking_status = f"Thinking mode: [yellow]Not available for current model[/yellow]\n"
 
         self.console.print(Panel(
-            f"[bold]Context Statistics[/bold]\n"
             f"Context retention: [{'green' if self.retain_context else 'red'}]{'Enabled' if self.retain_context else 'Disabled'}[/{'green' if self.retain_context else 'red'}]\n"
             f"{thinking_status}"
+            f"Tool execution display: [{'green' if self.show_tool_execution else 'red'}]{'Enabled' if self.show_tool_execution else 'Disabled'}[/{'green' if self.show_tool_execution else 'red'}]\n"
             f"Conversation entries: {history_count}\n"
             f"Approximate token count: {self.approx_token_count:,}",
-            title="Context Window", border_style="cyan", expand=False
+            title="Context Info", border_style="cyan", expand=False
         ))
 
     def auto_load_default_config(self):
@@ -587,7 +605,7 @@ class MCPClient:
     def print_auto_load_default_config_status(self):
         """Print the status of the auto-load default configuration."""
         if self.default_configuration_status:
-            self.console.print("[green]✅ Default configuration loaded successfully![/green]")
+            self.console.print("[green] ✓ Default configuration loaded successfully![/green]")
             self.console.print()
 
 
@@ -607,6 +625,9 @@ class MCPClient:
             "modelSettings": {
                 "thinkingMode": self.thinking_mode,
                 "showThinking": self.show_thinking
+            },
+            "displaySettings": {
+                "showToolExecution": self.show_tool_execution
             }
         }
 
@@ -657,6 +678,11 @@ class MCPClient:
             if "showThinking" in config_data["modelSettings"]:
                 self.show_thinking = config_data["modelSettings"]["showThinking"]
 
+        # Load display settings if specified
+        if "displaySettings" in config_data:
+            if "showToolExecution" in config_data["displaySettings"]:
+                self.show_tool_execution = config_data["displaySettings"]["showToolExecution"]
+
         return True
 
     def reset_configuration(self):
@@ -686,6 +712,14 @@ class MCPClient:
             else:
                 # Default show thinking to True if not specified
                 self.show_thinking = True
+
+        # Reset display settings from the default configuration
+        if "displaySettings" in config_data:
+            if "showToolExecution" in config_data["displaySettings"]:
+                self.show_tool_execution = config_data["displaySettings"]["showToolExecution"]
+            else:
+                # Default show tool execution to True if not specified
+                self.show_tool_execution = True
 
         return True
 

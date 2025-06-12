@@ -154,14 +154,14 @@ class ToolManager:
         if tool_texts:
             columns = Columns(tool_texts, equal=True, expand=True)
             subtitle = f"[bold]{enabled_count}/{len(self.available_tools)} tools enabled[/bold]"
-            self.console.print(Panel(columns, title="[bold]Available Tools[/bold]", subtitle=subtitle, border_style="green"))
+            self.console.print(Panel(columns, title="[bold]🔧 Available Tools[/bold]", subtitle=subtitle, border_style="green"))
         else:
             self.console.print("[yellow]No tools available from the server[/yellow]")
 
     # These helper methods break down the select_tools method into more manageable pieces
     def _display_tool_selection_header(self) -> None:
         """Display the tool selection header."""
-        self.console.print(Panel(Text.from_markup("[bold]Tool Selection[/bold]", justify="center"),
+        self.console.print(Panel(Text.from_markup("[bold]🔧 Tool Selection[/bold]", justify="center"),
                                  expand=True, border_style="green"))
         self.console.print(Panel("[bold]Available Servers and Tools[/bold]",
                                  border_style="blue", expand=False))

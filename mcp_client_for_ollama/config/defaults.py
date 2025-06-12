@@ -22,6 +22,9 @@ def default_config() -> dict:
         "modelSettings": {
             "thinkingMode": True,
             "showThinking": False
+        },
+        "displaySettings": {
+            "showToolExecution": True
         }
     }
 

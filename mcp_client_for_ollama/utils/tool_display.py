@@ -36,13 +36,17 @@ class ToolDisplayManager:
         # Use Rich Syntax with Monokai theme for JSON
         return Syntax(formatted_json, "json", theme="monokai", line_numbers=False)
 
-    def display_tool_execution(self, tool_name: str, tool_args: Any) -> None:
+    def display_tool_execution(self, tool_name: str, tool_args: Any, show: bool = True) -> None:
         """Display the tool execution panel with arguments
 
         Args:
             tool_name: Name of the tool being executed
             tool_args: Arguments passed to the tool (always JSON-serializable)
+            show: Whether to display the tool execution panel (default: True)
         """
+        if not show:
+            return
+
         args_display = self._format_json(tool_args)
 
         # Create the tool execution panel with JSON syntax highlighting
@@ -58,14 +62,18 @@ class ToolDisplayManager:
             padding=(1, 2)
         ))
 
-    def display_tool_response(self, tool_name: str, tool_args: Any, tool_response: str) -> None:
+    def display_tool_response(self, tool_name: str, tool_args: Any, tool_response: str, show: bool = True) -> None:
         """Display the tool response panel with arguments and response
 
         Args:
             tool_name: Name of the tool that was executed
             tool_args: Arguments that were passed to the tool (always JSON-serializable)
             tool_response: Response from the tool
+            show: Whether to display the tool response panel (default: True)
         """
+        if not show:
+            return
+
         args_display = self._format_json(tool_args)
 
         # Try to format response as JSON if possible, otherwise display as text
