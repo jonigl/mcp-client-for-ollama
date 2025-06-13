@@ -220,8 +220,8 @@ class MCPClient:
         }
 
         # Add thinking parameter if thinking mode is enabled and model supports it
-        if self.thinking_mode and self.supports_thinking_mode():
-            chat_params["think"] = True
+        if self.supports_thinking_mode():
+            chat_params["think"] = self.thinking_mode
 
         # Initial Ollama API call with the query and available tools
         stream = await self.ollama.chat(**chat_params)
@@ -231,7 +231,7 @@ class MCPClient:
         tool_calls = []
         response_text, tool_calls = await self.streaming_manager.process_streaming_response(
             stream,
-            thinking_mode=self.thinking_mode and self.supports_thinking_mode(),
+            thinking_mode=self.thinking_mode,
             show_thinking=self.show_thinking
         )
         # Check if there are any tool calls in the response
@@ -274,15 +274,15 @@ class MCPClient:
             }
 
             # Add thinking parameter if thinking mode is enabled and model supports it
-            if self.thinking_mode and self.supports_thinking_mode():
-                chat_params_followup["think"] = True
+            if self.supports_thinking_mode():
+                chat_params_followup["think"] = self.thinking_mode
 
             stream = await self.ollama.chat(**chat_params_followup)
 
             # Process the streaming response with thinking mode support
             response_text, _ = await self.streaming_manager.process_streaming_response(
                 stream,
-                thinking_mode=self.thinking_mode and self.supports_thinking_mode(),
+                thinking_mode=self.thinking_mode,
                 show_thinking=self.show_thinking
             )
 
