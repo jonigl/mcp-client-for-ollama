@@ -157,7 +157,7 @@ wheels = [
 
 [[package]]
 name = "mcp-client-for-ollama"
-version = "0.10.0"
+version = "0.10.1"
 source = { editable = "." }
 dependencies = [
     { name = "mcp" },
