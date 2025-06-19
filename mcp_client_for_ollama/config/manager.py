@@ -221,4 +221,8 @@ class ConfigManager:
             if "showToolExecution" in config_data["displaySettings"]:
                 validated["displaySettings"]["showToolExecution"] = bool(config_data["displaySettings"]["showToolExecution"])
 
+        if "hilSettings" in config_data and isinstance(config_data["hilSettings"], dict):
+            if "enabled" in config_data["hilSettings"]:
+                validated["hilSettings"]["enabled"] = bool(config_data["hilSettings"]["enabled"])
+
         return validated

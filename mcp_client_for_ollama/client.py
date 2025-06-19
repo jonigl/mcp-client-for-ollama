@@ -19,6 +19,7 @@ from .models.manager import ModelManager
 from .tools.manager import ToolManager
 from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
+from .utils.hil_manager import HumanInTheLoopManager
 
 class MCPClient:
     def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST):
@@ -37,6 +38,8 @@ class MCPClient:
         self.streaming_manager = StreamingManager(console=self.console)
         # Initialize the tool display manager
         self.tool_display_manager = ToolDisplayManager(console=self.console)
+        # Initialize the HIL manager
+        self.hil_manager = HumanInTheLoopManager(console=self.console)
         # Store server and tool data
         self.sessions = {}  # Dict to store multiple sessions
         # UI components
@@ -250,6 +253,21 @@ class MCPClient:
                 # Execute tool call
                 self.tool_display_manager.display_tool_execution(tool_name, tool_args, show=self.show_tool_execution)
 
+                # Request HIL confirmation if enabled
+                should_execute = await self.hil_manager.request_tool_confirmation(
+                    tool_name, tool_args
+                )
+
+                if not should_execute:
+                    tool_response = "Tool call was skipped by user"
+                    self.tool_display_manager.display_tool_response(tool_name, tool_args, tool_response, show=self.show_tool_execution)
+                    messages.append({
+                        "role": "tool",
+                        "content": tool_response,
+                        "name": tool_name
+                    })
+                    continue
+
                 # Call the tool on the specified server
                 result = None
                 with self.console.status(f"[cyan]⏳ Running {tool_name}...[/cyan]"):
@@ -327,7 +345,7 @@ class MCPClient:
                     f"Upgrade with: [bold white]pip install --upgrade mcp-client-for-ollama[/bold white]",
                     title="Update Available", border_style="yellow", expand=False
                 ))
-        except Exception as e:
+        except Exception:
             # Silently fail - version check should not block program usage
             pass
 
@@ -422,6 +440,10 @@ class MCPClient:
                     await self.reload_servers()
                     continue
 
+                if query.lower() in ['human-in-loop', 'hil']:
+                    self.hil_manager.toggle()
+                    continue
+
                 # Check if query is too short and not a special command
                 if len(query.strip()) < 5:
                     self.console.print("[yellow]Query must be at least 5 characters long.[/yellow]")
@@ -474,6 +496,7 @@ class MCPClient:
             "[bold cyan]MCP Servers and Tools:[/bold cyan]\n"
             "• Type [bold]tools[/bold] or [bold]t[/bold] to configure tools\n"
             "• Type [bold]show-tool-execution[/bold] or [bold]ste[/bold] to toggle tool execution display\n"
+            "• Type [bold]human-in-loop[/bold] or [bold]hil[/bold] to toggle Human-in-the-Loop confirmations\n"
             "• Type [bold]reload-servers[/bold] or [bold]rs[/bold] to reload MCP servers\n\n"
 
             "[bold cyan]Context:[/bold cyan]\n"
@@ -591,6 +614,7 @@ class MCPClient:
             f"Context retention: [{'green' if self.retain_context else 'red'}]{'Enabled' if self.retain_context else 'Disabled'}[/{'green' if self.retain_context else 'red'}]\n"
             f"{thinking_status}"
             f"Tool execution display: [{'green' if self.show_tool_execution else 'red'}]{'Enabled' if self.show_tool_execution else 'Disabled'}[/{'green' if self.show_tool_execution else 'red'}]\n"
+            f"Human-in-the-Loop confirmations: [{'green' if self.hil_manager.is_enabled() else 'red'}]{'Enabled' if self.hil_manager.is_enabled() else 'Disabled'}[/{'green' if self.hil_manager.is_enabled() else 'red'}]\n"
             f"Conversation entries: {history_count}\n"
             f"Approximate token count: {self.approx_token_count:,}",
             title="Context Info", border_style="cyan", expand=False
@@ -628,6 +652,9 @@ class MCPClient:
             },
             "displaySettings": {
                 "showToolExecution": self.show_tool_execution
+            },
+            "hilSettings": {
+                "enabled": self.hil_manager.is_enabled()
             }
         }
 
@@ -683,6 +710,11 @@ class MCPClient:
             if "showToolExecution" in config_data["displaySettings"]:
                 self.show_tool_execution = config_data["displaySettings"]["showToolExecution"]
 
+        # Load HIL settings if specified
+        if "hilSettings" in config_data:
+            if "enabled" in config_data["hilSettings"]:
+                self.hil_manager.set_enabled(config_data["hilSettings"]["enabled"])
+
         return True
 
     def reset_configuration(self):
@@ -720,6 +752,14 @@ class MCPClient:
             else:
                 # Default show tool execution to True if not specified
                 self.show_tool_execution = True
+
+        # Reset HIL settings from the default configuration
+        if "hilSettings" in config_data:
+            if "enabled" in config_data["hilSettings"]:
+                self.hil_manager.set_enabled(config_data["hilSettings"]["enabled"])
+            else:
+                # Default HIL to True if not specified
+                self.hil_manager.set_enabled(True)
 
         return True
 

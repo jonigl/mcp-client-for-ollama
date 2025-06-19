@@ -33,6 +33,7 @@ This implementation was adapted from the [Model Context Protocol quickstart guid
 - 🎨 **Rich Terminal Interface**: Interactive console UI
 - 🖥️ **Streaming Responses**: View model outputs in real-time as they're generated
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
+- 🤖 **Human-in-the-Loop (HIL)**: Review and approve tool executions before they run for enhanced control and safety
 - 🎨 **Enhanced Tool Display**: Beautiful, structured visualization of tool executions with JSON syntax highlighting
 - 🧠 **Context Management**: Control conversation memory with configurable retention settings
 - 🤔 **Thinking Mode**: Advanced reasoning capabilities with visible thought processes for supported models (deepseek-r1, qwen3)
@@ -144,6 +145,7 @@ During chat, use these commands:
 | `thinking-mode`  | `tm`             | Toggle thinking mode (deepseek-r1, qwen3 only)      |
 | `show-thinking`  | `st`             | Toggle thinking text visibility                     |
 | `show-tool-execution` | `ste`       | Toggle tool execution display visibility            |
+| `human-in-loop`  | `hil`            | Toggle Human-in-the-Loop confirmations for tool execution |
 | `clear`          | `cc`             | Clear conversation history and context              |
 | `context-info`   | `ci`             | Display context statistics                          |
 | `cls`            | `clear-screen`   | Clear the terminal screen                           |
@@ -203,6 +205,48 @@ Simply type `reload-servers` or `rs` in the chat interface, and the client will:
 
 This feature dramatically improves the development experience when building and testing MCP servers.
 
+### Human-in-the-Loop (HIL) Tool Execution
+
+The Human-in-the-Loop feature provides an additional safety layer by allowing you to review and approve tool executions before they run. This is particularly useful for:
+
+- 🛡️ **Safety**: Review potentially destructive operations before execution
+- 🔍 **Learning**: Understand what tools the model wants to use and why
+- 🎯 **Control**: Selective execution of only the tools you approve
+- 🚫 **Prevention**: Stop unwanted tool calls from executing
+
+#### HIL Confirmation Display
+
+When HIL is enabled, you'll see a confirmation prompt before each tool execution:
+
+**Example:**
+```
+🧑‍💻 Human-in-the-Loop Confirmation
+Tool to execute: weather.get_weather
+Arguments:
+  • city: Miami
+
+Options:
+  y/yes - Execute the tool call
+  n/no - Skip this tool call
+  disable - Disable HIL confirmations permanently
+
+What would you like to do? (y):
+```
+
+### Human-in-the-Loop (HIL) Configuration
+
+- **Default State**: HIL confirmations are enabled by default for safety
+- **Toggle Command**: Use `human-in-loop` or `hil` to toggle on/off
+- **Persistent Settings**: HIL preference is saved with your configuration
+- **Quick Disable**: Choose "disable" during any confirmation to turn off permanently
+- **Re-enable**: Use the `hil` command anytime to turn confirmations back on
+
+**Benefits:**
+- **Enhanced Safety**: Prevent accidental or unwanted tool executions
+- **Awareness**: Understand what actions the model is attempting to perform
+- **Selective Control**: Choose which operations to allow on a case-by-case basis
+- **Peace of Mind**: Full visibility and control over automated actions
+
 ## Configuration Management
 
 > [!TIP]
@@ -222,6 +266,7 @@ The configuration saves:
 - Context retention settings
 - Thinking mode settings
 - Tool execution display preferences
+- Human-in-the-Loop confirmation settings
 
 ## Server Configuration Format
 
@@ -278,8 +323,9 @@ For a complete list of Ollama models with tool use capabilities, visit the [offi
 1. The client sends your query to Ollama with a list of available tools
 2. If Ollama decides to use a tool, the client:
    - Displays the tool execution with formatted arguments and syntax highlighting
+   - **NEW**: Shows a Human-in-the-Loop confirmation prompt (if enabled) allowing you to review and approve the tool call
    - Extracts the tool name and arguments from the model response
-   - Calls the appropriate MCP server with these arguments
+   - Calls the appropriate MCP server with these arguments (only if approved or HIL is disabled)
    - Shows the tool response in a structured, easy-to-read format
    - Sends the tool result back to Ollama for final processing
    - Displays the model's final response incorporating the tool results

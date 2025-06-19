@@ -25,6 +25,9 @@ def default_config() -> dict:
         },
         "displaySettings": {
             "showToolExecution": True
+        },
+        "hilSettings": {
+            "enabled": True
         }
     }
 
