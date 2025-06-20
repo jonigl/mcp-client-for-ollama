@@ -33,7 +33,7 @@ This implementation was adapted from the [Model Context Protocol quickstart guid
 - 🎨 **Rich Terminal Interface**: Interactive console UI
 - 🖥️ **Streaming Responses**: View model outputs in real-time as they're generated
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
-- 🤖 **Human-in-the-Loop (HIL)**: Review and approve tool executions before they run for enhanced control and safety
+- 🧑‍💻 **Human-in-the-Loop (HIL)**: Review and approve tool executions before they run for enhanced control and safety
 - 🎨 **Enhanced Tool Display**: Beautiful, structured visualization of tool executions with JSON syntax highlighting
 - 🧠 **Context Management**: Control conversation memory with configurable retention settings
 - 🤔 **Thinking Mode**: Advanced reasoning capabilities with visible thought processes for supported models (deepseek-r1, qwen3)
