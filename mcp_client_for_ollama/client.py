@@ -66,14 +66,6 @@ class MCPClient:
             'auto_discovery': False
         }
 
-    async def check_ollama_running(self) -> bool:
-        """Check if Ollama is running by making a request to its API
-
-        Returns:
-            bool: True if Ollama is running, False otherwise
-        """
-        return await self.model_manager.check_ollama_running()
-
     def display_current_model(self):
         """Display the currently selected model"""
         self.model_manager.display_current_model()
@@ -238,7 +230,7 @@ class MCPClient:
             show_thinking=self.show_thinking
         )
         # Check if there are any tool calls in the response
-        if len(tool_calls) > 0:
+        if len(tool_calls) > 0 and self.tool_manager.get_enabled_tool_objects():
             for tool in tool_calls:
                 tool_name = tool.function.name
                 tool_args = tool.function.arguments
@@ -842,7 +834,7 @@ async def main():
 
     # Create a temporary client to check if Ollama is running
     client = MCPClient(model=args.model, host=args.host)
-    if not await client.check_ollama_running():
+    if not await client.model_manager.check_ollama_running():
         console.print(Panel(
             "[bold red]Error: Ollama is not running![/bold red]\n\n"
             "This client requires Ollama to be running to process queries.\n"
