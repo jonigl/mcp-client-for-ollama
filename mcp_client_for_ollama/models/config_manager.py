@@ -261,7 +261,7 @@ class ModelConfigManager:
             f"[bold][orange3]11.[/orange3] presence_penalty:[/bold] {format_value(self.presence_penalty)}\n"
             f"[bold][orange3]12.[/orange3] frequency_penalty:[/bold] {format_value(self.frequency_penalty)}\n"
             f"[bold][orange3]13.[/orange3] stop:[/bold] {format_value(self.stop)}",
-            title="[bold blue]📝 Model Parameters[/bold blue]",
+            title="[bold blue]🎛️ Model Parameters[/bold blue]",
             border_style="blue", expand=False))
         self.console.print("\n[bold yellow]Note:[/bold yellow] Unset values will use Ollama's defaults.")
         self.console.print()
@@ -374,7 +374,7 @@ class ModelConfigManager:
             if clear_console_func:
                 clear_console_func()
 
-            self.console.print(Panel(Text.from_markup("[bold]🎛️  Model Configuration[/bold]", justify="center"), expand=True, border_style="green"))
+            self.console.print(Panel(Text.from_markup("[bold]🪛 Model Configuration[/bold]", justify="center"), expand=True, border_style="green"))
             self.display_current_config()
 
             if result_message:
