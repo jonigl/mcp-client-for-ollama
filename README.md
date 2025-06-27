@@ -20,6 +20,28 @@
   <img src="https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/v0.2.5/misc/ollmcp-demo.gif" alt="MCP Client for Ollama Demo">
 </p>
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+  - [Command-line Arguments](#command-line-arguments)
+  - [Usage Examples](#usage-examples)
+- [Interactive Commands](#interactive-commands)
+  - [Tool and Server Selection](#tool-and-server-selection)
+  - [Model Selection](#model-selection)
+  - [Advanced Model Configuration](#advanced-model-configuration)
+  - [Server Reloading for Development](#server-reloading-for-development)
+  - [Human-in-the-Loop (HIL) Tool Execution](#human-in-the-loop-hil-tool-execution)
+- [Configuration Management](#configuration-management)
+- [Server Configuration Format](#server-configuration-format)
+- [Compatible Models](#compatible-models)
+- [Where Can I Find More MCP Servers?](#where-can-i-find-more-mcp-servers)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
+
 ## Overview
 
 This project provides a robust Python-based client that connects to one or more Model Context Protocol (MCP) servers and uses Ollama to process queries with tool use capabilities. The client establishes connections to MCP servers, sends queries to Ollama models, and handles the tool calls the model makes.
@@ -34,12 +56,14 @@ This implementation was adapted from the [Model Context Protocol quickstart guid
 - 🖥️ **Streaming Responses**: View model outputs in real-time as they're generated
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
 - 🧑‍💻 **Human-in-the-Loop (HIL)**: Review and approve tool executions before they run for enhanced control and safety
+- 🎛️ **Advanced Model Configuration**: Fine-tune 10+ model parameters including temperature, sampling, repetition control, and more
+- 💬 **System Prompt Customization**: Define and edit the system prompt to control model behavior and persona
 - 🎨 **Enhanced Tool Display**: Beautiful, structured visualization of tool executions with JSON syntax highlighting
 - 🧠 **Context Management**: Control conversation memory with configurable retention settings
 - 🤔 **Thinking Mode**: Advanced reasoning capabilities with visible thought processes for supported models (deepseek-r1, qwen3)
-- 🔄 **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
+- 🗣️ **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
 - 🔍 **Auto-Discovery**: Automatically find and use Claude's existing MCP server configurations
-- 🎛️ **Dynamic Model Switching**: Switch between any installed Ollama model without restarting
+- 🔁 **Dynamic Model Switching**: Switch between any installed Ollama model without restarting
 - 💾 **Configuration Persistence**: Save and load tool preferences between sessions
 - 🔄 **Server Reloading**: Hot-reload MCP servers during development without restarting the client
 - 📊 **Usage Analytics**: Track token consumption and conversation history metrics
@@ -136,11 +160,13 @@ ollmcp --host http://localhost:22545 --servers-json /path/to/servers.json --mode
 During chat, use these commands:
 
 ![ollmcp main interface](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-welcome.png?raw=true)
+
 | Command          | Shortcut         | Description                                         |
 |------------------|------------------|-----------------------------------------------------|
 | `help`           | `h`              | Display help and available commands                 |
 | `tools`          | `t`              | Open the tool selection interface                   |
 | `model`          | `m`              | List and select a different Ollama model            |
+| `model-config`   | `mc`             | Configure advanced model parameters and system prompt|
 | `context`        | `c`              | Toggle context retention                            |
 | `thinking-mode`  | `tm`             | Toggle thinking mode (deepseek-r1, qwen3 only)      |
 | `show-thinking`  | `st`             | Toggle thinking text visibility                     |
@@ -154,6 +180,7 @@ During chat, use these commands:
 | `reset-config`   | `rc`             | Reset configuration to defaults (all tools enabled) |
 | `reload-servers` | `rs`             | Reload all MCP servers with current configuration   |
 | `quit`, `exit`   | `q` or `Ctrl+D`  | Exit the client                                     |
+
 
 ### Tool and Server Selection
 
@@ -174,11 +201,54 @@ The tool and server selection interface allows you to enable or disable specific
 
 The model selection interface shows all available models in your Ollama installation:
 
-![ollmcp tool and server selection interface](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmpc-tool-and-server-selection.jpg?raw=true)
+![ollmcp tool and server selection interface](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmpc-tool-and-server-selection.png?raw=true)
 
 - Enter the **number** of the model you want to use
 - `s` or `save` - Save the model selection and return to chat
 - `q` or `quit` - Cancel the model selection and return to chat
+
+### Advanced Model Configuration
+
+The `model-config` (`mc`) command opens the advanced model settings interface, allowing you to fine-tune how the model generates responses:
+
+![ollmcp model configuration interface](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-model-configuration.png?raw=true)
+
+#### System Prompt
+
+- **System Prompt**: Set the model's role and behavior to guide responses.
+
+#### Key Parameters
+
+- **Keep Tokens**: Prevent important tokens from being dropped
+- **Max Tokens**: Limit response length (0 = auto)
+- **Seed**: Make outputs reproducible (set to -1 for random)
+- **Temperature**: Control randomness (0 = deterministic, higher = creative)
+- **Top K / Top P / Min P / Typical P**: Sampling controls for diversity
+- **Repeat Last N / Repeat Penalty**: Reduce repetition
+- **Presence/Frequency Penalty**: Encourage new topics, reduce repeats
+- **Stop Sequences**: Custom stopping points (up to 8)
+
+#### Commands
+
+- Enter parameter numbers `1-14` to edit settings
+- Enter `sp` to edit the system prompt
+- Use `u1`, `u2`, etc. to unset parameters, or `uall` to reset all
+- `h`/`help`: Show parameter details and tips
+- `undo`: Revert changes
+- `s`/`save`: Apply changes
+- `q`/`quit`: Cancel
+
+#### Example Configurations
+
+- **Factual:** `temperature: 0.0-0.3`, `top_p: 0.1-0.5`, `seed: 42`
+- **Creative:** `temperature: 1.0+`, `top_p: 0.95`, `presence_penalty: 0.2`
+- **Reduce Repeats:** `repeat_penalty: 1.1-1.3`, `presence_penalty: 0.2`, `frequency_penalty: 0.3`
+- **Balanced:** `temperature: 0.7`, `top_p: 0.9`, `typical_p: 0.7`
+- **Reproducible:** `seed: 42`, `temperature: 0.0`
+
+> [!TIP]
+> All parameters default to unset, letting Ollama use its own optimized values. Use `help` in the config menu for details and recommendations. Changes are saved with your configuration.
+
 
 ### Server Reloading for Development
 
@@ -262,6 +332,7 @@ The client supports saving and loading tool configurations between sessions:
 The configuration saves:
 
 - Current model selection
+- Advanced model parameters (system prompt, temperature, sampling settings, etc.)
 - Enabled/disabled status of all tools
 - Context retention settings
 - Thinking mode settings
