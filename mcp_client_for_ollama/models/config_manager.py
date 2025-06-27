@@ -3,10 +3,12 @@
 This module handles model configuration options like system prompt, temperature, and top_k.
 """
 from typing import Dict, Any, Optional, Callable
-from rich.console import Console
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.prompt import Prompt, FloatPrompt, IntPrompt
 from rich.text import Text
+from rich.table import Table
+import rich.box
 
 class ModelConfigManager:
     """Manages model configuration options.
@@ -38,6 +40,94 @@ class ModelConfigManager:
         self.presence_penalty = None       # float
         self.frequency_penalty = None      # float
         self.stop = None                   # list[str]
+
+        # Parameter explanations
+        self.parameter_explanations = {
+            "system_prompt": {
+                "description": "Provides context and instructions to guide the model's behavior.",
+                "range": "Free-form text",
+                "effect": "Sets the style, tone, and capabilities of the model's responses.",
+                "recommendation": "Be clear and specific about the role and constraints you want the model to follow."
+            },
+            "num_keep": {
+                "description": "Number of tokens to keep from the prompt when the context window overflows.",
+                "range": "0 to model context size (e.g., 0-8192)",
+                "effect": "Controls how much prompt context is preserved during long conversations.",
+                "recommendation": "Higher values preserve more context but use more tokens."
+            },
+            "seed": {
+                "description": "Random seed to use for generation.",
+                "range": "Any integer (e.g., 1-4294967295), or 0 for random",
+                "effect": "Controls reproducibility of outputs. Same seed = same output for same prompt.",
+                "recommendation": "Set to 0 for non-deterministic outputs, or use a specific value for reproducible responses."
+            },
+            "num_predict": {
+                "description": "Maximum number of tokens to generate in the response.",
+                "range": "1 to model maximum (typically 128-2048)",
+                "effect": "Limits the length of the generated text.",
+                "recommendation": "Lower values for short answers, higher for detailed responses."
+            },
+            "top_k": {
+                "description": "Limits token selection to the K most likely tokens at each step.",
+                "range": "0 (disabled) to 100+",
+                "effect": "Lower values increase focus and determinism, higher values increase diversity.",
+                "recommendation": "0 to disable, 10-40 for balanced generation."
+            },
+            "top_p": {
+                "description": "Limits token selection to tokens comprising the top_p probability mass.",
+                "range": "0.0 to 1.0",
+                "effect": "Lower values increase focus on most likely tokens, higher values include more diverse options.",
+                "recommendation": "0.7-0.9 for balanced generation."
+            },
+            "min_p": {
+                "description": "Filters tokens below this probability threshold relative to the most likely token.",
+                "range": "0.0 to 1.0",
+                "effect": "Eliminates unlikely tokens from consideration.",
+                "recommendation": "0.05-0.1 to remove unlikely tokens while maintaining diversity."
+            },
+            "typical_p": {
+                "description": "Selects tokens based on how typical they are relative to expected entropy.",
+                "range": "0.0 to 1.0",
+                "effect": "Controls selection of tokens based on their typicality rather than raw probability.",
+                "recommendation": "0.3-0.8 for more natural-sounding text."
+            },
+            "repeat_last_n": {
+                "description": "Number of previous tokens to consider for the repeat penalty calculation.",
+                "range": "0 to model context size (0 = disabled)",
+                "effect": "Controls how much context is considered when penalizing repetitions.",
+                "recommendation": "64-256 for balanced repetition control."
+            },
+            "temperature": {
+                "description": "Controls randomness of token selection.",
+                "range": "0.0 to 2.0+",
+                "effect": "0.0 = deterministic (always pick most likely), 1.0+ = increasingly random selection.",
+                "recommendation": "0.7-0.8 for balanced creativity, 0.0-0.3 for factual/logical responses."
+            },
+            "repeat_penalty": {
+                "description": "Penalizes repeating the same tokens.",
+                "range": "1.0 (no penalty) to 2.0+",
+                "effect": "Higher values reduce repetition more aggressively.",
+                "recommendation": "1.1-1.3 for subtle repetition reduction."
+            },
+            "presence_penalty": {
+                "description": "Penalizes tokens that appear at all, regardless of frequency.",
+                "range": "0.0 (no penalty) to 1.0+",
+                "effect": "Higher values encourage using new tokens that haven't appeared yet.",
+                "recommendation": "0.1-0.4 for balanced generation."
+            },
+            "frequency_penalty": {
+                "description": "Penalizes tokens proportionally to how frequently they've appeared.",
+                "range": "0.0 (no penalty) to 1.0+",
+                "effect": "Higher values more strongly discourage frequent tokens.",
+                "recommendation": "0.1-0.4 for balanced generation."
+            },
+            "stop": {
+                "description": "Sequences that will end generation when produced.",
+                "range": "List of strings",
+                "effect": "Stops generation when any sequence in the list is generated.",
+                "recommendation": "Use for controlling output format or limiting generation."
+            }
+        }
 
     def get_config(self) -> Dict[str, Any]:
         """Get the current model configuration.
@@ -176,6 +266,104 @@ class ModelConfigManager:
         self.console.print("\n[bold yellow]Note:[/bold yellow] Unset values will use Ollama's defaults.")
         self.console.print()
 
+    def display_parameter_explanations(self) -> None:
+        """Display detailed explanations for all model parameters in a scrollable format.
+
+        Shows consolidated, easy-to-read information about each parameter's purpose,
+        range, effect, and recommended usage.
+        """
+        # Create a renderable group that will contain all our content
+        content = []
+
+        # Create header
+        header = Panel(
+            Text.from_markup("[bold]🔎 Model Parameter Reference Guide[/bold]", justify="center"),
+            expand=True,
+            border_style="green"
+        )
+        content.append(header)
+
+        # Create a table for the parameters
+        table = Table(
+            show_header=True,
+            header_style="bold yellow",
+            show_lines=True,
+            expand=True,
+            box=rich.box.ROUNDED
+        )
+
+        # Add columns
+        table.add_column("Parameter", style="cyan", width=16)
+        table.add_column("Description", width=40)
+        table.add_column("Range", width=20)
+        table.add_column("Recommendation", width=30)
+
+        # Special styling for the system prompt
+        param = "system_prompt"
+        info = self.parameter_explanations[param]
+        table.add_row(
+            f"[bold magenta]💬 {param}[/bold magenta]",
+            f"{info['description']}\n[dim]{info['effect']}[/dim]",
+            info['range'],
+            info['recommendation']
+        )
+
+        # Add all other parameters
+        for param in [
+            "num_keep", "seed", "num_predict", "top_k", "top_p", "min_p",
+            "typical_p", "repeat_last_n", "temperature", "repeat_penalty",
+            "presence_penalty", "frequency_penalty", "stop"
+        ]:
+            info = self.parameter_explanations[param]
+            table.add_row(
+                f"[bold blue]{param}[/bold blue]",
+                f"{info['description']}\n[dim]{info['effect']}[/dim]",
+                info['range'],
+                info['recommendation']
+            )
+
+        content.append(table)
+
+        # Add a section for common parameter combinations
+        content.append("")
+        content.append("[bold]📋 Common Parameter Combinations[/bold]")
+
+        combinations_table = Table(show_header=True, header_style="bold yellow", expand=True)
+        combinations_table.add_column("Use Case", style="cyan")
+        combinations_table.add_column("Recommended Settings")
+
+        combinations_table.add_row(
+            "Factual, deterministic responses",
+            "temperature=0.0-0.3, top_p=0.1-0.5"
+        )
+        combinations_table.add_row(
+            "Balanced, natural responses",
+            "temperature=0.7, top_p=0.9, typical_p=0.7"
+        )
+        combinations_table.add_row(
+            "Creative, varied responses",
+            "temperature=1.0+, top_p=0.95, presence_penalty=0.2"
+        )
+        combinations_table.add_row(
+            "Reduce repetition",
+            "repeat_penalty=1.2, presence_penalty=0.2, frequency_penalty=0.3"
+        )
+        combinations_table.add_row(
+            "Reproducible outputs",
+            "seed=42 (or any fixed integer value)"
+        )
+
+        content.append(combinations_table)
+        content.append("\n[bold yellow]Press Q to exit the parameter guide.[/bold yellow]")
+
+        # Create a Group of all our rendered content
+        group = Group(*content)
+
+        # Use the console's pager to display the content
+        # This will provide a scrollable interface with keyboard navigation
+        with self.console.pager(styles=True):
+            self.console.print(group)
+
     def configure_model_interactive(self, clear_console_func: Optional[Callable] = None) -> None:
         """Interactively configure model parameters."""
         original_config = self.get_config()
@@ -212,6 +400,7 @@ class ModelConfigManager:
             self.console.print()
             self.console.print("[bold]u[/bold] - [bold]Unset a parameter[/bold] (use Ollama default)")
             self.console.print("[bold]uall[/bold] - [bold]Unset all parameters[/bold] (use Ollama defaults)")
+            self.console.print("[bold]h[/bold] or [bold]help[/bold] - Show Parameter Reference Guide")
             self.console.print("[bold]s[/bold] or [bold]save[/bold] - Save changes and return")
             self.console.print("[bold]q[/bold] or [bold]quit[/bold] - Cancel changes and return")
 
@@ -228,6 +417,13 @@ class ModelConfigManager:
                 if clear_console_func:
                     clear_console_func()
                 return
+
+            if selection in ['h', 'help']:
+                if clear_console_func:
+                    clear_console_func()
+                self.display_parameter_explanations()
+                continue
+
             if selection == 'uall':
                 self.system_prompt = ""
                 self.num_keep = None
