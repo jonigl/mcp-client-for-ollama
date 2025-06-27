@@ -248,19 +248,19 @@ class ModelConfigManager:
 
         # Display other model parameters
         self.console.print(Panel(
-            f"[bold]num_keep:[/bold] {format_value(self.num_keep)}\n"
-            f"[bold]seed:[/bold] {format_value(self.seed)}\n"
-            f"[bold]num_predict:[/bold] {format_value(self.num_predict)}\n"
-            f"[bold]top_k:[/bold] {format_value(self.top_k)}\n"
-            f"[bold]top_p:[/bold] {format_value(self.top_p)}\n"
-            f"[bold]min_p:[/bold] {format_value(self.min_p)}\n"
-            f"[bold]typical_p:[/bold] {format_value(self.typical_p)}\n"
-            f"[bold]repeat_last_n:[/bold] {format_value(self.repeat_last_n)}\n"
-            f"[bold]temperature:[/bold] {format_value(self.temperature)}\n"
-            f"[bold]repeat_penalty:[/bold] {format_value(self.repeat_penalty)}\n"
-            f"[bold]presence_penalty:[/bold] {format_value(self.presence_penalty)}\n"
-            f"[bold]frequency_penalty:[/bold] {format_value(self.frequency_penalty)}\n"
-            f"[bold]stop:[/bold] {format_value(self.stop)}",
+            f"[bold][orange3]1.[/orange3] num_keep:[/bold] {format_value(self.num_keep)}\n"
+            f"[bold][orange3]2.[/orange3] seed:[/bold] {format_value(self.seed)}\n"
+            f"[bold][orange3]3.[/orange3] num_predict:[/bold] {format_value(self.num_predict)}\n"
+            f"[bold][orange3]4.[/orange3] top_k:[/bold] {format_value(self.top_k)}\n"
+            f"[bold][orange3]5.[/orange3] top_p:[/bold] {format_value(self.top_p)}\n"
+            f"[bold][orange3]6.[/orange3] min_p:[/bold] {format_value(self.min_p)}\n"
+            f"[bold][orange3]7.[/orange3] typical_p:[/bold] {format_value(self.typical_p)}\n"
+            f"[bold][orange3]8.[/orange3] repeat_last_n:[/bold] {format_value(self.repeat_last_n)}\n"
+            f"[bold][orange3]9.[/orange3] temperature:[/bold] {format_value(self.temperature)}\n"
+            f"[bold][orange3]10.[/orange3] repeat_penalty:[/bold] {format_value(self.repeat_penalty)}\n"
+            f"[bold][orange3]11.[/orange3] presence_penalty:[/bold] {format_value(self.presence_penalty)}\n"
+            f"[bold][orange3]12.[/orange3] frequency_penalty:[/bold] {format_value(self.frequency_penalty)}\n"
+            f"[bold][orange3]13.[/orange3] stop:[/bold] {format_value(self.stop)}",
             title="[bold blue]📝 Model Parameters[/bold blue]",
             border_style="blue", expand=False))
         self.console.print("\n[bold yellow]Note:[/bold yellow] Unset values will use Ollama's defaults.")
@@ -356,11 +356,11 @@ class ModelConfigManager:
         content.append(combinations_table)
         content.append("\n[bold yellow]Press Q to exit the parameter guide.[/bold yellow]")
 
-        # Create a Group of all our rendered content
+        # Create a Group of all the rendered content
         group = Group(*content)
 
         # Use the console's pager to display the content
-        # This will provide a scrollable interface with keyboard navigation
+        # to provide a scrollable interface with keyboard navigation
         with self.console.pager(styles=True):
             self.console.print(group)
 
@@ -374,7 +374,7 @@ class ModelConfigManager:
             if clear_console_func:
                 clear_console_func()
 
-            self.console.print(Panel(Text.from_markup("[bold]🎛️ Model Configuration[/bold]", justify="center"), expand=True, border_style="green"))
+            self.console.print(Panel(Text.from_markup("[bold]🎛️  Model Configuration[/bold]", justify="center"), expand=True, border_style="green"))
             self.display_current_config()
 
             if result_message:
@@ -383,23 +383,11 @@ class ModelConfigManager:
 
             # Show the command panel
             self.console.print(Panel("[bold yellow]Commands[/bold yellow]", expand=False))
-            self.console.print("1. [bold]Set System Prompt[/bold] (system_prompt)")
-            self.console.print("2. [bold]Set Keep Tokens[/bold] (num_keep) [tokens to keep from prompt]")
-            self.console.print("3. [bold]Set Seed[/bold] (seed) [for reproducible outputs]")
-            self.console.print("4. [bold]Set Max Tokens[/bold] (num_predict) [max tokens to generate]")
-            self.console.print("5. [bold]Set Top K[/bold] (top_k) [0 to disable]")
-            self.console.print("6. [bold]Set Top P[/bold] (top_p) [0.0-1.0]")
-            self.console.print("7. [bold]Set Min P[/bold] (min_p) [0.0-1.0]")
-            self.console.print("8. [bold]Set Typical P[/bold] (typical_p) [0.0-1.0]")
-            self.console.print("9. [bold]Set Repeat Last N[/bold] (repeat_last_n) [context for repetition penalty]")
-            self.console.print("10. [bold]Set Temperature[/bold] (temperature) [0.0 = deterministic, 1.0+ = creative]")
-            self.console.print("11. [bold]Set Repeat Penalty[/bold] (repeat_penalty) [1.0 = no penalty]")
-            self.console.print("12. [bold]Set Presence Penalty[/bold] (presence_penalty) [0.0 = no penalty]")
-            self.console.print("13. [bold]Set Frequency Penalty[/bold] (frequency_penalty) [0.0 = no penalty]")
-            self.console.print("14. [bold]Set Stop Sequences[/bold] (stop) [comma-separated]")
-            self.console.print()
-            self.console.print("[bold]u[/bold] - [bold]Unset a parameter[/bold] (use Ollama default)")
-            self.console.print("[bold]uall[/bold] - [bold]Unset all parameters[/bold] (use Ollama defaults)")
+            self.console.print("Enter [bold magenta]sp[/bold magenta] or [bold magenta]system_prompt[/bold magenta] - [bold]Set the system prompt[/bold]")
+            self.console.print("Enter [bold orange3]number[/bold orange3] - [bold]Set a parameter[/bold] [dim](e.g., 1 for num_keep, 9 for temperature)[/dim]")
+            self.console.print("Enter [bold][orange3]u[/orange3] + [orange3]number[/orange3][/bold] or [bold][magenta]usp[/magenta][/bold] - [bold]Unset a parameter[/bold] [dim](e.g., u1 to unset num_keep, usp to unset system_prompt)[/dim]")
+            self.console.print("[bold]uall[/bold] - Unset all parameters [dim](use Ollama defaults)[/dim]")
+            self.console.print("[bold]undo[/bold] - Restore original settings [dim](from before changes)[/dim]")
             self.console.print("[bold]h[/bold] or [bold]help[/bold] - Show Parameter Reference Guide")
             self.console.print("[bold]s[/bold] or [bold]save[/bold] - Save changes and return")
             self.console.print("[bold]q[/bold] or [bold]quit[/bold] - Cancel changes and return")
@@ -417,6 +405,12 @@ class ModelConfigManager:
                 if clear_console_func:
                     clear_console_func()
                 return
+
+            if selection == 'undo':
+                self.set_config(original_config)
+                result_message = "[green]Settings restored to original values.[/green]"
+                result_style = "green"
+                continue
 
             if selection in ['h', 'help']:
                 if clear_console_func:
@@ -443,81 +437,85 @@ class ModelConfigManager:
                 result_style = "green"
                 continue
 
-            if selection == 'u':
-                self.console.print(Panel("[bold yellow]Unset Parameter[/bold yellow]", expand=False))
-                self.console.print("Which parameter would you like to unset? (Enter the number)")
-                self.console.print(
-                    "1=system_prompt, 2=num_keep, 3=seed, 4=num_predict, 5=top_k, 6=top_p,\n"
-                    "7=min_p, 8=typical_p, 9=repeat_last_n, 10=temperature, 11=repeat_penalty,\n"
-                    "12=presence_penalty, 13=frequency_penalty, 14=stop"
-                )
+            # Handle shorthand unset commands (e.g., u1, usp)
+            if selection.startswith('u') and len(selection) > 1:
+                param_to_unset = selection[1:]  # Extract the part after 'u'
 
-                unset_choice = Prompt.ask("Parameter to unset")
+                # Handle parameter unset by shorthand (u + number or usp)
+                if param_to_unset == "sp" or param_to_unset == "system_prompt":
+                    self.system_prompt = ""
+                    result_message = "[green]system_prompt unset (using Ollama default).[/green]"
+                    result_style = "green"
+                    continue
 
-                match unset_choice:
-                    case "1":
-                        self.system_prompt = ""
-                        result_message = "[green]system_prompt unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case "2":
-                        self.num_keep = None
-                        result_message = "[green]num_keep unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case "3":
-                        self.seed = None
-                        result_message = "[green]seed unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case "4":
-                        self.num_predict = None
-                        result_message = "[green]num_predict unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case "5":
-                        self.top_k = None
-                        result_message = "[green]top_k unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case "6":
-                        self.top_p = None
-                        result_message = "[green]top_p unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case "7":
-                        self.min_p = None
-                        result_message = "[green]min_p unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case "8":
-                        self.typical_p = None
-                        result_message = "[green]typical_p unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case "9":
-                        self.repeat_last_n = None
-                        result_message = "[green]repeat_last_n unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case "10":
-                        self.temperature = None
-                        result_message = "[green]temperature unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case "11":
-                        self.repeat_penalty = None
-                        result_message = "[green]repeat_penalty unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case "12":
-                        self.presence_penalty = None
-                        result_message = "[green]presence_penalty unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case "13":
-                        self.frequency_penalty = None
-                        result_message = "[green]frequency_penalty unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case "14":
-                        self.stop = None
-                        result_message = "[green]stop unset (using Ollama default).[/green]"
-                        result_style = "green"
-                    case _:
-                        result_message = "[red]Invalid parameter number.[/red]"
-                        result_style = "red"
+                # Try to convert to integer for numbered parameters
+                try:
+                    param_num = int(param_to_unset)
+                    # Map parameter numbers to their actions
+                    match param_num:
+                        case 1:
+                            self.num_keep = None
+                            result_message = "[green]num_keep unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 2:
+                            self.seed = None
+                            result_message = "[green]seed unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 3:
+                            self.num_predict = None
+                            result_message = "[green]num_predict unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 4:
+                            self.top_k = None
+                            result_message = "[green]top_k unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 5:
+                            self.top_p = None
+                            result_message = "[green]top_p unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 6:
+                            self.min_p = None
+                            result_message = "[green]min_p unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 7:
+                            self.typical_p = None
+                            result_message = "[green]typical_p unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 8:
+                            self.repeat_last_n = None
+                            result_message = "[green]repeat_last_n unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 9:
+                            self.temperature = None
+                            result_message = "[green]temperature unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 10:
+                            self.repeat_penalty = None
+                            result_message = "[green]repeat_penalty unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 11:
+                            self.presence_penalty = None
+                            result_message = "[green]presence_penalty unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 12:
+                            self.frequency_penalty = None
+                            result_message = "[green]frequency_penalty unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 13:
+                            self.stop = None
+                            result_message = "[green]stop unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case _:
+                            result_message = "[red]Invalid parameter number.[/red]"
+                            result_style = "red"
+                except ValueError:
+                    result_message = f"[red]Invalid unset command: {selection}[/red]"
+                    result_style = "red"
+
                 continue
 
             match selection:
-                case "1":
+                case "sp" | "system_prompt":
                     current = self.system_prompt
                     prompt_text = f"System Prompt (empty to keep current: '{current}')" if current else "System Prompt"
                     new_value = Prompt.ask(prompt_text, default="")
@@ -526,7 +524,7 @@ class ModelConfigManager:
                         result_message = "[green]System prompt updated.[/green]"
                         result_style = "green"
 
-                case "2":
+                case "1":
                     try:
                         new_value = IntPrompt.ask("Keep Tokens (num_keep)", default=self.num_keep)
                         if new_value >= 0:
@@ -540,7 +538,7 @@ class ModelConfigManager:
                         result_message = "[red]Please enter a valid integer.[/red]"
                         result_style = "red"
 
-                case "3":
+                case "2":
                     try:
                         new_value = IntPrompt.ask("Seed (integer for reproducible outputs)", default=self.seed)
                         self.seed = new_value
@@ -550,7 +548,7 @@ class ModelConfigManager:
                         result_message = "[red]Please enter a valid integer.[/red]"
                         result_style = "red"
 
-                case "4":
+                case "3":
                     try:
                         new_value = IntPrompt.ask("Max Tokens (num_predict)", default=self.num_predict)
                         if new_value > 0:
@@ -564,7 +562,7 @@ class ModelConfigManager:
                         result_message = "[red]Please enter a valid integer.[/red]"
                         result_style = "red"
 
-                case "5":
+                case "4":
                     try:
                         new_value = IntPrompt.ask("Top K (0 to disable)", default=self.top_k)
                         if new_value >= 0:
@@ -578,7 +576,7 @@ class ModelConfigManager:
                         result_message = "[red]Please enter a valid integer.[/red]"
                         result_style = "red"
 
-                case "6":
+                case "5":
                     try:
                         new_value = FloatPrompt.ask("Top P (0.0-1.0)", default=self.top_p)
                         if 0.0 <= new_value <= 1.0:
@@ -592,7 +590,7 @@ class ModelConfigManager:
                         result_message = "[red]Please enter a valid number.[/red]"
                         result_style = "red"
 
-                case "7":
+                case "6":
                     try:
                         new_value = FloatPrompt.ask("Min P (0.0-1.0)", default=self.min_p)
                         if 0.0 <= new_value <= 1.0:
@@ -606,7 +604,7 @@ class ModelConfigManager:
                         result_message = "[red]Please enter a valid number.[/red]"
                         result_style = "red"
 
-                case "8":
+                case "7":
                     try:
                         new_value = FloatPrompt.ask("Typical P (0.0-1.0)", default=self.typical_p)
                         if 0.0 <= new_value <= 1.0:
@@ -620,7 +618,7 @@ class ModelConfigManager:
                         result_message = "[red]Please enter a valid number.[/red]"
                         result_style = "red"
 
-                case "9":
+                case "8":
                     try:
                         new_value = IntPrompt.ask("Repeat Last N (context for repetition penalty)", default=self.repeat_last_n)
                         if new_value >= 0:
@@ -634,7 +632,7 @@ class ModelConfigManager:
                         result_message = "[red]Please enter a valid integer.[/red]"
                         result_style = "red"
 
-                case "10":
+                case "9":
                     try:
                         new_value = FloatPrompt.ask("Temperature (0.0 = deterministic, 1.0+ = creative)", default=self.temperature)
                         if new_value >= 0.0:
@@ -648,7 +646,7 @@ class ModelConfigManager:
                         result_message = "[red]Please enter a valid number.[/red]"
                         result_style = "red"
 
-                case "11":
+                case "10":
                     try:
                         new_value = FloatPrompt.ask("Repeat Penalty (1.0 = no penalty)", default=self.repeat_penalty)
                         if new_value >= 0.0:
@@ -662,7 +660,7 @@ class ModelConfigManager:
                         result_message = "[red]Please enter a valid number.[/red]"
                         result_style = "red"
 
-                case "12":
+                case "11":
                     try:
                         new_value = FloatPrompt.ask("Presence Penalty (0.0 = no penalty)", default=self.presence_penalty)
                         self.presence_penalty = new_value
@@ -672,7 +670,7 @@ class ModelConfigManager:
                         result_message = "[red]Please enter a valid number.[/red]"
                         result_style = "red"
 
-                case "13":
+                case "12":
                     try:
                         new_value = FloatPrompt.ask("Frequency Penalty (0.0 = no penalty)", default=self.frequency_penalty)
                         self.frequency_penalty = new_value
@@ -682,7 +680,7 @@ class ModelConfigManager:
                         result_message = "[red]Please enter a valid number.[/red]"
                         result_style = "red"
 
-                case "14":
+                case "13":
                     default_val = ",".join(self.stop) if self.stop is not None else None
                     new_value = Prompt.ask("Stop Sequences (comma-separated)", default=default_val)
                     if new_value and new_value.strip():
