@@ -44,88 +44,88 @@ class ModelConfigManager:
         # Parameter explanations
         self.parameter_explanations = {
             "system_prompt": {
-                "description": "Provides context and instructions to guide the model's behavior.",
-                "range": "Free-form text",
-                "effect": "Sets the style, tone, and capabilities of the model's responses.",
-                "recommendation": "Be clear and specific about the role and constraints you want the model to follow."
+                "description": "A string placed in the context before any user input to define behavior, style, or persona.",
+                "range": "Any UTF-8 string; practical length ≲ 2 kB",
+                "effect": "Sets the foundation for how the model behaves throughout the conversation.",
+                "recommendation": "Be concise but specific about the desired role, tone, and constraints."
             },
             "num_keep": {
-                "description": "Number of tokens to keep from the prompt when the context window overflows.",
-                "range": "0 to model context size (e.g., 0-8192)",
-                "effect": "Controls how much prompt context is preserved during long conversations.",
-                "recommendation": "Higher values preserve more context but use more tokens."
+                "description": "Locks the first n tokens of the current context when the window overflows, so they are never discarded.",
+                "range": "0 – context size (e.g., 0 – 8192); 0 = no lock",
+                "effect": "Does not carry over between separate API calls. Helps retain important context.",
+                "recommendation": "Use to keep instruction preamble in context during long conversations."
             },
             "seed": {
-                "description": "Random seed to use for generation.",
-                "range": "Any integer (e.g., 1-4294967295), or 0 for random",
-                "effect": "Controls reproducibility of outputs. Same seed = same output for same prompt.",
-                "recommendation": "Set to 0 for non-deterministic outputs, or use a specific value for reproducible responses."
+                "description": "Integer that initializes the random number generator, making outputs reproducible.",
+                "range": "0 – 2³² - 1; -1 picks a random seed",
+                "effect": "Same seed + same prompt = same output, enabling deterministic generation.",
+                "recommendation": "Set a specific value when reproducibility is needed; leave unset or -1 for varied responses."
             },
             "num_predict": {
-                "description": "Maximum number of tokens to generate in the response.",
-                "range": "1 to model maximum (typically 128-2048)",
-                "effect": "Limits the length of the generated text.",
-                "recommendation": "Lower values for short answers, higher for detailed responses."
+                "description": "Maximum number of tokens the model may generate.",
+                "range": "0 – context size; 0 lets the server choose",
+                "effect": "Limits response length regardless of natural stopping point.",
+                "recommendation": "Use higher values for detailed responses, lower for concise answers."
             },
             "top_k": {
-                "description": "Limits token selection to the K most likely tokens at each step.",
-                "range": "0 (disabled) to 100+",
-                "effect": "Lower values increase focus and determinism, higher values increase diversity.",
-                "recommendation": "0 to disable, 10-40 for balanced generation."
+                "description": "At each step, sampling is limited to the k most-likely tokens.",
+                "range": "0 – vocab size (~50k); 0 disables the filter",
+                "effect": "Reduces randomness by excluding unlikely tokens from consideration.",
+                "recommendation": "20-40 for balanced output; 0 to disable and rely on other sampling methods."
             },
             "top_p": {
-                "description": "Limits token selection to tokens comprising the top_p probability mass.",
-                "range": "0.0 to 1.0",
-                "effect": "Lower values increase focus on most likely tokens, higher values include more diverse options.",
-                "recommendation": "0.7-0.9 for balanced generation."
+                "description": "Chooses from the smallest set of tokens whose cumulative probability ≥ top_p (nucleus sampling).",
+                "range": "0.0 – 1.0",
+                "effect": "Controls diversity by only considering tokens above a probability threshold.",
+                "recommendation": "0.7-0.9 for natural language; lower for more deterministic responses."
             },
             "min_p": {
-                "description": "Filters tokens below this probability threshold relative to the most likely token.",
-                "range": "0.0 to 1.0",
-                "effect": "Eliminates unlikely tokens from consideration.",
-                "recommendation": "0.05-0.1 to remove unlikely tokens while maintaining diversity."
+                "description": "Filters out tokens whose probability is below min_p × max_prob for that step.",
+                "range": "0.0 – 1.0; 0 disables",
+                "effect": "Removes very unlikely tokens even if they would be included by top_k/top_p.",
+                "recommendation": "0.05-0.1 to filter unlikely tokens while maintaining diversity."
             },
             "typical_p": {
-                "description": "Selects tokens based on how typical they are relative to expected entropy.",
-                "range": "0.0 to 1.0",
-                "effect": "Controls selection of tokens based on their typicality rather than raw probability.",
-                "recommendation": "0.3-0.8 for more natural-sounding text."
+                "description": "Keeps tokens whose conditional probability is near the typical value for the distribution.",
+                "range": "0.0 – 1.0; 1 disables",
+                "effect": "Applied after top_k and before top_p. Helps generate more natural text.",
+                "recommendation": "0.3-0.8 for natural language; 1.0 to disable."
             },
             "repeat_last_n": {
-                "description": "Number of previous tokens to consider for the repeat penalty calculation.",
-                "range": "0 to model context size (0 = disabled)",
-                "effect": "Controls how much context is considered when penalizing repetitions.",
-                "recommendation": "64-256 for balanced repetition control."
+                "description": "Number of recent tokens considered when applying repetition penalties.",
+                "range": "-1 (entire context), 0 (disable), or 1 – context size",
+                "effect": "Controls how much history is considered when preventing repetition.",
+                "recommendation": "64-256 for most applications; -1 for maximum repetition control."
             },
             "temperature": {
-                "description": "Controls randomness of token selection.",
-                "range": "0.0 to 2.0+",
-                "effect": "0.0 = deterministic (always pick most likely), 1.0+ = increasingly random selection.",
-                "recommendation": "0.7-0.8 for balanced creativity, 0.0-0.3 for factual/logical responses."
+                "description": "Scales the logits to control randomness: lower = deterministic, higher = creative.",
+                "range": "≥ 0.0; common 0.2 – 1.2",
+                "effect": "Higher values make distribution more uniform; lower values make it more peaked.",
+                "recommendation": "0.7-0.8 for balanced responses; near 0 for factual/consistent outputs."
             },
             "repeat_penalty": {
-                "description": "Penalizes repeating the same tokens.",
-                "range": "1.0 (no penalty) to 2.0+",
-                "effect": "Higher values reduce repetition more aggressively.",
-                "recommendation": "1.1-1.3 for subtle repetition reduction."
+                "description": "Multiplies the probability of already-seen tokens by 1 / penalty.",
+                "range": "1.0 – 2.0+; 1.0 = off",
+                "effect": "Higher values more strongly discourage the model from repeating itself.",
+                "recommendation": "1.1-1.3 for subtle repetition control without harming fluency."
             },
             "presence_penalty": {
-                "description": "Penalizes tokens that appear at all, regardless of frequency.",
-                "range": "0.0 (no penalty) to 1.0+",
-                "effect": "Higher values encourage using new tokens that haven't appeared yet.",
-                "recommendation": "0.1-0.4 for balanced generation."
+                "description": "Adds a penalty once a token has appeared, encouraging new topics.",
+                "range": "0.0 – 2.0; 0 = off",
+                "effect": "Penalizes tokens that have appeared at all, regardless of frequency.",
+                "recommendation": "0.1-0.4 for encouraging topic diversity without affecting coherence."
             },
             "frequency_penalty": {
-                "description": "Penalizes tokens proportionally to how frequently they've appeared.",
-                "range": "0.0 (no penalty) to 1.0+",
-                "effect": "Higher values more strongly discourage frequent tokens.",
-                "recommendation": "0.1-0.4 for balanced generation."
+                "description": "Penalizes tokens proportionally to how often they have appeared, reducing repetition.",
+                "range": "0.0 – 2.0; 0 = off",
+                "effect": "Higher values more strongly discourage frequently used tokens.",
+                "recommendation": "0.1-0.4 for reducing word repetition while maintaining coherence."
             },
             "stop": {
-                "description": "Sequences that will end generation when produced.",
-                "range": "List of strings",
-                "effect": "Stops generation when any sequence in the list is generated.",
-                "recommendation": "Use for controlling output format or limiting generation."
+                "description": "List of strings; generation halts immediately after any is produced.",
+                "range": "0–8 strings, each ≤ 255 characters",
+                "effect": "Provides precise control over where generation ends.",
+                "recommendation": "Use for controlling dialog format or preventing the model from continuing beyond desired points."
             }
         }
 
@@ -383,7 +383,7 @@ class ModelConfigManager:
 
             # Show the command panel
             self.console.print(Panel("[bold yellow]Commands[/bold yellow]", expand=False))
-            self.console.print("Enter [bold magenta]sp[/bold magenta] or [bold magenta]system_prompt[/bold magenta] - [bold]Set the system prompt[/bold]")
+            self.console.print("Enter [bold magenta]sp[/bold magenta] or [bold magenta]system_prompt[/bold magenta] - [bold]Set the system prompt[/bold] [dim](e.g., You are a helpful assistant.)[/dim]")
             self.console.print("Enter [bold orange3]number[/bold orange3] - [bold]Set a parameter[/bold] [dim](e.g., 1 for num_keep, 9 for temperature)[/dim]")
             self.console.print("Enter [bold][orange3]u[/orange3] + [orange3]number[/orange3][/bold] or [bold][magenta]usp[/magenta][/bold] - [bold]Unset a parameter[/bold] [dim](e.g., u1 to unset num_keep, usp to unset system_prompt)[/dim]")
             self.console.print("[bold]uall[/bold] - Unset all parameters [dim](use Ollama defaults)[/dim]")
@@ -517,8 +517,8 @@ class ModelConfigManager:
             match selection:
                 case "sp" | "system_prompt":
                     current = self.system_prompt
-                    prompt_text = f"System Prompt (empty to keep current: '{current}')" if current else "System Prompt"
-                    new_value = Prompt.ask(prompt_text, default="")
+                    prompt_text = f"System Prompt (string to define behavior, style, or persona) [{current}]:"
+                    new_value = Prompt.ask(prompt_text, default=self.system_prompt)
                     if new_value or not current:
                         self.system_prompt = new_value
                         result_message = "[green]System prompt updated.[/green]"
@@ -526,13 +526,13 @@ class ModelConfigManager:
 
                 case "1":
                     try:
-                        new_value = IntPrompt.ask("Keep Tokens (num_keep)", default=self.num_keep)
+                        new_value = IntPrompt.ask("Keep Tokens (num_keep, 0 to context size)", default=self.num_keep)
                         if new_value >= 0:
                             self.num_keep = new_value
-                            result_message = f"[green]Keep Tokens set to {new_value}.[/green]"
+                            result_message = f"[green]num_keep set to {new_value}.[/green]"
                             result_style = "green"
                         else:
-                            result_message = "[red]Keep Tokens must be a non-negative integer.[/red]"
+                            result_message = "[red]num_keep must be a non-negative integer.[/red]"
                             result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid integer.[/red]"
@@ -540,23 +540,27 @@ class ModelConfigManager:
 
                 case "2":
                     try:
-                        new_value = IntPrompt.ask("Seed (integer for reproducible outputs)", default=self.seed)
-                        self.seed = new_value
-                        result_message = f"[green]Seed set to {new_value}.[/green]"
-                        result_style = "green"
+                        new_value = IntPrompt.ask("Seed (integer for reproducible outputs, -1 for random)", default=self.seed)
+                        if new_value >= -1:
+                            self.seed = new_value
+                            result_message = f"[green]seed set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]seed must be -1 or a non-negative integer.[/red]"
+                            result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid integer.[/red]"
                         result_style = "red"
 
                 case "3":
                     try:
-                        new_value = IntPrompt.ask("Max Tokens (num_predict)", default=self.num_predict)
-                        if new_value > 0:
+                        new_value = IntPrompt.ask("Max Tokens (num_predict, 0 to context size; 0 lets the server choose)", default=self.num_predict)
+                        if new_value >= 0:
                             self.num_predict = new_value
-                            result_message = f"[green]Max Tokens set to {new_value}.[/green]"
+                            result_message = f"[green]num_predict set to {new_value}.[/green]"
                             result_style = "green"
                         else:
-                            result_message = "[red]Max Tokens must be a positive integer.[/red]"
+                            result_message = "[red]num_predict must be a non-negative integer.[/red]"
                             result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid integer.[/red]"
@@ -567,10 +571,10 @@ class ModelConfigManager:
                         new_value = IntPrompt.ask("Top K (0 to disable)", default=self.top_k)
                         if new_value >= 0:
                             self.top_k = new_value
-                            result_message = f"[green]Top K set to {new_value}.[/green]"
+                            result_message = f"[green]top_k set to {new_value}.[/green]"
                             result_style = "green"
                         else:
-                            result_message = "[red]Top K must be a non-negative integer.[/red]"
+                            result_message = "[red]top_k must be a non-negative integer.[/red]"
                             result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid integer.[/red]"
@@ -581,10 +585,10 @@ class ModelConfigManager:
                         new_value = FloatPrompt.ask("Top P (0.0-1.0)", default=self.top_p)
                         if 0.0 <= new_value <= 1.0:
                             self.top_p = new_value
-                            result_message = f"[green]Top P set to {new_value}.[/green]"
+                            result_message = f"[green]top_p set to {new_value}.[/green]"
                             result_style = "green"
                         else:
-                            result_message = "[red]Top P must be between 0.0 and 1.0.[/red]"
+                            result_message = "[red]top_p must be between 0.0 and 1.0.[/red]"
                             result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid number.[/red]"
@@ -592,13 +596,13 @@ class ModelConfigManager:
 
                 case "6":
                     try:
-                        new_value = FloatPrompt.ask("Min P (0.0-1.0)", default=self.min_p)
+                        new_value = FloatPrompt.ask("Min P (0.0-1.0, 0 disables)", default=self.min_p)
                         if 0.0 <= new_value <= 1.0:
                             self.min_p = new_value
-                            result_message = f"[green]Min P set to {new_value}.[/green]"
+                            result_message = f"[green]min_p set to {new_value}.[/green]"
                             result_style = "green"
                         else:
-                            result_message = "[red]Min P must be between 0.0 and 1.0.[/red]"
+                            result_message = "[red]min_p must be between 0.0 and 1.0.[/red]"
                             result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid number.[/red]"
@@ -606,13 +610,13 @@ class ModelConfigManager:
 
                 case "7":
                     try:
-                        new_value = FloatPrompt.ask("Typical P (0.0-1.0)", default=self.typical_p)
+                        new_value = FloatPrompt.ask("Typical P (0.0-1.0, 1.0 disables)", default=self.typical_p)
                         if 0.0 <= new_value <= 1.0:
                             self.typical_p = new_value
-                            result_message = f"[green]Typical P set to {new_value}.[/green]"
+                            result_message = f"[green]typical_p set to {new_value}.[/green]"
                             result_style = "green"
                         else:
-                            result_message = "[red]Typical P must be between 0.0 and 1.0.[/red]"
+                            result_message = "[red]typical_p must be between 0.0 and 1.0.[/red]"
                             result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid number.[/red]"
@@ -620,13 +624,13 @@ class ModelConfigManager:
 
                 case "8":
                     try:
-                        new_value = IntPrompt.ask("Repeat Last N (context for repetition penalty)", default=self.repeat_last_n)
-                        if new_value >= 0:
+                        new_value = IntPrompt.ask("Repeat Last N (-1 for entire context, 0 to disable)", default=self.repeat_last_n)
+                        if new_value >= -1:
                             self.repeat_last_n = new_value
-                            result_message = f"[green]Repeat Last N set to {new_value}.[/green]"
+                            result_message = f"[green]repeat_last_n set to {new_value}.[/green]"
                             result_style = "green"
                         else:
-                            result_message = "[red]Repeat Last N must be a non-negative integer.[/red]"
+                            result_message = "[red]repeat_last_n must be -1 or a non-negative integer.[/red]"
                             result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid integer.[/red]"
@@ -634,13 +638,13 @@ class ModelConfigManager:
 
                 case "9":
                     try:
-                        new_value = FloatPrompt.ask("Temperature (0.0 = deterministic, 1.0+ = creative)", default=self.temperature)
+                        new_value = FloatPrompt.ask("Temperature (≥ 0.0, lower = deterministic, higher = creative)", default=self.temperature)
                         if new_value >= 0.0:
                             self.temperature = new_value
-                            result_message = f"[green]Temperature set to {new_value}.[/green]"
+                            result_message = f"[green]temperature set to {new_value}.[/green]"
                             result_style = "green"
                         else:
-                            result_message = "[red]Temperature must be non-negative.[/red]"
+                            result_message = "[red]temperature must be non-negative.[/red]"
                             result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid number.[/red]"
@@ -648,13 +652,13 @@ class ModelConfigManager:
 
                 case "10":
                     try:
-                        new_value = FloatPrompt.ask("Repeat Penalty (1.0 = no penalty)", default=self.repeat_penalty)
-                        if new_value >= 0.0:
+                        new_value = FloatPrompt.ask("Repeat Penalty (≥ 1.0, 1.0 = no penalty)", default=self.repeat_penalty)
+                        if new_value >= 1.0:
                             self.repeat_penalty = new_value
-                            result_message = f"[green]Repeat Penalty set to {new_value}.[/green]"
+                            result_message = f"[green]repeat_penalty set to {new_value}.[/green]"
                             result_style = "green"
                         else:
-                            result_message = "[red]Repeat Penalty must be non-negative.[/red]"
+                            result_message = "[red]repeat_penalty must be 1.0 or higher.[/red]"
                             result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid number.[/red]"
@@ -662,20 +666,28 @@ class ModelConfigManager:
 
                 case "11":
                     try:
-                        new_value = FloatPrompt.ask("Presence Penalty (0.0 = no penalty)", default=self.presence_penalty)
-                        self.presence_penalty = new_value
-                        result_message = f"[green]Presence Penalty set to {new_value}.[/green]"
-                        result_style = "green"
+                        new_value = FloatPrompt.ask("Presence Penalty (0.0-2.0, 0 = no penalty)", default=self.presence_penalty)
+                        if 0.0 <= new_value <= 2.0:
+                            self.presence_penalty = new_value
+                            result_message = f"[green]presence_penalty set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]presence_penalty must be between 0.0 and 2.0.[/red]"
+                            result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid number.[/red]"
                         result_style = "red"
 
                 case "12":
                     try:
-                        new_value = FloatPrompt.ask("Frequency Penalty (0.0 = no penalty)", default=self.frequency_penalty)
-                        self.frequency_penalty = new_value
-                        result_message = f"[green]Frequency Penalty set to {new_value}.[/green]"
-                        result_style = "green"
+                        new_value = FloatPrompt.ask("Frequency Penalty (0.0-2.0, 0 = no penalty)", default=self.frequency_penalty)
+                        if 0.0 <= new_value <= 2.0:
+                            self.frequency_penalty = new_value
+                            result_message = f"[green]frequency_penalty set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]frequency_penalty must be between 0.0 and 2.0.[/red]"
+                            result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid number.[/red]"
                         result_style = "red"
@@ -684,12 +696,17 @@ class ModelConfigManager:
                     default_val = ",".join(self.stop) if self.stop is not None else None
                     new_value = Prompt.ask("Stop Sequences (comma-separated)", default=default_val)
                     if new_value and new_value.strip():
-                        self.stop = [seq.strip() for seq in new_value.split(",") if seq.strip()]
-                        result_message = f"[green]Stop Sequences set to {self.stop}.[/green]"
-                        result_style = "green"
+                        sequences = [seq.strip() for seq in new_value.split(",") if seq.strip()]
+                        if len(sequences) <= 8 and all(len(seq) <= 255 for seq in sequences):
+                            self.stop = sequences
+                            result_message = f"[green]stop sequences set to {self.stop}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]Maximum 8 sequences, each ≤ 255 characters.[/red]"
+                            result_style = "red"
                     else:
                         self.stop = []
-                        result_message = "[green]Stop Sequences cleared.[/green]"
+                        result_message = "[green]stop sequences cleared.[/green]"
                         result_style = "green"
 
                 case _:
