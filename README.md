@@ -201,7 +201,7 @@ The tool and server selection interface allows you to enable or disable specific
 
 The model selection interface shows all available models in your Ollama installation:
 
-![ollmcp tool and server selection interface](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmpc-tool-and-server-selection.png?raw=true)
+![ollmcp tool and server selection interface](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmpc-tool-and-server-selection.jpg?raw=true)
 
 - Enter the **number** of the model you want to use
 - `s` or `save` - Save the model selection and return to chat
