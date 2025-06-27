@@ -244,7 +244,7 @@ class ModelConfigManager:
             system_prompt_text,
             title="[bold magenta]💬 System Prompt[/bold magenta]",
             border_style="magenta",
-            expand=True))
+            expand=False))
 
         # Display other model parameters
         self.console.print(Panel(

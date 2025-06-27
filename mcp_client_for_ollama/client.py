@@ -322,7 +322,7 @@ class MCPClient:
             )
 
         if not response_text:
-            self.console.print("[red]No response received.[/red]")
+            self.console.print("[red]No content response received.[/red]")
             response_text = ""
 
         # Append query and response to chat history
