@@ -16,6 +16,7 @@ from .utils.version import check_for_updates
 from .utils.constants import DEFAULT_CLAUDE_CONFIG, TOKEN_COUNT_PER_CHAR, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, THINKING_MODELS
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
+from .models.config_manager import ModelConfigManager
 from .tools.manager import ToolManager
 from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
@@ -32,6 +33,8 @@ class MCPClient:
         self.server_connector = ServerConnector(self.exit_stack, self.console)
         # Initialize the model manager
         self.model_manager = ModelManager(console=self.console, default_model=model, ollama=self.ollama)
+        # Initialize the model config manager
+        self.model_config_manager = ModelConfigManager(console=self.console)
         # Initialize the tool manager with server connector reference
         self.tool_manager = ToolManager(console=self.console, server_connector=self.server_connector)
         # Initialize the streaming manager
@@ -138,6 +141,15 @@ class MCPClient:
         self.display_current_model()
         self._display_chat_history()
 
+    def configure_model_options(self):
+        """Let the user configure model parameters like system prompt, temperature, etc."""
+        self.model_config_manager.configure_model_interactive(clear_console_func=self.clear_console)
+
+        # Display the chat history and current state after selection
+        self.display_available_tools()
+        self.display_current_model()
+        self._display_chat_history()
+
     def _display_chat_history(self):
         """Display chat history when returning to the main chat interface"""
         if self.chat_history:
@@ -188,6 +200,14 @@ class MCPClient:
             # No context retention - just use current query
             messages = [current_message]
 
+        # Add system prompt if one is configured
+        system_prompt = self.model_config_manager.get_system_prompt()
+        if system_prompt:
+            messages.insert(0, {
+                "role": "system",
+                "content": system_prompt
+            })
+
         # Get enabled tools from the tool manager
         enabled_tool_objects = self.tool_manager.get_enabled_tool_objects()
 
@@ -206,12 +226,16 @@ class MCPClient:
         # Get current model from the model manager
         model = self.model_manager.get_current_model()
 
+        # Get model options in Ollama format
+        model_options = self.model_config_manager.get_ollama_options()
+
         # Prepare chat parameters
         chat_params = {
             "model": model,
             "messages": messages,
             "stream": True,
-            "tools": available_tools
+            "tools": available_tools,
+            "options": model_options
         }
 
         # Add thinking parameter if thinking mode is enabled and model supports it
@@ -281,6 +305,7 @@ class MCPClient:
                 "model": model,
                 "messages": messages,
                 "stream": True,
+                "options": model_options
             }
 
             # Add thinking parameter if thinking mode is enabled and model supports it
@@ -372,6 +397,10 @@ class MCPClient:
                     await self.select_model()
                     continue
 
+                if query.lower() in ['model-config', 'mc']:
+                    self.configure_model_options()
+                    continue
+
                 if query.lower() in ['context', 'c']:
                     self.toggle_context_retention()
                     continue
@@ -432,7 +461,7 @@ class MCPClient:
                     await self.reload_servers()
                     continue
 
-                if query.lower() in ['human-in-loop', 'hil']:
+                if query.lower() in ['human-in-the-loop', 'hil']:
                     self.hil_manager.toggle()
                     continue
 
@@ -482,13 +511,14 @@ class MCPClient:
 
             "[bold cyan]Model:[/bold cyan]\n"
             "• Type [bold]model[/bold] or [bold]m[/bold] to select a model\n"
+            "• Type [bold]model-config[/bold] or [bold]mc[/bold] to configure system prompt and model parameters\n"
             f"• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode [{', '.join(THINKING_MODELS)}]\n"
             "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n\n"
 
             "[bold cyan]MCP Servers and Tools:[/bold cyan]\n"
             "• Type [bold]tools[/bold] or [bold]t[/bold] to configure tools\n"
             "• Type [bold]show-tool-execution[/bold] or [bold]ste[/bold] to toggle tool execution display\n"
-            "• Type [bold]human-in-loop[/bold] or [bold]hil[/bold] to toggle Human-in-the-Loop confirmations\n"
+            "• Type [bold]human-in-the-loop[/bold] or [bold]hil[/bold] to toggle Human-in-the-Loop confirmations\n"
             "• Type [bold]reload-servers[/bold] or [bold]rs[/bold] to reload MCP servers\n\n"
 
             "[bold cyan]Context:[/bold cyan]\n"
@@ -642,6 +672,7 @@ class MCPClient:
                 "thinkingMode": self.thinking_mode,
                 "showThinking": self.show_thinking
             },
+            "modelConfig": self.model_config_manager.get_config(),
             "displaySettings": {
                 "showToolExecution": self.show_tool_execution
             },
@@ -696,6 +727,10 @@ class MCPClient:
                 self.thinking_mode = config_data["modelSettings"]["thinkingMode"]
             if "showThinking" in config_data["modelSettings"]:
                 self.show_thinking = config_data["modelSettings"]["showThinking"]
+
+        # Load model configuration if specified
+        if "modelConfig" in config_data:
+            self.model_config_manager.set_config(config_data["modelConfig"])
 
         # Load display settings if specified
         if "displaySettings" in config_data:

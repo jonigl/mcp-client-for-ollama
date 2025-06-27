@@ -1,0 +1,503 @@
+"""Model configuration management for MCP Client for Ollama.
+
+This module handles model configuration options like system prompt, temperature, and top_k.
+"""
+from typing import Dict, Any, Optional, Callable
+from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Prompt, FloatPrompt, IntPrompt
+from rich.text import Text
+
+class ModelConfigManager:
+    """Manages model configuration options.
+
+    This class handles configuration of system prompts and model parameters
+    like temperature, top_k, etc. Only sends configured options to Ollama,
+    allowing Ollama to use its own defaults for unset values.
+    """
+
+    def __init__(self, console: Optional[Console] = None):
+        """Initialize the ModelConfigManager.
+
+        Args:
+            console: Rich console for output (optional)
+        """
+        self.console = console or Console()
+        self.system_prompt = ""
+        # All options start as None (unset) to rely on Ollama's defaults
+        self.num_keep = None               # int
+        self.seed = None                   # int
+        self.num_predict = None            # int
+        self.top_k = None                  # int
+        self.top_p = None                  # float
+        self.min_p = None                  # float
+        self.typical_p = None              # float
+        self.repeat_last_n = None          # int
+        self.temperature = None            # float
+        self.repeat_penalty = None         # float
+        self.presence_penalty = None       # float
+        self.frequency_penalty = None      # float
+        self.stop = None                   # list[str]
+
+    def get_config(self) -> Dict[str, Any]:
+        """Get the current model configuration.
+
+        Returns:
+            Dict containing the model configuration
+        """
+        return {
+            "system_prompt": self.system_prompt,
+            "num_keep": self.num_keep,
+            "seed": self.seed,
+            "num_predict": self.num_predict,
+            "top_k": self.top_k,
+            "top_p": self.top_p,
+            "min_p": self.min_p,
+            "typical_p": self.typical_p,
+            "repeat_last_n": self.repeat_last_n,
+            "temperature": self.temperature,
+            "repeat_penalty": self.repeat_penalty,
+            "presence_penalty": self.presence_penalty,
+            "frequency_penalty": self.frequency_penalty,
+            "stop": self.stop
+        }
+
+    def get_ollama_options(self) -> Dict[str, Any]:
+        """Get model configuration formatted for Ollama API.
+
+        Only includes options that have been explicitly set by the user,
+        allowing Ollama to use its own defaults for unset values.
+
+        Returns:
+            Dict containing only the configured Ollama-compatible options
+        """
+        options = {}
+        if self.num_keep is not None:
+            options["num_keep"] = self.num_keep
+        if self.seed is not None:
+            options["seed"] = self.seed
+        if self.num_predict is not None:
+            options["num_predict"] = self.num_predict
+        if self.top_k is not None:
+            options["top_k"] = self.top_k
+        if self.top_p is not None:
+            options["top_p"] = self.top_p
+        if self.min_p is not None:
+            options["min_p"] = self.min_p
+        if self.typical_p is not None:
+            options["typical_p"] = self.typical_p
+        if self.repeat_last_n is not None:
+            options["repeat_last_n"] = self.repeat_last_n
+        if self.temperature is not None:
+            options["temperature"] = self.temperature
+        if self.repeat_penalty is not None:
+            options["repeat_penalty"] = self.repeat_penalty
+        if self.presence_penalty is not None:
+            options["presence_penalty"] = self.presence_penalty
+        if self.frequency_penalty is not None:
+            options["frequency_penalty"] = self.frequency_penalty
+        if self.stop is not None:
+            options["stop"] = self.stop
+        return options
+
+    def get_system_prompt(self) -> str:
+        """Get the current system prompt.
+
+        Returns:
+            The system prompt string
+        """
+        return self.system_prompt
+
+    def set_config(self, config: Dict[str, Any]) -> None:
+        """Set model configuration from a dictionary.
+
+        Args:
+            config: Dictionary containing model configuration
+        """
+        if "system_prompt" in config:
+            self.system_prompt = config["system_prompt"]
+        if "num_keep" in config:
+            self.num_keep = config["num_keep"]
+        if "seed" in config:
+            self.seed = config["seed"]
+        if "num_predict" in config:
+            self.num_predict = config["num_predict"]
+        if "top_k" in config:
+            self.top_k = config["top_k"]
+        if "top_p" in config:
+            self.top_p = config["top_p"]
+        if "min_p" in config:
+            self.min_p = config["min_p"]
+        if "typical_p" in config:
+            self.typical_p = config["typical_p"]
+        if "repeat_last_n" in config:
+            self.repeat_last_n = config["repeat_last_n"]
+        if "temperature" in config:
+            self.temperature = config["temperature"]
+        if "repeat_penalty" in config:
+            self.repeat_penalty = config["repeat_penalty"]
+        if "presence_penalty" in config:
+            self.presence_penalty = config["presence_penalty"]
+        if "frequency_penalty" in config:
+            self.frequency_penalty = config["frequency_penalty"]
+        if "stop" in config:
+            self.stop = config["stop"]
+
+    def display_current_config(self) -> None:
+        """Display the current model configuration."""
+        def format_value(value):
+            return str(value) if value is not None else "-"
+
+        # Display system prompt in a separate expandable panel
+        system_prompt_text = self.system_prompt if self.system_prompt else "(None)"
+        self.console.print(Panel(
+            system_prompt_text,
+            title="[bold magenta]💬 System Prompt[/bold magenta]",
+            border_style="magenta",
+            expand=True))
+
+        # Display other model parameters
+        self.console.print(Panel(
+            f"[bold]num_keep:[/bold] {format_value(self.num_keep)}\n"
+            f"[bold]seed:[/bold] {format_value(self.seed)}\n"
+            f"[bold]num_predict:[/bold] {format_value(self.num_predict)}\n"
+            f"[bold]top_k:[/bold] {format_value(self.top_k)}\n"
+            f"[bold]top_p:[/bold] {format_value(self.top_p)}\n"
+            f"[bold]min_p:[/bold] {format_value(self.min_p)}\n"
+            f"[bold]typical_p:[/bold] {format_value(self.typical_p)}\n"
+            f"[bold]repeat_last_n:[/bold] {format_value(self.repeat_last_n)}\n"
+            f"[bold]temperature:[/bold] {format_value(self.temperature)}\n"
+            f"[bold]repeat_penalty:[/bold] {format_value(self.repeat_penalty)}\n"
+            f"[bold]presence_penalty:[/bold] {format_value(self.presence_penalty)}\n"
+            f"[bold]frequency_penalty:[/bold] {format_value(self.frequency_penalty)}\n"
+            f"[bold]stop:[/bold] {format_value(self.stop)}",
+            title="[bold blue]📝 Model Parameters[/bold blue]",
+            border_style="blue", expand=False))
+        self.console.print("\n[bold yellow]Note:[/bold yellow] Unset values will use Ollama's defaults.")
+        self.console.print()
+
+    def configure_model_interactive(self, clear_console_func: Optional[Callable] = None) -> None:
+        """Interactively configure model parameters."""
+        original_config = self.get_config()
+        result_message = None
+        result_style = "red"
+
+        while True:
+            if clear_console_func:
+                clear_console_func()
+
+            self.console.print(Panel(Text.from_markup("[bold]🎛️ Model Configuration[/bold]", justify="center"), expand=True, border_style="green"))
+            self.display_current_config()
+
+            if result_message:
+                self.console.print(Panel(result_message, border_style=result_style, expand=False))
+                result_message = None
+
+            # Show the command panel
+            self.console.print(Panel("[bold yellow]Commands[/bold yellow]", expand=False))
+            self.console.print("1. [bold]Set System Prompt[/bold] (system_prompt)")
+            self.console.print("2. [bold]Set Keep Tokens[/bold] (num_keep) [tokens to keep from prompt]")
+            self.console.print("3. [bold]Set Seed[/bold] (seed) [for reproducible outputs]")
+            self.console.print("4. [bold]Set Max Tokens[/bold] (num_predict) [max tokens to generate]")
+            self.console.print("5. [bold]Set Top K[/bold] (top_k) [0 to disable]")
+            self.console.print("6. [bold]Set Top P[/bold] (top_p) [0.0-1.0]")
+            self.console.print("7. [bold]Set Min P[/bold] (min_p) [0.0-1.0]")
+            self.console.print("8. [bold]Set Typical P[/bold] (typical_p) [0.0-1.0]")
+            self.console.print("9. [bold]Set Repeat Last N[/bold] (repeat_last_n) [context for repetition penalty]")
+            self.console.print("10. [bold]Set Temperature[/bold] (temperature) [0.0 = deterministic, 1.0+ = creative]")
+            self.console.print("11. [bold]Set Repeat Penalty[/bold] (repeat_penalty) [1.0 = no penalty]")
+            self.console.print("12. [bold]Set Presence Penalty[/bold] (presence_penalty) [0.0 = no penalty]")
+            self.console.print("13. [bold]Set Frequency Penalty[/bold] (frequency_penalty) [0.0 = no penalty]")
+            self.console.print("14. [bold]Set Stop Sequences[/bold] (stop) [comma-separated]")
+            self.console.print()
+            self.console.print("[bold]u[/bold] - [bold]Unset a parameter[/bold] (use Ollama default)")
+            self.console.print("[bold]uall[/bold] - [bold]Unset all parameters[/bold] (use Ollama defaults)")
+            self.console.print("[bold]s[/bold] or [bold]save[/bold] - Save changes and return")
+            self.console.print("[bold]q[/bold] or [bold]quit[/bold] - Cancel changes and return")
+
+            selection = Prompt.ask("> ")
+            selection = selection.strip().lower()
+
+            if selection in ['s', 'save']:
+                if clear_console_func:
+                    clear_console_func()
+                return
+
+            if selection in ['q', 'quit']:
+                self.set_config(original_config)
+                if clear_console_func:
+                    clear_console_func()
+                return
+            if selection == 'uall':
+                self.system_prompt = ""
+                self.num_keep = None
+                self.seed = None
+                self.num_predict = None
+                self.top_k = None
+                self.top_p = None
+                self.min_p = None
+                self.typical_p = None
+                self.repeat_last_n = None
+                self.temperature = None
+                self.repeat_penalty = None
+                self.presence_penalty = None
+                self.frequency_penalty = None
+                self.stop = None
+                result_message = "[green]All parameters unset (using Ollama defaults).[/green]"
+                result_style = "green"
+                continue
+
+            if selection == 'u':
+                self.console.print(Panel("[bold yellow]Unset Parameter[/bold yellow]", expand=False))
+                self.console.print("Which parameter would you like to unset? (Enter the number)")
+                self.console.print(
+                    "1=system_prompt, 2=num_keep, 3=seed, 4=num_predict, 5=top_k, 6=top_p,\n"
+                    "7=min_p, 8=typical_p, 9=repeat_last_n, 10=temperature, 11=repeat_penalty,\n"
+                    "12=presence_penalty, 13=frequency_penalty, 14=stop"
+                )
+
+                unset_choice = Prompt.ask("Parameter to unset")
+
+                match unset_choice:
+                    case "1":
+                        self.system_prompt = ""
+                        result_message = "[green]system_prompt unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case "2":
+                        self.num_keep = None
+                        result_message = "[green]num_keep unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case "3":
+                        self.seed = None
+                        result_message = "[green]seed unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case "4":
+                        self.num_predict = None
+                        result_message = "[green]num_predict unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case "5":
+                        self.top_k = None
+                        result_message = "[green]top_k unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case "6":
+                        self.top_p = None
+                        result_message = "[green]top_p unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case "7":
+                        self.min_p = None
+                        result_message = "[green]min_p unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case "8":
+                        self.typical_p = None
+                        result_message = "[green]typical_p unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case "9":
+                        self.repeat_last_n = None
+                        result_message = "[green]repeat_last_n unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case "10":
+                        self.temperature = None
+                        result_message = "[green]temperature unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case "11":
+                        self.repeat_penalty = None
+                        result_message = "[green]repeat_penalty unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case "12":
+                        self.presence_penalty = None
+                        result_message = "[green]presence_penalty unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case "13":
+                        self.frequency_penalty = None
+                        result_message = "[green]frequency_penalty unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case "14":
+                        self.stop = None
+                        result_message = "[green]stop unset (using Ollama default).[/green]"
+                        result_style = "green"
+                    case _:
+                        result_message = "[red]Invalid parameter number.[/red]"
+                        result_style = "red"
+                continue
+
+            match selection:
+                case "1":
+                    current = self.system_prompt
+                    prompt_text = f"System Prompt (empty to keep current: '{current}')" if current else "System Prompt"
+                    new_value = Prompt.ask(prompt_text, default="")
+                    if new_value or not current:
+                        self.system_prompt = new_value
+                        result_message = "[green]System prompt updated.[/green]"
+                        result_style = "green"
+
+                case "2":
+                    try:
+                        new_value = IntPrompt.ask("Keep Tokens (num_keep)", default=self.num_keep)
+                        if new_value >= 0:
+                            self.num_keep = new_value
+                            result_message = f"[green]Keep Tokens set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]Keep Tokens must be a non-negative integer.[/red]"
+                            result_style = "red"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid integer.[/red]"
+                        result_style = "red"
+
+                case "3":
+                    try:
+                        new_value = IntPrompt.ask("Seed (integer for reproducible outputs)", default=self.seed)
+                        self.seed = new_value
+                        result_message = f"[green]Seed set to {new_value}.[/green]"
+                        result_style = "green"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid integer.[/red]"
+                        result_style = "red"
+
+                case "4":
+                    try:
+                        new_value = IntPrompt.ask("Max Tokens (num_predict)", default=self.num_predict)
+                        if new_value > 0:
+                            self.num_predict = new_value
+                            result_message = f"[green]Max Tokens set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]Max Tokens must be a positive integer.[/red]"
+                            result_style = "red"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid integer.[/red]"
+                        result_style = "red"
+
+                case "5":
+                    try:
+                        new_value = IntPrompt.ask("Top K (0 to disable)", default=self.top_k)
+                        if new_value >= 0:
+                            self.top_k = new_value
+                            result_message = f"[green]Top K set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]Top K must be a non-negative integer.[/red]"
+                            result_style = "red"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid integer.[/red]"
+                        result_style = "red"
+
+                case "6":
+                    try:
+                        new_value = FloatPrompt.ask("Top P (0.0-1.0)", default=self.top_p)
+                        if 0.0 <= new_value <= 1.0:
+                            self.top_p = new_value
+                            result_message = f"[green]Top P set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]Top P must be between 0.0 and 1.0.[/red]"
+                            result_style = "red"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid number.[/red]"
+                        result_style = "red"
+
+                case "7":
+                    try:
+                        new_value = FloatPrompt.ask("Min P (0.0-1.0)", default=self.min_p)
+                        if 0.0 <= new_value <= 1.0:
+                            self.min_p = new_value
+                            result_message = f"[green]Min P set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]Min P must be between 0.0 and 1.0.[/red]"
+                            result_style = "red"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid number.[/red]"
+                        result_style = "red"
+
+                case "8":
+                    try:
+                        new_value = FloatPrompt.ask("Typical P (0.0-1.0)", default=self.typical_p)
+                        if 0.0 <= new_value <= 1.0:
+                            self.typical_p = new_value
+                            result_message = f"[green]Typical P set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]Typical P must be between 0.0 and 1.0.[/red]"
+                            result_style = "red"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid number.[/red]"
+                        result_style = "red"
+
+                case "9":
+                    try:
+                        new_value = IntPrompt.ask("Repeat Last N (context for repetition penalty)", default=self.repeat_last_n)
+                        if new_value >= 0:
+                            self.repeat_last_n = new_value
+                            result_message = f"[green]Repeat Last N set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]Repeat Last N must be a non-negative integer.[/red]"
+                            result_style = "red"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid integer.[/red]"
+                        result_style = "red"
+
+                case "10":
+                    try:
+                        new_value = FloatPrompt.ask("Temperature (0.0 = deterministic, 1.0+ = creative)", default=self.temperature)
+                        if new_value >= 0.0:
+                            self.temperature = new_value
+                            result_message = f"[green]Temperature set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]Temperature must be non-negative.[/red]"
+                            result_style = "red"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid number.[/red]"
+                        result_style = "red"
+
+                case "11":
+                    try:
+                        new_value = FloatPrompt.ask("Repeat Penalty (1.0 = no penalty)", default=self.repeat_penalty)
+                        if new_value >= 0.0:
+                            self.repeat_penalty = new_value
+                            result_message = f"[green]Repeat Penalty set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]Repeat Penalty must be non-negative.[/red]"
+                            result_style = "red"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid number.[/red]"
+                        result_style = "red"
+
+                case "12":
+                    try:
+                        new_value = FloatPrompt.ask("Presence Penalty (0.0 = no penalty)", default=self.presence_penalty)
+                        self.presence_penalty = new_value
+                        result_message = f"[green]Presence Penalty set to {new_value}.[/green]"
+                        result_style = "green"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid number.[/red]"
+                        result_style = "red"
+
+                case "13":
+                    try:
+                        new_value = FloatPrompt.ask("Frequency Penalty (0.0 = no penalty)", default=self.frequency_penalty)
+                        self.frequency_penalty = new_value
+                        result_message = f"[green]Frequency Penalty set to {new_value}.[/green]"
+                        result_style = "green"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid number.[/red]"
+                        result_style = "red"
+
+                case "14":
+                    default_val = ",".join(self.stop) if self.stop is not None else None
+                    new_value = Prompt.ask("Stop Sequences (comma-separated)", default=default_val)
+                    if new_value and new_value.strip():
+                        self.stop = [seq.strip() for seq in new_value.split(",") if seq.strip()]
+                        result_message = f"[green]Stop Sequences set to {self.stop}.[/green]"
+                        result_style = "green"
+                    else:
+                        self.stop = []
+                        result_message = "[green]Stop Sequences cleared.[/green]"
+                        result_style = "green"
+
+                case _:
+                    result_message = "[red]Invalid selection. Please choose a valid option.[/red]"
+                    result_style = "red"

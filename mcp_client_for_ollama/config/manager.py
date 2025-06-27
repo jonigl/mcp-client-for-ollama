@@ -217,6 +217,37 @@ class ConfigManager:
             if "showThinking" in config_data["modelSettings"]:
                 validated["modelSettings"]["showThinking"] = bool(config_data["modelSettings"]["showThinking"])
 
+        if "modelConfig" in config_data and isinstance(config_data["modelConfig"], dict):
+            model_config = config_data["modelConfig"]
+            if "system_prompt" in model_config:
+                validated["modelConfig"]["system_prompt"] = str(model_config["system_prompt"])
+            if "num_keep" in model_config:
+                validated["modelConfig"]["num_keep"] = model_config["num_keep"] if model_config["num_keep"] is not None else None
+            if "seed" in model_config:
+                validated["modelConfig"]["seed"] = model_config["seed"] if model_config["seed"] is not None else None
+            if "num_predict" in model_config:
+                validated["modelConfig"]["num_predict"] = model_config["num_predict"] if model_config["num_predict"] is not None else None
+            if "top_k" in model_config:
+                validated["modelConfig"]["top_k"] = model_config["top_k"] if model_config["top_k"] is not None else None
+            if "top_p" in model_config:
+                validated["modelConfig"]["top_p"] = model_config["top_p"] if model_config["top_p"] is not None else None
+            if "min_p" in model_config:
+                validated["modelConfig"]["min_p"] = model_config["min_p"] if model_config["min_p"] is not None else None
+            if "typical_p" in model_config:
+                validated["modelConfig"]["typical_p"] = model_config["typical_p"] if model_config["typical_p"] is not None else None
+            if "repeat_last_n" in model_config:
+                validated["modelConfig"]["repeat_last_n"] = model_config["repeat_last_n"] if model_config["repeat_last_n"] is not None else None
+            if "temperature" in model_config:
+                validated["modelConfig"]["temperature"] = model_config["temperature"] if model_config["temperature"] is not None else None
+            if "repeat_penalty" in model_config:
+                validated["modelConfig"]["repeat_penalty"] = model_config["repeat_penalty"] if model_config["repeat_penalty"] is not None else None
+            if "presence_penalty" in model_config:
+                validated["modelConfig"]["presence_penalty"] = model_config["presence_penalty"] if model_config["presence_penalty"] is not None else None
+            if "frequency_penalty" in model_config:
+                validated["modelConfig"]["frequency_penalty"] = model_config["frequency_penalty"] if model_config["frequency_penalty"] is not None else None
+            if "stop" in model_config:
+                validated["modelConfig"]["stop"] = model_config["stop"] if model_config["stop"] is not None else None
+
         if "displaySettings" in config_data and isinstance(config_data["displaySettings"], dict):
             if "showToolExecution" in config_data["displaySettings"]:
                 validated["displaySettings"]["showToolExecution"] = bool(config_data["displaySettings"]["showToolExecution"])

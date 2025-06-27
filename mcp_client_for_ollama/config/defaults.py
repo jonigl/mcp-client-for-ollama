@@ -23,6 +23,22 @@ def default_config() -> dict:
             "thinkingMode": True,
             "showThinking": False
         },
+        "modelConfig": {
+            "system_prompt": "",
+            "num_keep": None,
+            "seed": None,
+            "num_predict": None,
+            "top_k": None,
+            "top_p": None,
+            "min_p": None,
+            "typical_p": None,
+            "repeat_last_n": None,
+            "temperature": None,
+            "repeat_penalty": None,
+            "presence_penalty": None,
+            "frequency_penalty": None,
+            "stop": None
+        },
         "displaySettings": {
             "showToolExecution": True
         },
