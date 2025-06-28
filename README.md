@@ -54,7 +54,7 @@ This implementation was adapted from the [Model Context Protocol quickstart guid
 - 🌐 **Multi-Server Support**: Connect to multiple MCP servers simultaneously
 - 🚀 **Multiple Transport Types**: Supports STDIO, SSE, and Streamable HTTP server connections
 - 🎨 **Rich Terminal Interface**: Interactive console UI
-- 🖥️ **Streaming Responses**: View model outputs in real-time as they're generated
+- 🌊 **Streaming Responses**: View model outputs in real-time as they're generated
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
 - 🧑‍💻 **Human-in-the-Loop (HIL)**: Review and approve tool executions before they run for enhanced control and safety
 - 🎮 **Advanced Model Configuration**: Fine-tune 10+ model parameters including temperature, sampling, repetition control, and more
@@ -72,6 +72,7 @@ This implementation was adapted from the [Model Context Protocol quickstart guid
 - 📊 **Usage Analytics**: Track token consumption and conversation history metrics
 - 🔌 **Plug-and-Play**: Works immediately with standard MCP-compliant tool servers
 - 🔔 **Update Notifications**: Automatically detects when a new version is available
+- 🖥️ **Modern CLI with Typer**: Grouped options, shell autocompletion, and improved help output
 
 ## Requirements
 
@@ -116,7 +117,16 @@ ollmcp
 
 ### Command-line Arguments
 
-#### Server Options:
+> [!TIP]
+> The CLI now uses `Typer` for a modern experience: grouped options, rich help, and built-in shell autocompletion. To enable autocompletion, run:
+>
+> ```bash
+> ollmcp --install-completion
+> ```
+>
+> Then restart your shell or follow the printed instructions.
+
+#### MCP Server Configuration:
 
 - `--mcp-server`: Path to one or more MCP server scripts (.py or .js). Can be specified multiple times.
 - `--servers-json`: Path to a JSON file with server configurations.
@@ -126,10 +136,18 @@ ollmcp
 > Claude's configuration file is typically located at:
 > `~/Library/Application Support/Claude/claude_desktop_config.json`
 
-#### Model Options:
+
+#### Ollama Configuration:
 
 - `--model MODEL`: Ollama model to use. Default: `qwen2.5:7b`
 - `--host HOST`: Ollama host URL. Default: `http://localhost:11434`
+
+#### General Options:
+
+- `--version`: Show version and exit
+- `--install-completion`: Install shell autocompletion scripts for the client
+- `--show-completion`: Show available shell completion options
+- `--help`: Show help message and exit
 
 ### Usage Examples
 
@@ -322,6 +340,12 @@ What would you like to do? (y):
 
 ## Autocomplete and Prompt Features
 
+### Typer Shell Autocompletion
+
+- The CLI supports shell autocompletion for all options and arguments via Typer
+- To enable, run `ollmcp --install-completion` and follow the instructions for your shell
+- Enjoy tab-completion for all grouped and general options
+
 ### FZF-style Autocomplete
 
 - Fuzzy matching for commands as you type
@@ -448,6 +472,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Model Context Protocol](https://modelcontextprotocol.io/) for the specification and examples
 - [Ollama](https://ollama.com/) for the local LLM runtime
 - [Rich](https://rich.readthedocs.io/) for the terminal user interface
+- [Typer](https://typer.tiangolo.com/) for the modern CLI experience
+- [UV](https://www.uvicorn.org/) for the lightning-fast Python package manager and virtual environment management
 
 ---
 
