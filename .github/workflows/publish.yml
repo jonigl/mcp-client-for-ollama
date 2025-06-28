@@ -117,18 +117,4 @@ jobs:
           name: "Release v${{ needs.extract-version.outputs.version }}"
           draft: false
           prerelease: ${{ steps.release-type.outputs.type == 'prerelease' }}
-          body: |
-            # Release v${{ needs.extract-version.outputs.version }}
-            
-            ## Packages
-            
-            - Main package: [mcp-client-for-ollama ${{ needs.extract-version.outputs.version }}](https://pypi.org/project/mcp-client-for-ollama/${{ needs.extract-version.outputs.version }}/)
-            - CLI package: [ollmcp ${{ needs.extract-version.outputs.version }}](https://pypi.org/project/ollmcp/${{ needs.extract-version.outputs.version }}/)
-            
-            ## Installation
-            
-            ```bash
-            pip install mcp-client-for-ollama==${{ needs.extract-version.outputs.version }}
-            # or
-            pip install ollmcp==${{ needs.extract-version.outputs.version }}
-            ```
+          generate_release_notes: true
