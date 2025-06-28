@@ -84,12 +84,6 @@ class ConfigManager:
 
             # Validate loaded configuration and provide defaults for missing fields
             validated_config = self._validate_config(config_data)
-
-            self.console.print(Panel(
-                f"[green]Configuration loaded successfully from:[/green]\n"
-                f"[blue]{config_path}[/blue]",
-                title="Config Loaded", border_style="green", expand=False
-            ))
             return validated_config
 
         except Exception as e:

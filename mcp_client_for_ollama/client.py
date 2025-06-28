@@ -1,9 +1,10 @@
 """MCP Client for Ollama - A TUI client for interacting with Ollama models and MCP servers"""
-import argparse
 import asyncio
 import os
 from contextlib import AsyncExitStack
+from typing import List, Optional
 
+import typer
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from rich.console import Console
@@ -856,38 +857,65 @@ class MCPClient:
                 title="Reload Failed", border_style="red", expand=False
             ))
 
-async def main():
-    """Main entry point for the MCP Client for Ollama"""
-    parser = argparse.ArgumentParser(description="MCP Client for Ollama")
+app = typer.Typer(help="MCP Client for Ollama")
 
-    # Server configuration options
-    server_group = parser.add_argument_group("server options")
-    server_group.add_argument("--mcp-server", help="Path to a server script (.py or .js)", action="append")
-    server_group.add_argument("--servers-json", help="Path to a JSON file with server configurations")
-    server_group.add_argument("--auto-discovery", action="store_true", default=False,
-                              help=f"Auto-discover servers from Claude's config at {DEFAULT_CLAUDE_CONFIG} - Default option")
-    # Model options
-    model_group = parser.add_argument_group("model options")
-    model_group.add_argument("--model", default=DEFAULT_MODEL, help=f"Ollama model to use. Default: '{DEFAULT_MODEL}'")
-    model_group.add_argument("--host", default=DEFAULT_OLLAMA_HOST, help=f"Ollama host URL. Default: '{DEFAULT_OLLAMA_HOST}'")
+@app.command()
+def main(
+    # MCP Server Configuration
+    mcp_server: Optional[List[str]] = typer.Option(
+        None, "--mcp-server",
+        help="Path to a server script (.py or .js)",
+        rich_help_panel="MCP Server Configuration"
+    ),
+    servers_json: Optional[str] = typer.Option(
+        None, "--servers-json",
+        help="Path to a JSON file with server configurations",
+        rich_help_panel="MCP Server Configuration"
+    ),
+    auto_discovery: bool = typer.Option(
+        False, "--auto-discovery",
+        help=f"Auto-discover servers from Claude's config at {DEFAULT_CLAUDE_CONFIG} - If no other options are provided, this will be enabled by default",
+        rich_help_panel="MCP Server Configuration"
+    ),
 
-    # Add version flag
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    # Ollama Configuration
+    model: str = typer.Option(
+        DEFAULT_MODEL, "--model",
+        help="Ollama model to use",
+        rich_help_panel="Ollama Configuration"
+    ),
+    host: str = typer.Option(
+        DEFAULT_OLLAMA_HOST, "--host",
+        help="Ollama host URL",
+        rich_help_panel="Ollama Configuration"
+    ),
 
-    # Add a function to modify args after parsing
-    def parse_args_with_defaults():
-        args = parser.parse_args()
-        # If none of the server arguments are provided, enable auto-discovery
-        if not (args.mcp_server or args.servers_json or args.auto_discovery):
-            args.auto_discovery = True
-        return args
+    # General Options
+    version: Optional[bool] = typer.Option(
+        None, "--version",
+        help="Show version and exit",
+    )
+):
+    """Run the MCP Client for Ollama with specified options."""
 
-    args = parse_args_with_defaults()
+    if version:
+        typer.echo(f"mcp-client-for-ollama {__version__}")
+        raise typer.Exit()
+
+    # If none of the server arguments are provided, enable auto-discovery
+    if not (mcp_server or servers_json or auto_discovery):
+        auto_discovery = True
+
+    # Run the async main function
+    asyncio.run(async_main(mcp_server, servers_json, auto_discovery, model, host))
+
+async def async_main(mcp_server, servers_json, auto_discovery, model, host):
+    """Asynchronous main function to run the MCP Client for Ollama"""
 
     console = Console()
 
     # Create a temporary client to check if Ollama is running
-    client = MCPClient(model=args.model, host=args.host)
+    client = MCPClient(model=model, host=host)
     if not await client.model_manager.check_ollama_running():
         console.print(Panel(
             "[bold red]Error: Ollama is not running![/bold red]\n\n"
@@ -899,47 +927,48 @@ async def main():
 
     # Handle server configuration options - only use one source to prevent duplicates
     config_path = None
-    auto_discovery = False
+    auto_discovery_final = auto_discovery
 
-    if args.servers_json:
+    if servers_json:
         # If --servers-json is provided, use that and disable auto-discovery
-        if os.path.exists(args.servers_json):
-            config_path = args.servers_json
+        if os.path.exists(servers_json):
+            config_path = servers_json
         else:
-            console.print(f"[bold red]Error: Specified JSON config file not found: {args.servers_json}[/bold red]")
+            console.print(f"[bold red]Error: Specified JSON config file not found: {servers_json}[/bold red]")
             return
-    elif args.auto_discovery:
+    elif auto_discovery:
         # If --auto-discovery is provided, use that and set config_path to None
-        auto_discovery = True
+        auto_discovery_final = True
         if os.path.exists(DEFAULT_CLAUDE_CONFIG):
             console.print(f"[cyan]Auto-discovering servers from Claude's config at {DEFAULT_CLAUDE_CONFIG}[/cyan]")
         else:
             console.print(f"[yellow]Warning: Claude config not found at {DEFAULT_CLAUDE_CONFIG}[/yellow]")
     else:
         # If neither is provided, check if DEFAULT_CLAUDE_CONFIG exists and use auto_discovery
-        if not args.mcp_server:
+        if not mcp_server:
             if os.path.exists(DEFAULT_CLAUDE_CONFIG):
                 console.print(f"[cyan]Auto-discovering servers from Claude's config at {DEFAULT_CLAUDE_CONFIG}[/cyan]")
-                auto_discovery = True
+                auto_discovery_final = True
             else:
-                console.print(f"[yellow]Warning: No servers specified and Claude config not found.[/yellow]")
+                console.print("[yellow]Warning: No servers specified and Claude config not found.[/yellow]")
 
     # Validate that we have at least one server source
-    if not args.mcp_server and not config_path and not auto_discovery:
-        parser.error("At least one of --mcp-server, --servers-json, or --auto-discovery must be provided")
+    if not mcp_server and not config_path and not auto_discovery_final:
+        typer.echo("Error: At least one of --mcp-server, --servers-json, or --auto-discovery must be provided", err=True)
+        raise typer.Exit(1)
 
     # Validate mcp-server paths exist
-    if args.mcp_server:
-        for server_path in args.mcp_server:
+    if mcp_server:
+        for server_path in mcp_server:
             if not os.path.exists(server_path):
                 console.print(f"[bold red]Error: Server script not found: {server_path}[/bold red]")
                 return
     try:
-        await client.connect_to_servers(args.mcp_server, config_path, auto_discovery)
+        await client.connect_to_servers(mcp_server, config_path, auto_discovery_final)
         client.auto_load_default_config()
         await client.chat_loop()
     finally:
         await client.cleanup()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    app()

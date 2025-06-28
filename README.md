@@ -57,7 +57,7 @@ This implementation was adapted from the [Model Context Protocol quickstart guid
 - 🖥️ **Streaming Responses**: View model outputs in real-time as they're generated
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
 - 🧑‍💻 **Human-in-the-Loop (HIL)**: Review and approve tool executions before they run for enhanced control and safety
-- 🎛️ **Advanced Model Configuration**: Fine-tune 10+ model parameters including temperature, sampling, repetition control, and more
+- 🎮 **Advanced Model Configuration**: Fine-tune 10+ model parameters including temperature, sampling, repetition control, and more
 - 💬 **System Prompt Customization**: Define and edit the system prompt to control model behavior and persona
 - 🎨 **Enhanced Tool Display**: Beautiful, structured visualization of tool executions with JSON syntax highlighting
 - 🧠 **Context Management**: Control conversation memory with configurable retention settings

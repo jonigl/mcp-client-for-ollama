@@ -13,6 +13,7 @@ dependencies = [
     "ollama==0.5.1",
     "prompt-toolkit>=3.0.51",
     "rich>=14.0.0",
+    "typer>=0.12.0",
 ]
 
 [project.scripts]

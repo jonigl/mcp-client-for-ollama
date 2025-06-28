@@ -7,8 +7,7 @@ This allows you to run the client using:
 It simply imports and runs the main function from cli.py.
 """
 
-import asyncio
-from .cli import main
+from .cli import run_cli
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_cli()
