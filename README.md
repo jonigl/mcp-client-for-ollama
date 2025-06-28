@@ -17,7 +17,10 @@
 [![CI](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml/badge.svg)](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/v0.2.5/misc/ollmcp-demo.gif" alt="MCP Client for Ollama Demo">
+  <img src="https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/v0.13.0/misc/ollmcp-demo.gif" alt="MCP Client for Ollama Demo">
+</p>
+<p align="center">
+  <a href="https://asciinema.org/a/jxc6N8oKZAWrzH8aK867zhXdO" target="_blank">🎥 View this demo as an asciinema recording</a>
 </p>
 
 ## Table of Contents
@@ -45,9 +48,7 @@
 
 ## Overview
 
-This project provides a robust Python-based client that connects to one or more Model Context Protocol (MCP) servers and uses Ollama to process queries with tool use capabilities. The client establishes connections to MCP servers, sends queries to Ollama models, and handles the tool calls the model makes.
-
-This implementation was adapted from the [Model Context Protocol quickstart guide](https://modelcontextprotocol.io/quickstart/client) and customized to work with Ollama, providing a user-friendly interface for interacting with LLMs that support function calling.
+MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (TUI) for connecting local Ollama LLMs to one or more Model Context Protocol (MCP) servers, enabling advanced tool use and workflow automation. With a rich, user-friendly interface, it lets you manage tools, models, and server connections in real time—no coding required. Whether you're building, testing, or just exploring LLM tool use, this client streamlines your workflow with features like fuzzy autocomplete, advanced model configuration, MCP servers hot-reloading for development, and Human-in-the-Loop safety controls.
 
 ## Features
 
@@ -85,7 +86,7 @@ This implementation was adapted from the [Model Context Protocol quickstart guid
 **Option 1:** Install with pip and run
 
 ```bash
-pip install ollmcp
+pip install --upgrade ollmcp
 ollmcp
 ```
 
