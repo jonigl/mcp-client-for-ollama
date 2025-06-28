@@ -1,7 +1,9 @@
+"""MCP Client for Ollama - A TUI client for interacting with Ollama models and MCP servers"""
 import argparse
 import asyncio
 import os
 from contextlib import AsyncExitStack
+
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from rich.console import Console
@@ -13,7 +15,7 @@ import ollama
 from . import __version__
 from .config.manager import ConfigManager
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, TOKEN_COUNT_PER_CHAR, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, THINKING_MODELS
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, TOKEN_COUNT_PER_CHAR, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, THINKING_MODELS, DEFAULT_COMPLETION_STYLE
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
@@ -21,8 +23,12 @@ from .tools.manager import ToolManager
 from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
 from .utils.hil_manager import HumanInTheLoopManager
+from .utils.fzf_style_completion import FZFStyleCompleter
+
 
 class MCPClient:
+    """Main client class for interacting with Ollama and MCP servers"""
+
     def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST):
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
@@ -47,10 +53,11 @@ class MCPClient:
         self.sessions = {}  # Dict to store multiple sessions
         # UI components
         self.chat_history = []  # Add chat history list to store interactions
-        self.prompt_session = PromptSession()
-        self.prompt_style = Style.from_dict({
-            'prompt': 'ansibrightyellow bold',
-        })
+        # Command completer for interactive prompts
+        self.prompt_session = PromptSession(
+            completer=FZFStyleCompleter(),
+            style=Style.from_dict(DEFAULT_COMPLETION_STYLE)
+        )
         # Context retention settings
         self.retain_context = True  # By default, retain conversation context
         self.approx_token_count = 0  # Approximate token count for the conversation
@@ -134,7 +141,6 @@ class MCPClient:
         """Let the user select which tools to enable using interactive prompts with server-based grouping"""
         # Call the tool manager's select_tools method
         self.tool_manager.select_tools(clear_console_func=self.clear_console)
-
 
         # Display the chat history and current state after selection
         self.display_available_tools()
@@ -336,13 +342,26 @@ class MCPClient:
 
         return response_text
 
-    async def get_user_input(self, prompt_text: str = "\nQuery") -> str:
+    async def get_user_input(self, prompt_text: str = None) -> str:
         """Get user input with full keyboard navigation support"""
         try:
-            # Use prompt_async instead of prompt
+            if prompt_text is None:
+                model_name = self.model_manager.get_current_model().split(':')[0]
+                tool_count = len(self.tool_manager.get_enabled_tool_objects())
+
+                # Simple and readable
+                prompt_text = f"{model_name}"
+
+                # Add thinking indicator
+                if self.thinking_mode and self.supports_thinking_mode():
+                    prompt_text += "/show-thinking" if self.show_thinking else "/thinking"
+
+                # Add tool count
+                if tool_count > 0:
+                    prompt_text += f"/{tool_count}-tool" if tool_count == 1 else f"/{tool_count}-tools"
+
             user_input = await self.prompt_session.prompt_async(
-                f"{prompt_text}: ",
-                style=self.prompt_style
+                f"{prompt_text}❯ "
             )
             return user_input
         except KeyboardInterrupt:
@@ -379,7 +398,7 @@ class MCPClient:
         while True:
             try:
                 # Use await to call the async method
-                query = await self.get_user_input("Query")
+                query = await self.get_user_input()
 
                 if query.lower() in ['quit', 'q', 'exit']:
                     self.console.print("[yellow]Exiting...[/yellow]")
@@ -486,7 +505,7 @@ class MCPClient:
                         ))
                     else:
                         self.console.print(Panel(f"[bold red]Ollama Error:[/bold red] {error_msg}",
-                                              border_style="red", expand=False))
+                                                 border_style="red", expand=False))
 
                     # If it's a "model not found" error, suggest how to fix it
                     if "not found" in error_msg.lower() and "try pulling it first" in error_msg.lower():
@@ -653,7 +672,6 @@ class MCPClient:
         if self.default_configuration_status:
             self.console.print("[green] ✓ Default configuration loaded successfully![/green]")
             self.console.print()
-
 
     def save_configuration(self, config_name=None):
         """Save current tool configuration and model settings to a file
@@ -839,6 +857,7 @@ class MCPClient:
             ))
 
 async def main():
+    """Main entry point for the MCP Client for Ollama"""
     parser = argparse.ArgumentParser(description="MCP Client for Ollama")
 
     # Server configuration options
@@ -846,7 +865,7 @@ async def main():
     server_group.add_argument("--mcp-server", help="Path to a server script (.py or .js)", action="append")
     server_group.add_argument("--servers-json", help="Path to a JSON file with server configurations")
     server_group.add_argument("--auto-discovery", action="store_true", default=False,
-                            help=f"Auto-discover servers from Claude's config at {DEFAULT_CLAUDE_CONFIG} - Default option")
+                              help=f"Auto-discover servers from Claude's config at {DEFAULT_CLAUDE_CONFIG} - Default option")
     # Model options
     model_group = parser.add_argument_group("model options")
     model_group.add_argument("--model", default=DEFAULT_MODEL, help=f"Ollama model to use. Default: '{DEFAULT_MODEL}'")
@@ -855,7 +874,7 @@ async def main():
     # Add version flag
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
-     # Add a function to modify args after parsing
+    # Add a function to modify args after parsing
     def parse_args_with_defaults():
         args = parser.parse_args()
         # If none of the server arguments are provided, enable auto-discovery

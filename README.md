@@ -35,6 +35,7 @@
   - [Advanced Model Configuration](#advanced-model-configuration)
   - [Server Reloading for Development](#server-reloading-for-development)
   - [Human-in-the-Loop (HIL) Tool Execution](#human-in-the-loop-hil-tool-execution)
+- [Autocomplete and Prompt Features](#autocomplete-and-prompt-features)
 - [Configuration Management](#configuration-management)
 - [Server Configuration Format](#server-configuration-format)
 - [Compatible Models](#compatible-models)
@@ -66,6 +67,8 @@ This implementation was adapted from the [Model Context Protocol quickstart guid
 - 🔁 **Dynamic Model Switching**: Switch between any installed Ollama model without restarting
 - 💾 **Configuration Persistence**: Save and load tool preferences between sessions
 - 🔄 **Server Reloading**: Hot-reload MCP servers during development without restarting the client
+- ✨ **Fuzzy Autocomplete**: Interactive, arrow-key command autocomplete with descriptions
+- 🏷️ **Dynamic Prompt**: Shows current model, thinking mode, and enabled tools
 - 📊 **Usage Analytics**: Track token consumption and conversation history metrics
 - 🔌 **Plug-and-Play**: Works immediately with standard MCP-compliant tool servers
 - 🔔 **Update Notifications**: Automatically detects when a new version is available
@@ -316,6 +319,35 @@ What would you like to do? (y):
 - **Awareness**: Understand what actions the model is attempting to perform
 - **Selective Control**: Choose which operations to allow on a case-by-case basis
 - **Peace of Mind**: Full visibility and control over automated actions
+
+## Autocomplete and Prompt Features
+
+### FZF-style Autocomplete
+
+- Fuzzy matching for commands as you type
+- Arrow (`▶`) highlights the best match
+- Command descriptions shown in the menu
+- Case-insensitive matching for convenience
+- Centralized command list for consistency
+
+### Contextual Prompt
+
+The chat prompt now gives you clear, contextual information at a glance:
+
+- **Model**: Shows the current Ollama model in use
+- **Thinking Mode**: Indicates if "thinking mode" is active (for supported models)
+- **Tools**: Displays the number of enabled tools
+
+**Example prompt:**
+```
+qwen3/show-thinking/12-tools❯
+```
+- `qwen3` Model name
+- `/show-thinking` Thinking mode indicator (if enabled, otherwise `/thinking` or omitted)
+- `/12-tools` Number of tools enabled (or `/1-tool` for singular)
+- `❯` Prompt symbol
+
+This makes it easy to see your current context before entering a query.
 
 ## Configuration Management
 
