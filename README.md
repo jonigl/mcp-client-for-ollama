@@ -20,7 +20,7 @@
   <img src="https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/v0.13.0/misc/ollmcp-demo.gif" alt="MCP Client for Ollama Demo">
 </p>
 <p align="center">
-  <a href="https://asciinema.org/a/jxc6N8oKZAWrzH8aK867zhXdO" target="_blank">🎥 View this demo as an asciinema recording</a>
+  <a href="https://asciinema.org/a/jxc6N8oKZAWrzH8aK867zhXdO" target="_blank">🎥 Watch this demo as an Asciinema recording</a>
 </p>
 
 ## Table of Contents
@@ -398,7 +398,7 @@ The configuration saves:
 
 ## Server Configuration Format
 
-The JSON configuration file supports STDIO, SSE, and Streamable HTTP server types:
+The JSON configuration file supports STDIO, SSE, and Streamable HTTP server types (MCP 1.10.1):
 
 ```json
 {
@@ -432,7 +432,7 @@ The JSON configuration file supports STDIO, SSE, and Streamable HTTP server type
 }
 ```
 > [!NOTE]
-> If you specify a URL without a type, the client will default to using Streamable HTTP transport.
+> **MCP 1.10.1 Transport Support**: The client now supports the latest Streamable HTTP transport with improved performance and reliability. If you specify a URL without a type, the client will default to using Streamable HTTP transport.
 
 ## Compatible Models
 
@@ -470,11 +470,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- [Model Context Protocol](https://modelcontextprotocol.io/) for the specification and examples
 - [Ollama](https://ollama.com/) for the local LLM runtime
+- [Model Context Protocol](https://modelcontextprotocol.io/) for the specification and examples
 - [Rich](https://rich.readthedocs.io/) for the terminal user interface
 - [Typer](https://typer.tiangolo.com/) for the modern CLI experience
+- [Prompt Toolkit](https://python-prompt-toolkit.readthedocs.io/) for the interactive command line interface
 - [UV](https://www.uvicorn.org/) for the lightning-fast Python package manager and virtual environment management
+- [Asciinema](https://asciinema.org/) for the demo recording
 
 ---
 

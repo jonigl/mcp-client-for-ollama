@@ -6,8 +6,6 @@ initialization, and communication.
 
 import os
 import shutil
-import os
-import shutil
 from contextlib import AsyncExitStack
 from typing import Dict, List, Any, Optional, Tuple
 from rich.console import Console
@@ -15,6 +13,7 @@ from rich.panel import Panel
 from mcp import ClientSession, Tool
 from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamablehttp_client
 
 from .discovery import process_server_paths, parse_server_configs, auto_discover_servers
 
@@ -38,6 +37,7 @@ class ServerConnector:
         self.sessions = {}  # Dict to store multiple sessions
         self.available_tools = []  # List to store all available tools
         self.enabled_tools = {}  # Dict to store tool enabled status
+        self.session_ids = {}  # Dict to store session IDs for HTTP connections
 
     async def connect_to_servers(self, server_paths=None, config_path=None, auto_discovery=False) -> Tuple[dict, list, dict]:
         """Connect to one or more MCP servers
@@ -137,12 +137,16 @@ class ServerConnector:
 
                 headers = self._get_headers_from_server(server)
 
-                # In MCP 1.9.0, use SSE client for HTTP connections as well
-                # since the dedicated HTTP client is no longer available
-                self.console.print(f"[yellow]Note: Using SSE client for HTTP connection to {server_name}[/yellow]")
-                transport = await self.exit_stack.enter_async_context(sse_client(url, headers=headers))
-                read_stream, write_stream = transport
+                # Use the streamablehttp_client for Streamable HTTP connections
+                transport = await self.exit_stack.enter_async_context(
+                    streamablehttp_client(url, headers=headers)
+                )
+                read_stream, write_stream, session_info = transport
                 session = await self.exit_stack.enter_async_context(ClientSession(read_stream, write_stream))
+
+                # Store session ID if provided
+                if hasattr(session_info, 'session_id') and session_info.session_id:
+                    self.session_ids[server_name] = session_info.session_id
 
             elif server_type == "script":
                 # Connect to script-based server using STDIO
@@ -383,17 +387,23 @@ class ServerConnector:
         if not headers and "config" in server:
             headers = server["config"].get("headers", {})
 
+        # Always add MCP Protocol Version header for HTTP connections
+        server_type = server.get("type", "script")
+        if server_type in ["sse", "streamable_http"]:
+            headers["MCP-Protocol-Version"] = "2025-06-18"
+
         return headers
 
     async def disconnect_all_servers(self):
         """Disconnect from all servers and reset state"""
-        # Close all existing connections
+        # Close all existing connections via exit stack
         await self.exit_stack.aclose()
 
         # Create a new exit stack for future connections
         self.exit_stack = AsyncExitStack()
 
         # Clear all state
-        self.sessions = {}
-        self.available_tools = []
-        self.enabled_tools = {}
+        self.sessions.clear()
+        self.available_tools.clear()
+        self.enabled_tools.clear()
+        self.session_ids.clear()
