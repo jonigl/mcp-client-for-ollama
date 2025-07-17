@@ -37,7 +37,7 @@ class MCPClient:
         self.console = Console()
         self.config_manager = ConfigManager(self.console)
         # Initialize the server connector
-        self.server_connector = ServerConnector(self.exit_stack, self.console)
+        self.server_connector = ServerConnector(self.exit_stack, default_model=model, ollama_client=self.ollama, console=self.console)
         # Initialize the model manager
         self.model_manager = ModelManager(console=self.console, default_model=model, ollama=self.ollama)
         # Initialize the model config manager
