@@ -3,13 +3,15 @@
 This module handles enabling, disabling, and selecting tools from MCP servers.
 """
 
-from typing import Dict, List, Any, Optional, Tuple, Callable
+import json
+from typing import Dict, List, Optional, Tuple, Callable
 from mcp import Tool
 from rich.console import Console
 from rich.columns import Columns
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.text import Text
+from rich.syntax import Syntax
 
 class ToolManager:
     """Manages MCP tools.
@@ -252,11 +254,12 @@ class ToolManager:
             show_descriptions: Current state of description display
         """
         self.console.print(Panel("[bold yellow]Commands[/bold yellow]", expand=False))
-        self.console.print(f"• Enter [bold magenta]numbers[/bold magenta][bold yellow] separated by commas or ranges[/bold yellow] to toggle tools (e.g. [bold]1,3,5-8[/bold])")
-        self.console.print(f"• Enter [bold orange3]S + number[/bold orange3] to toggle all tools in a server (e.g. [bold]S1[/bold] or [bold]s2[/bold])")
+        self.console.print("• Enter [bold magenta]numbers[/bold magenta][bold yellow] separated by commas or ranges[/bold yellow] to toggle tools (e.g. [bold]1,3,5-8[/bold])")
+        self.console.print("• Enter [bold orange3]S + number[/bold orange3] to toggle all tools in a server (e.g. [bold]S1[/bold] or [bold]s2[/bold])")
         self.console.print("• [bold]a[/bold] or [bold]all[/bold] - Enable all tools")
         self.console.print("• [bold]n[/bold] or [bold]none[/bold] - Disable all tools")
         self.console.print(f"• [bold]d[/bold] or [bold]desc[/bold] - {'Hide' if show_descriptions else 'Show'} descriptions")
+        self.console.print("• [bold]j[/bold] or [bold]json[/bold] - Show detailed tool JSON schemas on enabled tools for debugging purposes")
         self.console.print("• [bold]s[/bold] or [bold]save[/bold] - Save changes and return")
         self.console.print("• [bold]q[/bold] or [bold]quit[/bold] - Cancel and return")
 
@@ -451,6 +454,14 @@ class ToolManager:
                 result_message, result_style = f"[blue]Tool descriptions {status}![/blue]", "blue"
                 continue
 
+            if selection in ['j', 'json']:
+                self._clear_console(clear_console_func)
+                self.debug_tool_schemas()
+                self.console.print("\n[dim]Press Enter to continue...[/dim]")
+                input()  # Wait for user to press Enter
+                self._clear_console(clear_console_func)
+                continue
+
             # Check for server toggle (S1, S2, etc.)
             if selection.startswith('s') and len(selection) > 1 and selection[1:].isdigit():
                 result_message, result_style = self._process_server_toggle(
@@ -478,3 +489,43 @@ class ToolManager:
             server_connector: The server connector instance
         """
         self.server_connector = server_connector
+
+    def debug_tool_schemas(self) -> None:
+        """Debug method to display detailed tool schemas"""
+        enabled_tools = self.get_enabled_tool_objects()
+
+        if not enabled_tools:
+            self.console.print("[yellow]No tools are enabled.[/yellow]")
+            return
+
+        self.console.print(Panel("[bold]🔍 Tool Schema Debug Information[/bold]", border_style="cyan"))
+
+        for tool in enabled_tools:
+            # Tool header
+            tool_panel = Panel(
+                f"{tool.description or 'No description'}",
+                title=f"{tool.name} Info",
+                border_style="green",
+                padding=(1, 1)
+            )
+            self.console.print(tool_panel)
+
+            # Schema content with JSON syntax highlighting
+            try:
+                schema_json = json.dumps(tool.inputSchema, indent=2)
+                syntax = Syntax(schema_json, "json", theme="monokai", line_numbers=False)
+                schema_panel = Panel(
+                    syntax,
+                    title=f"[bold orange3]{tool.name} Input Schema[bold orange3]",
+                    border_style="blue"
+                )
+                self.console.print(schema_panel)
+            except Exception as e:
+                error_panel = Panel(
+                    f"[red]Error: {str(e)}[/red]\n[yellow]Raw: {tool.inputSchema}[/yellow]",
+                    title="Schema Error",
+                    border_style="red"
+                )
+                self.console.print(error_panel)
+
+            self.console.print()  # Add spacing between tools
