@@ -861,47 +861,47 @@ class MCPClient:
                 title="Reload Failed", border_style="red", expand=False
             ))
 
-app = typer.Typer(help="MCP Client for Ollama")
+app = typer.Typer(help="MCP Client for Ollama", context_settings={"help_option_names": ["-h", "--help"]})
 
 @app.command()
 def main(
     # MCP Server Configuration
     mcp_server: Optional[List[str]] = typer.Option(
-        None, "--mcp-server",
+        None, "--mcp-server", "-s",
         help="Path to a server script (.py or .js)",
         rich_help_panel="MCP Server Configuration"
     ),
     mcp_server_url: Optional[List[str]] = typer.Option(
-        None, "--mcp-server-url",
+        None, "--mcp-server-url", "-u",
         help="URL for SSE or Streamable HTTP MCP server (e.g., http://localhost:8000/sse, https://domain-name.com/mcp, etc)",
         rich_help_panel="MCP Server Configuration"
     ),
     servers_json: Optional[str] = typer.Option(
-        None, "--servers-json",
+        None, "--servers-json", "-j",
         help="Path to a JSON file with server configurations",
         rich_help_panel="MCP Server Configuration"
     ),
     auto_discovery: bool = typer.Option(
-        False, "--auto-discovery",
+        False, "--auto-discovery", "-a",
         help=f"Auto-discover servers from Claude's config at {DEFAULT_CLAUDE_CONFIG} - If no other options are provided, this will be enabled by default",
         rich_help_panel="MCP Server Configuration"
     ),
 
     # Ollama Configuration
     model: str = typer.Option(
-        DEFAULT_MODEL, "--model",
+        DEFAULT_MODEL, "--model", "-m",
         help="Ollama model to use",
         rich_help_panel="Ollama Configuration"
     ),
     host: str = typer.Option(
-        DEFAULT_OLLAMA_HOST, "--host",
+        DEFAULT_OLLAMA_HOST, "--host", "-H",
         help="Ollama host URL",
         rich_help_panel="Ollama Configuration"
     ),
 
     # General Options
     version: Optional[bool] = typer.Option(
-        None, "--version",
+        None, "--version", "-v",
         help="Show version and exit",
     )
 ):
