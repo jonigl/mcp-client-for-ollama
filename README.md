@@ -130,6 +130,7 @@ ollmcp
 #### MCP Server Configuration:
 
 - `--mcp-server`: Path to one or more MCP server scripts (.py or .js). Can be specified multiple times.
+- `--mcp-server-url`: URL to one or more SSE or Streamable HTTP MCP servers. Can be specified multiple times.
 - `--servers-json`: Path to a JSON file with server configurations.
 - `--auto-discovery`: Auto-discover servers from Claude's default config file (default behavior if no other options provided).
 
@@ -152,6 +153,14 @@ ollmcp
 
 ### Usage Examples
 
+Simplest way to run the client:
+
+```bash
+ollmcp
+```
+> [!TIP]
+> This will automatically discover and connect to any MCP servers configured in Claude's settings and use the default model `qwen2.5:7b` or the model specified in your configuration file.
+
 Connect to a single server:
 
 ```bash
@@ -161,9 +170,11 @@ ollmcp --mcp-server /path/to/weather.py --model llama3.2:3b
 Connect to multiple servers:
 
 ```bash
-ollmcp --mcp-server /path/to/weather.py --mcp-server /path/to/filesystem.js --model qwen2.5:latest
-
+ollmcp --mcp-server /path/to/weather.py --mcp-server /path/to/filesystem.js
 ```
+
+>[!TIP]
+> If model is not specified, the default model `qwen2.5:7b` will be used or the model specified in your configuration file.
 
 Use a JSON configuration file:
 
@@ -171,10 +182,37 @@ Use a JSON configuration file:
 ollmcp --servers-json /path/to/servers.json --model llama3.2:1b
 ```
 
+>[!TIP]
+> See the [Server Configuration Format](#server-configuration-format) section for details on how to structure the JSON file.
+
 Use a custom Ollama host:
 
 ```bash
 ollmcp --host http://localhost:22545 --servers-json /path/to/servers.json --model qwen3:latest
+```
+
+Connect to SSE or Streamable HTTP servers by URL:
+
+```bash
+ollmcp --mcp-server-url http://localhost:8000/sse --model qwen2.5:latest
+```
+
+Connect to multiple URL servers:
+
+```bash
+ollmcp --mcp-server-url http://localhost:8000/sse --mcp-server-url http://localhost:9000/mcp
+```
+
+Mix local scripts and URL servers:
+
+```bash
+ollmcp --mcp-server /path/to/weather.py --mcp-server-url http://localhost:8000/mcp --model qwen3:1.7b
+```
+
+Use auto-discovery with mixed server types:
+
+```bash
+ollmcp --mcp-server /path/to/weather.py --mcp-server-url http://localhost:8000/mcp --auto-discovery
 ```
 
 ## Interactive Commands
