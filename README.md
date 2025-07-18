@@ -119,7 +119,7 @@ ollmcp
 ### Command-line Arguments
 
 > [!TIP]
-> The CLI now uses `Typer` for a modern experience: grouped options, rich help, and built-in shell autocompletion. To enable autocompletion, run:
+> The CLI now uses `Typer` for a modern experience: grouped options, rich help, and built-in shell autocompletion. Advanced users can use short flags for faster commands. To enable autocompletion, run:
 >
 > ```bash
 > ollmcp --install-completion
@@ -129,27 +129,26 @@ ollmcp
 
 #### MCP Server Configuration:
 
-- `--mcp-server`: Path to one or more MCP server scripts (.py or .js). Can be specified multiple times.
-- `--mcp-server-url`: URL to one or more SSE or Streamable HTTP MCP servers. Can be specified multiple times.
-- `--servers-json`: Path to a JSON file with server configurations.
-- `--auto-discovery`: Auto-discover servers from Claude's default config file (default behavior if no other options provided).
+- `--mcp-server`, `-s`: Path to one or more MCP server scripts (.py or .js). Can be specified multiple times.
+- `--mcp-server-url`, `-u`: URL to one or more SSE or Streamable HTTP MCP servers. Can be specified multiple times.
+- `--servers-json`, `-j`: Path to a JSON file with server configurations.
+- `--auto-discovery`, `-a`: Auto-discover servers from Claude's default config file (default behavior if no other options provided).
 
 > [!TIP]
 > Claude's configuration file is typically located at:
 > `~/Library/Application Support/Claude/claude_desktop_config.json`
 
-
 #### Ollama Configuration:
 
-- `--model MODEL`: Ollama model to use. Default: `qwen2.5:7b`
-- `--host HOST`: Ollama host URL. Default: `http://localhost:11434`
+- `--model`, `-m` MODEL: Ollama model to use. Default: `qwen2.5:7b`
+- `--host`, `-H` HOST: Ollama host URL. Default: `http://localhost:11434`
 
 #### General Options:
 
-- `--version`: Show version and exit
+- `--version`, `-v`: Show version and exit
+- `--help`, `-h`: Show help message and exit
 - `--install-completion`: Install shell autocompletion scripts for the client
 - `--show-completion`: Show available shell completion options
-- `--help`: Show help message and exit
 
 ### Usage Examples
 
@@ -165,12 +164,16 @@ Connect to a single server:
 
 ```bash
 ollmcp --mcp-server /path/to/weather.py --model llama3.2:3b
+# Or using short flags:
+ollmcp -s /path/to/weather.py -m llama3.2:3b
 ```
 
 Connect to multiple servers:
 
 ```bash
 ollmcp --mcp-server /path/to/weather.py --mcp-server /path/to/filesystem.js
+# Or using short flags:
+ollmcp -s /path/to/weather.py -s /path/to/filesystem.js
 ```
 
 >[!TIP]
@@ -180,6 +183,8 @@ Use a JSON configuration file:
 
 ```bash
 ollmcp --servers-json /path/to/servers.json --model llama3.2:1b
+# Or using short flags:
+ollmcp -j /path/to/servers.json -m llama3.2:1b
 ```
 
 >[!TIP]
@@ -188,31 +193,41 @@ ollmcp --servers-json /path/to/servers.json --model llama3.2:1b
 Use a custom Ollama host:
 
 ```bash
-ollmcp --host http://localhost:22545 --servers-json /path/to/servers.json --model qwen3:latest
+ollmcp --host http://localhost:22545 --servers-json /path/to/servers.json --auto-discovery
+# Or using short flags:
+ollmcp -H http://localhost:22545 -j /path/to/servers.json -a
 ```
 
 Connect to SSE or Streamable HTTP servers by URL:
 
 ```bash
 ollmcp --mcp-server-url http://localhost:8000/sse --model qwen2.5:latest
+# Or using short flags:
+ollmcp -u http://localhost:8000/sse -m qwen2.5:latest
 ```
 
 Connect to multiple URL servers:
 
 ```bash
 ollmcp --mcp-server-url http://localhost:8000/sse --mcp-server-url http://localhost:9000/mcp
+# Or using short flags:
+ollmcp -u http://localhost:8000/sse -u http://localhost:9000/mcp
 ```
 
 Mix local scripts and URL servers:
 
 ```bash
 ollmcp --mcp-server /path/to/weather.py --mcp-server-url http://localhost:8000/mcp --model qwen3:1.7b
+# Or using short flags:
+ollmcp -s /path/to/weather.py -u http://localhost:8000/mcp -m qwen3:1.7b
 ```
 
 Use auto-discovery with mixed server types:
 
 ```bash
 ollmcp --mcp-server /path/to/weather.py --mcp-server-url http://localhost:8000/mcp --auto-discovery
+# Or using short flags:
+ollmcp -s /path/to/weather.py -u http://localhost:8000/mcp -a
 ```
 
 ## Interactive Commands
