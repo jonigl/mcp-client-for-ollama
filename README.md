@@ -254,6 +254,7 @@ The tool and server selection interface allows you to enable or disable specific
 - `a` or `all` - Enable all tools
 - `n` or `none` - Disable all tools
 - `d` or `desc` - Show/hide tool descriptions
+- `j` or `json` - Show detailed tool JSON schemas on enabled tools for debugging purposes
 - `s` or `save` - Save changes and return to chat
 - `q` or `quit` - Cancel changes and return to chat
 
