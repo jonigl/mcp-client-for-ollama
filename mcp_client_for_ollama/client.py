@@ -109,17 +109,19 @@ class MCPClient:
         """Display available tools with their enabled/disabled status"""
         self.tool_manager.display_available_tools()
 
-    async def connect_to_servers(self, server_paths=None, config_path=None, auto_discovery=False):
+    async def connect_to_servers(self, server_paths=None, server_urls=None, config_path=None, auto_discovery=False):
         """Connect to one or more MCP servers using the ServerConnector
 
         Args:
             server_paths: List of paths to server scripts (.py or .js)
+            server_urls: List of URLs for SSE or Streamable HTTP servers
             config_path: Path to JSON config file with server configurations
             auto_discovery: Whether to automatically discover servers
         """
         # Store connection parameters for potential reload
         self.server_connection_params = {
             'server_paths': server_paths,
+            'server_urls': server_urls,
             'config_path': config_path,
             'auto_discovery': auto_discovery
         }
@@ -127,6 +129,7 @@ class MCPClient:
         # Connect to servers using the server connector
         sessions, available_tools, enabled_tools = await self.server_connector.connect_to_servers(
             server_paths=server_paths,
+            server_urls=server_urls,
             config_path=config_path,
             auto_discovery=auto_discovery
         )
@@ -834,6 +837,7 @@ class MCPClient:
             # Reconnect using stored parameters
             await self.connect_to_servers(
                 server_paths=self.server_connection_params['server_paths'],
+                server_urls=self.server_connection_params['server_urls'],
                 config_path=self.server_connection_params['config_path'],
                 auto_discovery=self.server_connection_params['auto_discovery']
             )
@@ -865,6 +869,11 @@ def main(
     mcp_server: Optional[List[str]] = typer.Option(
         None, "--mcp-server",
         help="Path to a server script (.py or .js)",
+        rich_help_panel="MCP Server Configuration"
+    ),
+    mcp_server_url: Optional[List[str]] = typer.Option(
+        None, "--mcp-server-url",
+        help="URL for SSE or Streamable HTTP MCP server (e.g., http://localhost:8000/sse, https://domain-name.com/mcp, etc)",
         rich_help_panel="MCP Server Configuration"
     ),
     servers_json: Optional[str] = typer.Option(
@@ -903,13 +912,13 @@ def main(
         raise typer.Exit()
 
     # If none of the server arguments are provided, enable auto-discovery
-    if not (mcp_server or servers_json or auto_discovery):
+    if not (mcp_server or mcp_server_url or servers_json or auto_discovery):
         auto_discovery = True
 
     # Run the async main function
-    asyncio.run(async_main(mcp_server, servers_json, auto_discovery, model, host))
+    asyncio.run(async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host))
 
-async def async_main(mcp_server, servers_json, auto_discovery, model, host):
+async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host):
     """Asynchronous main function to run the MCP Client for Ollama"""
 
     console = Console()
@@ -945,17 +954,12 @@ async def async_main(mcp_server, servers_json, auto_discovery, model, host):
             console.print(f"[yellow]Warning: Claude config not found at {DEFAULT_CLAUDE_CONFIG}[/yellow]")
     else:
         # If neither is provided, check if DEFAULT_CLAUDE_CONFIG exists and use auto_discovery
-        if not mcp_server:
+        if not mcp_server and not mcp_server_url:
             if os.path.exists(DEFAULT_CLAUDE_CONFIG):
                 console.print(f"[cyan]Auto-discovering servers from Claude's config at {DEFAULT_CLAUDE_CONFIG}[/cyan]")
                 auto_discovery_final = True
             else:
                 console.print("[yellow]Warning: No servers specified and Claude config not found.[/yellow]")
-
-    # Validate that we have at least one server source
-    if not mcp_server and not config_path and not auto_discovery_final:
-        typer.echo("Error: At least one of --mcp-server, --servers-json, or --auto-discovery must be provided", err=True)
-        raise typer.Exit(1)
 
     # Validate mcp-server paths exist
     if mcp_server:
@@ -964,7 +968,7 @@ async def async_main(mcp_server, servers_json, auto_discovery, model, host):
                 console.print(f"[bold red]Error: Server script not found: {server_path}[/bold red]")
                 return
     try:
-        await client.connect_to_servers(mcp_server, config_path, auto_discovery_final)
+        await client.connect_to_servers(mcp_server, mcp_server_url, config_path, auto_discovery_final)
         client.auto_load_default_config()
         await client.chat_loop()
     finally:

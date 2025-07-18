@@ -44,31 +44,31 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-        
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         python -m pip install pytest
-        
+
     - name: Install and test main package
       run: |
         # Install in development mode
         pip install -e .
-        
+
         # Run tests only in the main package's tests directory
         cd tests
         python -m pytest -xvs
         cd ..
-        
+
     - name: Install and test CLI package
       run: |
         # Install CLI package in development mode
         cd cli-package
         pip install -e .
-        
+
         # Run tests only in the CLI package's tests directory
         cd tests
-        python -m pytest -xvs 
+        python -m pytest -xvs
 
   build-check:
     name: Check build packages
@@ -79,23 +79,23 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
-        
+
     - name: Install build dependencies
       run: |
         python -m pip install --upgrade pip
         pip install build twine
-        
+
     - name: Build main package
       run: python -m build .
-      
+
     - name: Check main package
       run: twine check dist/*
-      
+
     - name: Build CLI package
       run: |
         cd cli-package
         python -m build .
-        
+
     - name: Check CLI package
       run: |
         cd cli-package
@@ -112,26 +112,26 @@ jobs:
         CLI_VERSION=$(grep -E '^version\s*=\s*"[^"]+"' cli-package/pyproject.toml | sed -E 's/^version\s*=\s*"([^"]+)".*/\1/')
         CLI_DEP_VERSION=$(grep -E '"mcp-client-for-ollama==' cli-package/pyproject.toml | sed -E 's/.*"mcp-client-for-ollama==([^"]+)".*/\1/')
         INIT_VERSION=$(grep -E '__version__\s*=\s*"[^"]+"' mcp_client_for_ollama/__init__.py | sed -E 's/.*__version__\s*=\s*"([^"]+)".*/\1/')
-        
+
         echo "Main package version: $MAIN_VERSION"
         echo "CLI package version: $CLI_VERSION"
         echo "CLI dependency version: $CLI_DEP_VERSION"
         echo "Init version: $INIT_VERSION"
-        
+
         # Check that all versions match
         if [ "$MAIN_VERSION" != "$CLI_VERSION" ]; then
           echo "::error::Version mismatch: Main package ($MAIN_VERSION) != CLI package ($CLI_VERSION)"
           exit 1
         fi
-        
+
         if [ "$MAIN_VERSION" != "$CLI_DEP_VERSION" ]; then
           echo "::error::Version mismatch: Main package ($MAIN_VERSION) != CLI dependency ($CLI_DEP_VERSION)"
           exit 1
         fi
-        
+
         if [ "$MAIN_VERSION" != "$INIT_VERSION" ]; then
           echo "::error::Version mismatch: Main package ($MAIN_VERSION) != __init__.py ($INIT_VERSION)"
           exit 1
         fi
-        
+
         echo "All versions are consistent: $MAIN_VERSION"

@@ -6,7 +6,8 @@ like Claude's configuration files.
 
 import os
 import json
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
+from urllib.parse import urlparse
 from ..utils.constants import DEFAULT_CLAUDE_CONFIG
 
 def process_server_paths(server_paths) -> List[Dict[str, Any]]:
@@ -39,6 +40,48 @@ def process_server_paths(server_paths) -> List[Dict[str, Any]]:
             "type": "script",
             "path": path,
             "name": os.path.basename(path).split('.')[0]  # Use filename without extension as name
+        })
+
+    return all_servers
+
+def process_server_urls(server_urls) -> List[Dict[str, Any]]:
+    """Process individual server URLs and create configurations for SSE/HTTP servers.
+
+    Args:
+        server_urls: A string or list of URLs to server endpoints
+
+    Returns:
+        List of valid server configurations ready to be connected to
+    """
+    if not server_urls:
+        return []
+
+    # Convert single string to list
+    if isinstance(server_urls, str):
+        server_urls = [server_urls]
+
+    all_servers = []
+    for url in server_urls:
+        # Basic URL validation
+        if not url.startswith(('http://', 'https://')):
+            continue
+
+        # Extract a meaningful name from the URL
+        parsed = urlparse(url)
+
+        # Use hostname but replace dots and colons with underscores to avoid parsing issues
+        name = parsed.netloc.replace(':', '_').replace('.', '_')
+
+        # Determine server type based on URL patterns
+        server_type = "streamable_http"  # Default to streamable_http
+        if "sse" in url.lower() or "/sse" in parsed.path.lower():
+            server_type = "sse"
+
+        # Create server entry with clean hostname-based name
+        all_servers.append({
+            "type": server_type,
+            "url": url,
+            "name": name
         })
 
     return all_servers

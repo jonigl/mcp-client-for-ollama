@@ -15,7 +15,7 @@ from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamablehttp_client
 
-from .discovery import process_server_paths, parse_server_configs, auto_discover_servers
+from .discovery import process_server_paths, process_server_urls, parse_server_configs, auto_discover_servers
 
 class ServerConnector:
     """Manages connections to one or more MCP servers.
@@ -39,11 +39,12 @@ class ServerConnector:
         self.enabled_tools = {}  # Dict to store tool enabled status
         self.session_ids = {}  # Dict to store session IDs for HTTP connections
 
-    async def connect_to_servers(self, server_paths=None, config_path=None, auto_discovery=False) -> Tuple[dict, list, dict]:
+    async def connect_to_servers(self, server_paths=None, server_urls=None, config_path=None, auto_discovery=False) -> Tuple[dict, list, dict]:
         """Connect to one or more MCP servers
 
         Args:
             server_paths: List of paths to server scripts (.py or .js)
+            server_urls: List of URLs for SSE or Streamable HTTP servers
             config_path: Path to JSON config file with server configurations
             auto_discovery: Whether to automatically discover servers
 
@@ -58,6 +59,13 @@ class ServerConnector:
             for server in script_servers:
                 self.console.print(f"[cyan]Found server script: {server['path']}[/cyan]")
             all_servers.extend(script_servers)
+
+        # Process server URLs
+        if server_urls:
+            url_servers = process_server_urls(server_urls)
+            for server in url_servers:
+                self.console.print(f"[cyan]Found server URL: {server['url']} (type: {server['type']})[/cyan]")
+            all_servers.extend(url_servers)
 
         # Process config file
         if config_path:
