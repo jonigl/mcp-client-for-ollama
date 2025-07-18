@@ -17,7 +17,7 @@
 [![CI](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml/badge.svg)](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/misc/ollmcp-demo.svg" alt="MCP Client for Ollama Demo">
+  <img src="https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/v0.15.0/misc/ollmcp-demo.svg" alt="MCP Client for Ollama Demo">
 </p>
 <p align="center">
   <a href="https://asciinema.org/a/jxc6N8oKZAWrzH8aK867zhXdO" target="_blank">🎥 Watch this demo as an Asciinema recording</a>
