@@ -246,7 +246,7 @@ During chat, use these commands:
 
 The tool and server selection interface allows you to enable or disable specific tools:
 
-![ollmcp tool and server selection interface](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmpc-tool-and-server-selection.jpg?raw=true)
+![ollmcp tool and server selection interface](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmpc-tool-and-server-selection.png?raw=true)
 
 - Enter **numbers** separated by commas (e.g. `1,3,5`) to toggle specific tools
 - Enter **ranges** of numbers (e.g. `5-8`) to toggle multiple consecutive tools
