@@ -43,6 +43,7 @@
 - [Server Configuration Format](#server-configuration-format)
 - [Compatible Models](#compatible-models)
 - [Where Can I Find More MCP Servers?](#where-can-i-find-more-mcp-servers)
+- [Related Projects](#related-projects)
 - [License](#license)
 - [Acknowledgments](#acknowledgments)
 
@@ -517,6 +518,10 @@ For a complete list of Ollama models with tool use capabilities, visit the [offi
 You can explore a collection of MCP servers in the official [MCP Servers repository](https://github.com/modelcontextprotocol/servers).
 
 This repository contains reference implementations for the Model Context Protocol, community-built servers, and additional resources to enhance your LLM tool capabilities.
+
+## Related Projects
+
+- **[Ollama MCP Bridge](https://github.com/jonigl/ollama-mcp-bridge)** - A Python API layer that sits in front of Ollama, automatically adding tools from multiple MCP servers to every chat request. This project provides a transparent proxy solution that pre-loads all MCP servers at startup and seamlessly integrates their tools into the Ollama API.
 
 ## License
 
