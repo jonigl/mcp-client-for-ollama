@@ -368,19 +368,9 @@ The Human-in-the-Loop feature provides an additional safety layer by allowing yo
 When HIL is enabled, you'll see a confirmation prompt before each tool execution:
 
 **Example:**
-```
-🧑‍💻 Human-in-the-Loop Confirmation
-Tool to execute: weather.get_weather
-Arguments:
-  • city: Miami
 
-Options:
-  y/yes - Execute the tool call
-  n/no - Skip this tool call
-  disable - Disable HIL confirmations permanently
+![ollmcp HIL confirmation screenshot](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-hil-feature.png?raw=true)
 
-What would you like to do? (y):
-```
 
 ### Human-in-the-Loop (HIL) Configuration
 
