@@ -21,9 +21,6 @@ DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 # URL for checking package updates on PyPI
 PYPI_PACKAGE_URL = "https://pypi.org/pypi/mcp-client-for-ollama/json"
 
-# Approximate token count per character (rough estimation)
-TOKEN_COUNT_PER_CHAR = 0.25
-
 # Thinking mode models - these models support the thinking parameter
 THINKING_MODELS = ["deepseek-r1", "qwen3"]
 
@@ -37,6 +34,7 @@ INTERACTIVE_COMMANDS = {
     'thinking-mode': 'Toggle thinking mode',
     'show-thinking': 'Toggle thinking visibility',
     'show-tool-execution': 'Toggle tool execution display',
+    'show-metrics': 'Toggle performance metrics display',
     'clear': 'Clear conversation context',
     'context-info': 'Show context information',
     'clear-screen': 'Clear terminal screen',

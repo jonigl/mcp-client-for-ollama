@@ -40,7 +40,8 @@ def default_config() -> dict:
             "stop": None
         },
         "displaySettings": {
-            "showToolExecution": True
+            "showToolExecution": True,
+            "showMetrics": False
         },
         "hilSettings": {
             "enabled": True

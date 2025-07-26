@@ -9,6 +9,7 @@ from rich.live import Live
 from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
+from .metrics import display_metrics, extract_metrics
 
 class StreamingManager:
     """Manages streaming responses for Ollama API calls"""
@@ -51,7 +52,7 @@ class StreamingManager:
             else:
                 return Markdown("**Answer:**\n\n" + content)
 
-    async def process_streaming_response(self, stream, print_response=True, thinking_mode=False, show_thinking=True):
+    async def process_streaming_response(self, stream, print_response=True, thinking_mode=False, show_thinking=True, show_metrics=False):
         """Process a streaming response from Ollama with status spinner and content updates
 
         Args:
@@ -59,15 +60,18 @@ class StreamingManager:
             print_response: Flag to control live updating of response text
             thinking_mode: Whether to handle thinking mode responses
             show_thinking: Whether to keep thinking text visible in final output
+            show_metrics: Whether to display performance metrics when streaming completes
 
         Returns:
             str: Accumulated response text
             list: Tool calls if any
+            dict: Metrics if captured, None otherwise
         """
         accumulated_text = ""
         thinking_content = ""
         tool_calls = []
         showing_working = True  # Track if we're still showing the working display
+        metrics = None  # Store metrics from final chunk
 
         if print_response:
             with Live(console=self.console, refresh_per_second=10, vertical_overflow='visible') as live:
@@ -75,6 +79,11 @@ class StreamingManager:
                 live.update(self._create_working_display())
 
                 async for chunk in stream:
+                    # Capture metrics when chunk is done
+                    extracted_metrics = extract_metrics(chunk)
+                    if extracted_metrics:
+                        metrics = extracted_metrics
+
                     # Handle thinking content
                     if (thinking_mode and hasattr(chunk, 'message') and
                         hasattr(chunk.message, 'thinking') and chunk.message.thinking):
@@ -130,9 +139,18 @@ class StreamingManager:
             # Add spacing after streaming completes only if we showed content and no tool calls
             if not showing_working and not tool_calls:
                 self.console.print()
+
+            # Display metrics if requested and available
+            if show_metrics and metrics and print_response:
+                display_metrics(self.console, metrics)
         else:
             # Silent processing without display
             async for chunk in stream:
+                # Capture metrics when chunk is done
+                extracted_metrics = extract_metrics(chunk)
+                if extracted_metrics:
+                    metrics = extracted_metrics
+
                 if (thinking_mode and hasattr(chunk, 'message') and
                     hasattr(chunk.message, 'thinking') and chunk.message.thinking):
                     thinking_content += chunk.message.thinking
@@ -146,4 +164,4 @@ class StreamingManager:
                     for tool in chunk.message.tool_calls:
                         tool_calls.append(tool)
 
-        return accumulated_text, tool_calls
+        return accumulated_text, tool_calls, metrics

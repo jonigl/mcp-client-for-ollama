@@ -16,7 +16,7 @@ import ollama
 from . import __version__
 from .config.manager import ConfigManager
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, TOKEN_COUNT_PER_CHAR, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, THINKING_MODELS, DEFAULT_COMPLETION_STYLE
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, THINKING_MODELS, DEFAULT_COMPLETION_STYLE
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
@@ -61,13 +61,14 @@ class MCPClient:
         )
         # Context retention settings
         self.retain_context = True  # By default, retain conversation context
-        self.approx_token_count = 0  # Approximate token count for the conversation
-        self.token_count_per_char = TOKEN_COUNT_PER_CHAR  # Rough approximation of tokens per character
+        self.actual_token_count = 0  # Actual token count from Ollama metrics
         # Thinking mode settings
         self.thinking_mode = True  # By default, thinking mode is enabled for models that support it
         self.show_thinking = False   # By default, thinking text is hidden after completion
         # Tool display settings
         self.show_tool_execution = True  # By default, show tool execution displays
+        # Metrics display settings
+        self.show_metrics = False  # By default, don't show metrics after each query
         self.default_configuration_status = False  # Track if default configuration was loaded successfully
 
         # Store server connection parameters for reloading
@@ -258,11 +259,16 @@ class MCPClient:
         # Process the streaming response with thinking mode support
         response_text = ""
         tool_calls = []
-        response_text, tool_calls = await self.streaming_manager.process_streaming_response(
+        response_text, tool_calls, metrics = await self.streaming_manager.process_streaming_response(
             stream,
             thinking_mode=self.thinking_mode,
-            show_thinking=self.show_thinking
+            show_thinking=self.show_thinking,
+            show_metrics=self.show_metrics
         )
+
+        # Update actual token count from metrics if available
+        if metrics and metrics.get('eval_count'):
+            self.actual_token_count += metrics['eval_count']
         # Check if there are any tool calls in the response
         if len(tool_calls) > 0 and self.tool_manager.get_enabled_tool_objects():
             for tool in tool_calls:
@@ -325,11 +331,16 @@ class MCPClient:
             stream = await self.ollama.chat(**chat_params_followup)
 
             # Process the streaming response with thinking mode support
-            response_text, _ = await self.streaming_manager.process_streaming_response(
+            response_text, _, followup_metrics = await self.streaming_manager.process_streaming_response(
                 stream,
                 thinking_mode=self.thinking_mode,
-                show_thinking=self.show_thinking
+                show_thinking=self.show_thinking,
+                show_metrics=self.show_metrics
             )
+
+            # Update actual token count from followup metrics if available
+            if followup_metrics and followup_metrics.get('eval_count'):
+                self.actual_token_count += followup_metrics['eval_count']
 
         if not response_text:
             self.console.print("[red]No content response received.[/red]")
@@ -337,12 +348,6 @@ class MCPClient:
 
         # Append query and response to chat history
         self.chat_history.append({"query": query, "response": response_text})
-
-        # Update token count estimation (rough approximation)
-        query_chars = len(query)
-        response_chars = len(response_text)
-        estimated_tokens = int((query_chars + response_chars) * self.token_count_per_char)
-        self.approx_token_count += estimated_tokens
 
         return response_text
 
@@ -438,6 +443,10 @@ class MCPClient:
 
                 if query.lower() in ['show-tool-execution', 'ste']:
                     self.toggle_show_tool_execution()
+                    continue
+
+                if query.lower() in ['show-metrics', 'sm']:
+                    self.toggle_show_metrics()
                     continue
 
                 if query.lower() in ['clear', 'cc']:
@@ -536,7 +545,8 @@ class MCPClient:
             "• Type [bold]model[/bold] or [bold]m[/bold] to select a model\n"
             "• Type [bold]model-config[/bold] or [bold]mc[/bold] to configure system prompt and model parameters\n"
             f"• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode [{', '.join(THINKING_MODELS)}]\n"
-            "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n\n"
+            "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n"
+            "• Type [bold]show-metrics[/bold] or [bold]sm[/bold] to toggle performance metrics display\n\n"
 
             "[bold cyan]MCP Servers and Tools:[/bold cyan]\n"
             "• Type [bold]tools[/bold] or [bold]t[/bold] to configure tools\n"
@@ -635,11 +645,22 @@ class MCPClient:
         else:
             self.console.print("[cyan]🔇 Tool execution details will be hidden for a cleaner output.[/cyan]")
 
+    def toggle_show_metrics(self):
+        """Toggle whether performance metrics are shown after each query"""
+        self.show_metrics = not self.show_metrics
+        status = "enabled" if self.show_metrics else "disabled"
+        self.console.print(f"[green]Performance metrics display {status}![/green]")
+
+        if self.show_metrics:
+            self.console.print("[cyan]📊 Performance metrics will be displayed after each query.[/cyan]")
+        else:
+            self.console.print("[cyan]🔇 Performance metrics will be hidden for a cleaner output.[/cyan]")
+
     def clear_context(self):
         """Clear conversation history and token count"""
         original_history_length = len(self.chat_history)
         self.chat_history = []
-        self.approx_token_count = 0
+        self.actual_token_count = 0
         self.console.print(f"[green]Context cleared! Removed {original_history_length} conversation entries.[/green]")
 
     def display_context_stats(self):
@@ -659,9 +680,10 @@ class MCPClient:
             f"Context retention: [{'green' if self.retain_context else 'red'}]{'Enabled' if self.retain_context else 'Disabled'}[/{'green' if self.retain_context else 'red'}]\n"
             f"{thinking_status}"
             f"Tool execution display: [{'green' if self.show_tool_execution else 'red'}]{'Enabled' if self.show_tool_execution else 'Disabled'}[/{'green' if self.show_tool_execution else 'red'}]\n"
+            f"Performance metrics: [{'green' if self.show_metrics else 'red'}]{'Enabled' if self.show_metrics else 'Disabled'}[/{'green' if self.show_metrics else 'red'}]\n"
             f"Human-in-the-Loop confirmations: [{'green' if self.hil_manager.is_enabled() else 'red'}]{'Enabled' if self.hil_manager.is_enabled() else 'Disabled'}[/{'green' if self.hil_manager.is_enabled() else 'red'}]\n"
             f"Conversation entries: {history_count}\n"
-            f"Approximate token count: {self.approx_token_count:,}",
+            f"Total tokens generated: {self.actual_token_count:,}",
             title="Context Info", border_style="cyan", expand=False
         ))
 
@@ -696,7 +718,8 @@ class MCPClient:
             },
             "modelConfig": self.model_config_manager.get_config(),
             "displaySettings": {
-                "showToolExecution": self.show_tool_execution
+                "showToolExecution": self.show_tool_execution,
+                "showMetrics": self.show_metrics
             },
             "hilSettings": {
                 "enabled": self.hil_manager.is_enabled()
@@ -758,6 +781,8 @@ class MCPClient:
         if "displaySettings" in config_data:
             if "showToolExecution" in config_data["displaySettings"]:
                 self.show_tool_execution = config_data["displaySettings"]["showToolExecution"]
+            if "showMetrics" in config_data["displaySettings"]:
+                self.show_metrics = config_data["displaySettings"]["showMetrics"]
 
         # Load HIL settings if specified
         if "hilSettings" in config_data:
@@ -801,6 +826,11 @@ class MCPClient:
             else:
                 # Default show tool execution to True if not specified
                 self.show_tool_execution = True
+            if "showMetrics" in config_data["displaySettings"]:
+                self.show_metrics = config_data["displaySettings"]["showMetrics"]
+            else:
+                # Default show metrics to False if not specified
+                self.show_metrics = False
 
         # Reset HIL settings from the default configuration
         if "hilSettings" in config_data:
