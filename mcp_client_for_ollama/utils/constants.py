@@ -21,9 +21,6 @@ DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 # URL for checking package updates on PyPI
 PYPI_PACKAGE_URL = "https://pypi.org/pypi/mcp-client-for-ollama/json"
 
-# Thinking mode models - these models support the thinking parameter
-THINKING_MODELS = ["deepseek-r1", "qwen3"]
-
 # Interactive commands and their descriptions for autocomplete
 INTERACTIVE_COMMANDS = {
     'tools': 'Configure available tools',

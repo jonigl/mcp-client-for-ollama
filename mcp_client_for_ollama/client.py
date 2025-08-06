@@ -16,7 +16,7 @@ import ollama
 from . import __version__
 from .config.manager import ConfigManager
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, THINKING_MODELS, DEFAULT_COMPLETION_STYLE
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
@@ -82,16 +82,25 @@ class MCPClient:
         """Display the currently selected model"""
         self.model_manager.display_current_model()
 
-    def supports_thinking_mode(self) -> bool:
-        """Check if the current model supports thinking mode
+    async def supports_thinking_mode(self) -> bool:
+        """Check if the current model supports thinking mode by checking its capabilities
 
         Returns:
             bool: True if the current model supports thinking mode, False otherwise
         """
-        current_model = self.model_manager.get_current_model()
-        # Check if the model name (before the colon) matches any thinking model
-        model_base_name = current_model.split(":")[0]
-        return model_base_name in THINKING_MODELS
+        try:
+            current_model = self.model_manager.get_current_model()
+            # Query the model's capabilities using ollama.show()
+            model_info = await self.ollama.show(current_model)
+
+            # Check if the model has 'thinking' capability
+            if 'capabilities' in model_info and model_info['capabilities']:
+                return 'thinking' in model_info['capabilities']
+
+            return False
+        except Exception:
+            # If we can't determine capabilities, assume no thinking support
+            return False
 
     async def select_model(self):
         """Let the user select an Ollama model from the available ones"""
@@ -250,7 +259,7 @@ class MCPClient:
         }
 
         # Add thinking parameter if thinking mode is enabled and model supports it
-        if self.supports_thinking_mode():
+        if await self.supports_thinking_mode():
             chat_params["think"] = self.thinking_mode
 
         # Initial Ollama API call with the query and available tools
@@ -325,7 +334,7 @@ class MCPClient:
             }
 
             # Add thinking parameter if thinking mode is enabled and model supports it
-            if self.supports_thinking_mode():
+            if await self.supports_thinking_mode():
                 chat_params_followup["think"] = self.thinking_mode
 
             stream = await self.ollama.chat(**chat_params_followup)
@@ -362,7 +371,7 @@ class MCPClient:
                 prompt_text = f"{model_name}"
 
                 # Add thinking indicator
-                if self.thinking_mode and self.supports_thinking_mode():
+                if self.thinking_mode and await self.supports_thinking_mode():
                     prompt_text += "/show-thinking" if self.show_thinking else "/thinking"
 
                 # Add tool count
@@ -434,11 +443,11 @@ class MCPClient:
                     continue
 
                 if query.lower() in ['thinking-mode', 'tm']:
-                    self.toggle_thinking_mode()
+                    await self.toggle_thinking_mode()
                     continue
 
                 if query.lower() in ['show-thinking', 'st']:
-                    self.toggle_show_thinking()
+                    await self.toggle_show_thinking()
                     continue
 
                 if query.lower() in ['show-tool-execution', 'ste']:
@@ -544,7 +553,7 @@ class MCPClient:
             "[bold cyan]Model:[/bold cyan]\n"
             "• Type [bold]model[/bold] or [bold]m[/bold] to select a model\n"
             "• Type [bold]model-config[/bold] or [bold]mc[/bold] to configure system prompt and model parameters\n"
-            f"• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode [{', '.join(THINKING_MODELS)}]\n"
+            f"• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode\n"
             "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n"
             "• Type [bold]show-metrics[/bold] or [bold]sm[/bold] to toggle performance metrics display\n\n"
 
@@ -579,16 +588,15 @@ class MCPClient:
         # Display current context stats
         self.display_context_stats()
 
-    def toggle_thinking_mode(self):
+    async def toggle_thinking_mode(self):
         """Toggle thinking mode on/off (only for supported models)"""
-        if not self.supports_thinking_mode():
+        if not await self.supports_thinking_mode():
             current_model = self.model_manager.get_current_model()
             model_base_name = current_model.split(":")[0]
             self.console.print(Panel(
                 f"[bold red]Thinking mode is not supported for model '{model_base_name}'[/bold red]\n\n"
-                f"Thinking mode is only available for these models:\n"
-                + "\n".join(f"• {model}" for model in THINKING_MODELS) +
-                f"\n\nCurrent model: [yellow]{current_model}[/yellow]\n"
+                f"Thinking mode is only available for models that have the 'thinking' capability.\n"
+                f"\nCurrent model: [yellow]{current_model}[/yellow]\n"
                 f"Use [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan] to switch to a supported model.",
                 title="Thinking Mode Not Available", border_style="red", expand=False
             ))
@@ -603,7 +611,7 @@ class MCPClient:
         else:
             self.console.print("[cyan]The model will now provide direct responses.[/cyan]")
 
-    def toggle_show_thinking(self):
+    async def toggle_show_thinking(self):
         """Toggle whether thinking text remains visible after completion"""
         if not self.thinking_mode:
             self.console.print(Panel(
@@ -614,13 +622,12 @@ class MCPClient:
             ))
             return
 
-        if not self.supports_thinking_mode():
+        if not await self.supports_thinking_mode():
             current_model = self.model_manager.get_current_model()
             model_base_name = current_model.split(":")[0]
             self.console.print(Panel(
                 f"[bold red]Thinking mode is not supported for model '{model_base_name}'[/bold red]\n\n"
-                f"This setting only applies to thinking-capable models:\n"
-                + "\n".join(f"• {model}" for model in THINKING_MODELS),
+                f"This setting only applies to models that have the 'thinking' capability.",
                 title="Show Thinking Not Available", border_style="red", expand=False
             ))
             return
@@ -667,14 +674,13 @@ class MCPClient:
         """Display information about the current context window usage"""
         history_count = len(self.chat_history)
 
-        # Check if thinking mode is available for current model
+        # For thinking status, show a simplified message. The user can check model capabilities by trying to enable thinking mode
         thinking_status = ""
-        if self.supports_thinking_mode():
-            thinking_status = f"Thinking mode: [{'green' if self.thinking_mode else 'red'}]{'Enabled' if self.thinking_mode else 'Disabled'}[/{'green' if self.thinking_mode else 'red'}]\n"
-            if self.thinking_mode:
-                thinking_status += f"Show thinking text: [{'green' if self.show_thinking else 'red'}]{'Visible' if self.show_thinking else 'Hidden'}[/{'green' if self.show_thinking else 'red'}]\n"
+        if self.thinking_mode:
+            thinking_status = f"Thinking mode: [green]Enabled[/green]\n"
+            thinking_status += f"Show thinking text: [{'green' if self.show_thinking else 'red'}]{'Visible' if self.show_thinking else 'Hidden'}[/{'green' if self.show_thinking else 'red'}]\n"
         else:
-            thinking_status = f"Thinking mode: [yellow]Not available for current model[/yellow]\n"
+            thinking_status = f"Thinking mode: [red]Disabled[/red]\n"
 
         self.console.print(Panel(
             f"Context retention: [{'green' if self.retain_context else 'red'}]{'Enabled' if self.retain_context else 'Disabled'}[/{'green' if self.retain_context else 'red'}]\n"
