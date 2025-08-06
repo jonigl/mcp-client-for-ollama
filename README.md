@@ -64,7 +64,7 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 - 💬 **System Prompt Customization**: Define and edit the system prompt to control model behavior and persona
 - 🎨 **Enhanced Tool Display**: Beautiful, structured visualization of tool executions with JSON syntax highlighting
 - 🧠 **Context Management**: Control conversation memory with configurable retention settings
-- 🤔 **Thinking Mode**: Advanced reasoning capabilities with visible thought processes for supported models (deepseek-r1, qwen3)
+- 🤔 **Thinking Mode**: Advanced reasoning capabilities with visible thought processes for supported models (e.g., gpt-oss, deepseek-r1, qwen3, etc.)
 - 🗣️ **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
 - 🔍 **Auto-Discovery**: Automatically find and use Claude's existing MCP server configurations
 - 🔁 **Dynamic Model Switching**: Switch between any installed Ollama model without restarting
@@ -245,7 +245,7 @@ During chat, use these commands:
 | `model`          | `m`              | List and select a different Ollama model            |
 | `model-config`   | `mc`             | Configure advanced model parameters and system prompt|
 | `context`        | `c`              | Toggle context retention                            |
-| `thinking-mode`  | `tm`             | Toggle thinking mode (deepseek-r1, qwen3 only)      |
+| `thinking-mode`  | `tm`             | Toggle thinking mode (e.g., gpt-oss, deepseek-r1, qwen3) |
 | `show-thinking`  | `st`             | Toggle thinking text visibility                     |
 | `show-tool-execution` | `ste`       | Toggle tool execution display visibility            |
 | `show-metrics`   | `sm`             | Toggle performance metrics display                  |
