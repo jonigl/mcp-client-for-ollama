@@ -16,6 +16,7 @@ from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamablehttp_client
 
 from .discovery import process_server_paths, process_server_urls, parse_server_configs, auto_discover_servers
+from ..utils.constants import MCP_PROTOCOL_VERSION
 
 class ServerConnector:
     """Manages connections to one or more MCP servers.
@@ -398,7 +399,7 @@ class ServerConnector:
         # Always add MCP Protocol Version header for HTTP connections
         server_type = server.get("type", "script")
         if server_type in ["sse", "streamable_http"]:
-            headers["MCP-Protocol-Version"] = "2025-06-18"
+            headers["MCP-Protocol-Version"] = MCP_PROTOCOL_VERSION
 
         return headers
 

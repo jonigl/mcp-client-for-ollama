@@ -18,8 +18,12 @@ DEFAULT_MODEL = "qwen2.5:7b"
 # Default ollama lcoal url for API requests
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 
+
 # URL for checking package updates on PyPI
 PYPI_PACKAGE_URL = "https://pypi.org/pypi/mcp-client-for-ollama/json"
+
+# MCP Protocol Version
+MCP_PROTOCOL_VERSION = "2025-06-18"
 
 # Interactive commands and their descriptions for autocomplete
 INTERACTIVE_COMMANDS = {
