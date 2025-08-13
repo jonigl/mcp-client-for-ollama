@@ -257,7 +257,7 @@ During chat, use these commands:
 | `load-config`    | `lc`             | Load tool and model configuration from a file       |
 | `reset-config`   | `rc`             | Reset configuration to defaults (all tools enabled) |
 | `reload-servers` | `rs`             | Reload all MCP servers with current configuration   |
-| `quit`, `exit`,`bye`, `/bye`    | `q` or `Ctrl+D`  | Exit the client                                     |
+| `quit`, `exit`,`bye`    | `q` or `Ctrl+D`  | Exit the client                                     |
 
 
 ### Tool and Server Selection
