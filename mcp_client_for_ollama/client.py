@@ -436,6 +436,9 @@ class MCPClient:
 
                 if query.lower() in ['model-config', 'mc']:
                     self.configure_model_options()
+                    continue
+
+                if query.lower() in ['context', 'c']:
                     self.toggle_context_retention()
                     continue
 
