@@ -436,9 +436,6 @@ class MCPClient:
 
                 if query.lower() in ['model-config', 'mc']:
                     self.configure_model_options()
-                    if query.lower() in ['quit', 'q', 'exit', 'bye', '/bye']:
-                        self.console.print("[yellow]Exiting...[/yellow]")
-                        break
                     self.toggle_context_retention()
                     continue
 
