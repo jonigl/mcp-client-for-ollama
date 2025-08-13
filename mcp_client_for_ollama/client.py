@@ -577,7 +577,7 @@ class MCPClient:
             "[bold cyan]Basic Commands:[/bold cyan]\n"
             "• Type [bold]help[/bold] or [bold]h[/bold] to show this help message\n"
             "• Type [bold]clear-screen[/bold] or [bold]cls[/bold] to clear the terminal screen\n"
-            "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], or [bold]Ctrl+D[/bold] to exit the client\n",
+            "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], [bold]bye[/bold], or [bold]Ctrl+D[/bold] to exit the client\n",
             title="[bold]Help[/bold]", border_style="yellow", expand=False))
 
     def toggle_context_retention(self):

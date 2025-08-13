@@ -45,7 +45,8 @@ INTERACTIVE_COMMANDS = {
     'reload-servers': 'Reload MCP servers',
     'human-in-the-loop': 'Toggle HIL confirmations',
     'quit': 'Exit the application',
-    'exit': 'Exit the application'
+    'exit': 'Exit the application',
+    'bye': 'Exit the application'
 }
 
 # Default completion menu style (used by prompt_toolkit in interactive mode)
