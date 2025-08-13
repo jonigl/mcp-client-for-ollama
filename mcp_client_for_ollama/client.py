@@ -418,7 +418,7 @@ class MCPClient:
                 # Use await to call the async method
                 query = await self.get_user_input()
 
-                if query.lower() in ['quit', 'q', 'exit', 'bye', '/bye']:
+                if query.lower() in ['quit', 'q', 'exit', 'bye']:
                     self.console.print("[yellow]Exiting...[/yellow]")
                     break
 
