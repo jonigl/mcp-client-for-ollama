@@ -17,6 +17,7 @@ from mcp.client.streamable_http import streamablehttp_client
 
 from .discovery import process_server_paths, process_server_urls, parse_server_configs, auto_discover_servers
 from ..utils.constants import MCP_PROTOCOL_VERSION
+from ..utils.connection import check_url_connectivity
 
 class ServerConnector:
     """Manages connections to one or more MCP servers.
@@ -92,6 +93,25 @@ class ServerConnector:
                 title="Warning", border_style="yellow", expand=False
             ))
             return self.sessions, self.available_tools, self.enabled_tools
+
+        # Check all servers url connectivity
+        servers_to_connect = []
+        skipped_servers = []
+        for server in all_servers:
+            if server.get("type") in ["sse", "streamable_http"]:
+                if not check_url_connectivity(server.get("url")):
+                    skipped_servers.append(server.get("name"))
+                    continue
+            servers_to_connect.append(server)
+        all_servers = servers_to_connect
+
+        if skipped_servers:
+            self.console.print(
+            f"[red]Skipping servers due to connectivity issues: {', '.join(skipped_servers)}[/red]"
+            )
+            self.console.print(
+            "[yellow]Servers must support HTTP or HTTPS protocols.[/yellow]"
+            )
 
         # Connect to each server
         for server in all_servers:

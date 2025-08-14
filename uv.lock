@@ -221,8 +221,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", specifier = "~=1.12.0" },
-    { name = "ollama", specifier = "~=0.5.1" },
+    { name = "mcp", specifier = "~=1.12.4" },
+    { name = "ollama", specifier = "~=0.5.3" },
     { name = "prompt-toolkit", specifier = "~=3.0.51" },
     { name = "rich", specifier = "~=14.1.0" },
     { name = "typer", specifier = "~=0.16.0" },
