@@ -130,7 +130,7 @@ class ModelConfigManager:
             },
             "num_ctx": {
                 "description": "Sets the size of the context window used to generate the next token.",
-                "range": "1 – model maximum (e.g., 1 – 32768 for qwen3:0.6b); model-dependent (Default: 4096)",
+                "range": "1 – model maximum (e.g., 1 – 32768 for qwen3:0.6b); model-dependent",
                 "effect": "Controls how much conversation history and context the model can access when generating responses.",
                 "recommendation": "Use higher values for complex conversations requiring more context; balance with memory usage and performance."
             }
