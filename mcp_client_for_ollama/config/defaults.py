@@ -37,7 +37,8 @@ def default_config() -> dict:
             "repeat_penalty": None,
             "presence_penalty": None,
             "frequency_penalty": None,
-            "stop": None
+            "stop": None,
+            "num_ctx": None
         },
         "displaySettings": {
             "showToolExecution": True,

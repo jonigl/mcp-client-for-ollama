@@ -56,19 +56,20 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 
 - 🌐 **Multi-Server Support**: Connect to multiple MCP servers simultaneously
 - 🚀 **Multiple Transport Types**: Supports STDIO, SSE, and Streamable HTTP server connections
-- 🎨 **Rich Terminal Interface**: Interactive console UI
+- 🎨 **Rich Terminal Interface**: Interactive console UI with modern styling
 - 🌊 **Streaming Responses**: View model outputs in real-time as they're generated
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
 - 🧑‍💻 **Human-in-the-Loop (HIL)**: Review and approve tool executions before they run for enhanced control and safety
-- 🎮 **Advanced Model Configuration**: Fine-tune 10+ model parameters including temperature, sampling, repetition control, and more
+- 🎮 **Advanced Model Configuration**: Fine-tune 15+ model parameters including context window size, temperature, sampling, repetition control, and more
 - 💬 **System Prompt Customization**: Define and edit the system prompt to control model behavior and persona
+- 🧠 **Context Window Control**: Adjust the context window size (num_ctx) to handle longer conversations and complex tasks
 - 🎨 **Enhanced Tool Display**: Beautiful, structured visualization of tool executions with JSON syntax highlighting
 - 🧠 **Context Management**: Control conversation memory with configurable retention settings
 - 🤔 **Thinking Mode**: Advanced reasoning capabilities with visible thought processes for supported models (e.g., gpt-oss, deepseek-r1, qwen3, etc.)
 - 🗣️ **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
 - 🔍 **Auto-Discovery**: Automatically find and use Claude's existing MCP server configurations
 - 🔁 **Dynamic Model Switching**: Switch between any installed Ollama model without restarting
-- 💾 **Configuration Persistence**: Save and load tool preferences between sessions
+- 💾 **Configuration Persistence**: Save and load tool preferences and model settings between sessions
 - 🔄 **Server Reloading**: Hot-reload MCP servers during development without restarting the client
 - ✨ **Fuzzy Autocomplete**: Interactive, arrow-key command autocomplete with descriptions
 - 🏷️ **Dynamic Prompt**: Shows current model, thinking mode, and enabled tools
@@ -298,6 +299,8 @@ The `model-config` (`mc`) command opens the advanced model settings interface, a
 
 #### Key Parameters
 
+- **System Prompt**: Set the model's role and behavior to guide responses.
+- **Context Window (num_ctx)**: Set how much chat history the model uses. Balance with memory usage and performance.
 - **Keep Tokens**: Prevent important tokens from being dropped
 - **Max Tokens**: Limit response length (0 = auto)
 - **Seed**: Make outputs reproducible (set to -1 for random)
@@ -309,7 +312,7 @@ The `model-config` (`mc`) command opens the advanced model settings interface, a
 
 #### Commands
 
-- Enter parameter numbers `1-14` to edit settings
+- Enter parameter numbers `1-15` to edit settings
 - Enter `sp` to edit the system prompt
 - Use `u1`, `u2`, etc. to unset parameters, or `uall` to reset all
 - `h`/`help`: Show parameter details and tips
@@ -324,6 +327,7 @@ The `model-config` (`mc`) command opens the advanced model settings interface, a
 - **Reduce Repeats:** `repeat_penalty: 1.1-1.3`, `presence_penalty: 0.2`, `frequency_penalty: 0.3`
 - **Balanced:** `temperature: 0.7`, `top_p: 0.9`, `typical_p: 0.7`
 - **Reproducible:** `seed: 42`, `temperature: 0.0`
+- **Large Context:** `num_ctx: 8192` or higher for complex conversations requiring more context
 
 > [!TIP]
 > All parameters default to unset, letting Ollama use its own optimized values. Use `help` in the config menu for details and recommendations. Changes are saved with your configuration.

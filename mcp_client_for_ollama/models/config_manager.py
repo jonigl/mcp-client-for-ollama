@@ -40,6 +40,7 @@ class ModelConfigManager:
         self.presence_penalty = None       # float
         self.frequency_penalty = None      # float
         self.stop = None                   # list[str]
+        self.num_ctx = None                # int
 
         # Parameter explanations
         self.parameter_explanations = {
@@ -126,6 +127,12 @@ class ModelConfigManager:
                 "range": "0–8 strings, each ≤ 255 characters",
                 "effect": "Provides precise control over where generation ends.",
                 "recommendation": "Use for controlling dialog format or preventing the model from continuing beyond desired points."
+            },
+            "num_ctx": {
+                "description": "Sets the size of the context window used to generate the next token.",
+                "range": "1 – model maximum (e.g., 1 – 32768 for qwen3:0.6b); model-dependent",
+                "effect": "Controls how much conversation history and context the model can access when generating responses.",
+                "recommendation": "Use higher values for complex conversations requiring more context; balance with memory usage and performance."
             }
         }
 
@@ -149,7 +156,8 @@ class ModelConfigManager:
             "repeat_penalty": self.repeat_penalty,
             "presence_penalty": self.presence_penalty,
             "frequency_penalty": self.frequency_penalty,
-            "stop": self.stop
+            "stop": self.stop,
+            "num_ctx": self.num_ctx
         }
 
     def get_ollama_options(self) -> Dict[str, Any]:
@@ -188,6 +196,8 @@ class ModelConfigManager:
             options["frequency_penalty"] = self.frequency_penalty
         if self.stop is not None:
             options["stop"] = self.stop
+        if self.num_ctx is not None:
+            options["num_ctx"] = self.num_ctx
         return options
 
     def get_system_prompt(self) -> str:
@@ -232,6 +242,8 @@ class ModelConfigManager:
             self.frequency_penalty = config["frequency_penalty"]
         if "stop" in config:
             self.stop = config["stop"]
+        if "num_ctx" in config:
+            self.num_ctx = config["num_ctx"]
 
     def display_current_config(self) -> None:
         """Display the current model configuration."""
@@ -260,7 +272,8 @@ class ModelConfigManager:
             f"[bold][orange3]10.[/orange3] repeat_penalty:[/bold] {format_value(self.repeat_penalty)}\n"
             f"[bold][orange3]11.[/orange3] presence_penalty:[/bold] {format_value(self.presence_penalty)}\n"
             f"[bold][orange3]12.[/orange3] frequency_penalty:[/bold] {format_value(self.frequency_penalty)}\n"
-            f"[bold][orange3]13.[/orange3] stop:[/bold] {format_value(self.stop)}",
+            f"[bold][orange3]13.[/orange3] stop:[/bold] {format_value(self.stop)}\n"
+            f"[bold][orange3]14.[/orange3] num_ctx:[/bold] {format_value(self.num_ctx)}",
             title="[bold blue]🎮 Model Parameters[/bold blue]",
             border_style="blue", expand=False))
         self.console.print("\n[bold yellow]Note:[/bold yellow] Unset values will use Ollama's defaults.")
@@ -312,7 +325,7 @@ class ModelConfigManager:
         for param in [
             "num_keep", "seed", "num_predict", "top_k", "top_p", "min_p",
             "typical_p", "repeat_last_n", "temperature", "repeat_penalty",
-            "presence_penalty", "frequency_penalty", "stop"
+            "presence_penalty", "frequency_penalty", "stop", "num_ctx"
         ]:
             info = self.parameter_explanations[param]
             table.add_row(
@@ -433,6 +446,7 @@ class ModelConfigManager:
                 self.presence_penalty = None
                 self.frequency_penalty = None
                 self.stop = None
+                self.num_ctx = None
                 result_message = "[green]All parameters unset (using Ollama defaults).[/green]"
                 result_style = "green"
                 continue
@@ -504,6 +518,10 @@ class ModelConfigManager:
                         case 13:
                             self.stop = None
                             result_message = "[green]stop unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 14:
+                            self.num_ctx = None
+                            result_message = "[green]num_ctx unset (using Ollama default).[/green]"
                             result_style = "green"
                         case _:
                             result_message = "[red]Invalid parameter number.[/red]"
@@ -708,6 +726,20 @@ class ModelConfigManager:
                         self.stop = []
                         result_message = "[green]stop sequences cleared.[/green]"
                         result_style = "green"
+
+                case "14":
+                    try:
+                        new_value = IntPrompt.ask("Context Size (num_ctx, size of context window)", default=self.num_ctx)
+                        if new_value >= 1:
+                            self.num_ctx = new_value
+                            result_message = f"[green]num_ctx set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]num_ctx must be a positive integer.[/red]"
+                            result_style = "red"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid integer.[/red]"
+                        result_style = "red"
 
                 case _:
                     result_message = "[red]Invalid selection. Please choose a valid option.[/red]"
