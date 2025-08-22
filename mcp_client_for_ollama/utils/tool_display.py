@@ -4,11 +4,13 @@ Handles the formatting and display of tool calls and responses
 """
 
 import json
+import re
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.text import Text
 from typing import Any
+from rich.markdown import Markdown
 
 
 class ToolDisplayManager:
@@ -76,21 +78,26 @@ class ToolDisplayManager:
 
         args_display = self._format_json(tool_args)
 
-        # Try to format response as JSON if possible, otherwise display as text
+        # Try to format response as JSON if possible, otherwise check for markdown patterns
         try:
             response_data = json.loads(tool_response)
             response_display = self._format_json(response_data)
-
-            # Both args and response are formatted - create layout with syntax highlighting
             header_text = Text.from_markup("[bold]Arguments:[/bold]\n\n")
             response_header_text = Text.from_markup("\n[bold]Response:[/bold]\n\n")
             panel_renderable = Group(header_text, args_display, response_header_text, response_display)
 
         except (json.JSONDecodeError, TypeError, ValueError):
-            # Response is not JSON - display as text
+            # Response is not JSON - check if it has enough markdown patterns
+            markdown_count = self._count_markdown_patterns(tool_response)
+            if markdown_count > 7: # Arbitrary threshold for markdown patterns
+                response_display = Markdown(tool_response)
+            else:
+                # Not enough markdown patterns - use plain text
+                response_display = Text(tool_response, style="white")
+
             header_text = Text.from_markup("[bold]Arguments:[/bold]\n\n")
-            response_text = Text.from_markup(f"\n[bold]Response:[/bold]\n\n[white]{tool_response}[/white]")
-            panel_renderable = Group(header_text, args_display, response_text)
+            response_header_text = Text.from_markup("\n[bold]Response:[/bold]\n\n")
+            panel_renderable = Group(header_text, args_display, response_header_text, response_display)
 
         self.console.print()  # Add a blank line before the panel
         self.console.print(Panel(
@@ -101,3 +108,33 @@ class ToolDisplayManager:
             padding=(1, 2)
         ))
         self.console.print()  # Add a blank line after the panel
+
+    def _count_markdown_patterns(self, text: str) -> int:
+        """Count markdown patterns in text
+
+        Args:
+            text: The text to check for markdown patterns
+
+        Returns:
+            Number of markdown patterns found
+        """
+        # Common markdown patterns
+        patterns = [
+            r'```\w*',  # Code blocks with language
+            r'```',     # Code blocks without language
+            r'^#{1,6}\s+',  # Headers (# ## ### etc.)
+            r'^\s*[-*+]\s+',  # Unordered lists
+            r'^\s*\d+\.\s+',  # Ordered lists
+            r'\*\*.*?\*\*',   # Bold text
+            r'\*.*?\*',       # Italic text
+            r'`.*?`',         # Inline code
+            r'^\s*>\s+',      # Blockquotes
+            r'\[.*?\]\(.*?\)',  # Links
+        ]
+
+        count = 0
+        for pattern in patterns:
+            matches = re.findall(pattern, text, re.MULTILINE)
+            count += len(matches)
+
+        return count
