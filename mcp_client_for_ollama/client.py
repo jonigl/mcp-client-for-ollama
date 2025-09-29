@@ -1,6 +1,7 @@
 """MCP Client for Ollama - A TUI client for interacting with Ollama models and MCP servers"""
 import asyncio
 import os
+import json
 from contextlib import AsyncExitStack
 from typing import List, Optional
 
@@ -34,6 +35,7 @@ class MCPClient:
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
         self.ollama = ollama.AsyncClient(host=host)
+        self.ollama_host = host
         self.console = Console()
         self.config_manager = ConfigManager(self.console)
         # Initialize the server connector
@@ -81,6 +83,31 @@ class MCPClient:
     def display_current_model(self):
         """Display the currently selected model"""
         self.model_manager.display_current_model()
+
+    def _normalize_tool_call(self, tc):
+        """Return (id, name, args_str, args_obj) for a tool call."""
+        # Supports dict-like and object-like shapes
+        try:
+            tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
+            fn = tc.get("function") if isinstance(tc, dict) else getattr(tc, "function", None)
+            name = fn.get("name") if isinstance(fn, dict) else (getattr(fn, "name", None) if fn else None)
+            args = fn.get("arguments") if isinstance(fn, dict) else (getattr(fn, "arguments", None) if fn else None)
+        except Exception:
+            tc_id, name, args = None, None, {}
+        # Ensure args_str is a JSON string and args_obj is a dict
+        if isinstance(args, str):
+            try:
+                args_obj = json.loads(args)
+            except Exception:
+                args_obj = {}
+            args_str = args
+        else:
+            args_obj = args or {}
+            try:
+                args_str = json.dumps(args_obj, ensure_ascii=False)
+            except Exception:
+                args_str = "{}"
+        return tc_id, name, args_str, args_obj
 
     async def supports_thinking_mode(self) -> bool:
         """Check if the current model supports thinking mode by checking its capabilities
@@ -257,7 +284,6 @@ class MCPClient:
             "tools": available_tools,
             "options": model_options
         }
-
         # Add thinking parameter if thinking mode is enabled and model supports it
         if await self.supports_thinking_mode():
             chat_params["think"] = self.thinking_mode
@@ -280,59 +306,68 @@ class MCPClient:
             self.actual_token_count += metrics['eval_count']
         # Check if there are any tool calls in the response
         if len(tool_calls) > 0 and self.tool_manager.get_enabled_tool_objects():
-            for tool in tool_calls:
-                tool_name = tool.function.name
-                tool_args = tool.function.arguments
+            # 1) Append the assistant message that contains tool_calls (and any assistant content)
+            assistant_msg = {"role": "assistant"}
+            if response_text and response_text.strip():
+                assistant_msg["content"] = response_text
+            assistant_msg["tool_calls"] = []
+            normalized_calls = []
+            for tc in tool_calls:
+                tc_id, fname, args_str, args_obj = self._normalize_tool_call(tc)
+                if not tc_id:
+                    tc_id = f"tc_{len(messages)}_{len(normalized_calls)}"
+                assistant_msg["tool_calls"].append({
+                    "id": tc_id,
+                    "type": "function",
+                    "function": {"name": fname, "arguments": args_obj},
+                })
+                normalized_calls.append((tc_id, fname, args_str, args_obj))
+            messages.append(assistant_msg)
 
-                # Parse server name and actual tool name from the qualified name
+            # 2) Execute tools and append one tool message per call with matching tool_call_id
+            tool_outputs = []
+            for tc_id, tool_name, args_str, args_obj in normalized_calls:
+                # Parse server and tool name
                 server_name, actual_tool_name = tool_name.split('.', 1) if '.' in tool_name else (None, tool_name)
-
                 if not server_name or server_name not in self.sessions:
                     self.console.print(f"[red]Error: Unknown server for tool {tool_name}[/red]")
+                    # Still append a tool message so counts match
+                    tool_outputs.append((tc_id, tool_name, f"Error: Unknown server for tool {tool_name}"))
                     continue
 
-                # Execute tool call
-                self.tool_display_manager.display_tool_execution(tool_name, tool_args, show=self.show_tool_execution)
+                self.tool_display_manager.display_tool_execution(tool_name, args_obj, show=self.show_tool_execution)
 
-                # Request HIL confirmation if enabled
-                should_execute = await self.hil_manager.request_tool_confirmation(
-                    tool_name, tool_args
-                )
-
+                should_execute = await self.hil_manager.request_tool_confirmation(tool_name, args_obj)
                 if not should_execute:
-                    tool_response = "Tool call was skipped by user"
-                    self.tool_display_manager.display_tool_response(tool_name, tool_args, tool_response, show=self.show_tool_execution)
-                    messages.append({
-                        "role": "tool",
-                        "content": tool_response,
-                        "name": tool_name
-                    })
+                    tool_outputs.append((tc_id, tool_name, "Tool call was skipped by user"))
+                    self.tool_display_manager.display_tool_response(tool_name, args_obj, "Tool call was skipped by user", show=self.show_tool_execution)
                     continue
 
-                # Call the tool on the specified server
-                result = None
                 with self.console.status(f"[cyan]⏳ Running {tool_name}...[/cyan]"):
-                    result = await self.sessions[server_name]["session"].call_tool(actual_tool_name, tool_args)
+                    # Ensure dict args are passed to the server tool
+                    result = await self.sessions[server_name]["session"].call_tool(actual_tool_name, args_obj or {})
+                tool_response = f"{result.content[0].text}" if getattr(result, "content", None) else str(result)
+                self.tool_display_manager.display_tool_response(tool_name, args_obj, tool_response, show=self.show_tool_execution)
+                tool_outputs.append((tc_id, tool_name, tool_response if isinstance(tool_response, str) else json.dumps(tool_response, ensure_ascii=False)))
 
-                tool_response = f"{result.content[0].text}"
+            # Safety: counts must match
+            if len(tool_outputs) != len(normalized_calls):
+                self.logger.error("Tool call/result count mismatch: %d calls vs %d results", len(normalized_calls), len(tool_outputs))
 
-                # Display the tool response
-                self.tool_display_manager.display_tool_response(tool_name, tool_args, tool_response, show=self.show_tool_execution)
-
+            for tc_id, tname, out_str in tool_outputs:
                 messages.append({
                     "role": "tool",
-                    "content": tool_response,
-                    "name": tool_name
+                    "tool_call_id": tc_id,
+                    "content": out_str if isinstance(out_str, str) else json.dumps(out_str, ensure_ascii=False),
                 })
 
-            # Get stream response from Ollama with the tool results
+             # Get stream response from Ollama with the tool results
             chat_params_followup = {
-                "model": model,
-                "messages": messages,
-                "stream": True,
-                "options": model_options
-            }
-
+                 "model": model,
+                 "messages": messages,
+                 "stream": True,
+                 "options": model_options
+             }
             # Add thinking parameter if thinking mode is enabled and model supports it
             if await self.supports_thinking_mode():
                 chat_params_followup["think"] = self.thinking_mode
