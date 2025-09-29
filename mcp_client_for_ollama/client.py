@@ -92,7 +92,11 @@ class MCPClient:
             fn = tc.get("function") if isinstance(tc, dict) else getattr(tc, "function", None)
             name = fn.get("name") if isinstance(fn, dict) else (getattr(fn, "name", None) if fn else None)
             args = fn.get("arguments") if isinstance(fn, dict) else (getattr(fn, "arguments", None) if fn else None)
-        except Exception:
+        except (AttributeError, KeyError, TypeError) as exc:
+            self.console.log(f"[red]Failed to normalize tool call ({exc.__class__.__name__}): {exc}[/red]")
+            tc_id, name, args = None, None, {}
+        except Exception as exc:
+            self.console.log(f"[red]Unexpected error while normalizing tool call: {exc!r}[/red]")
             tc_id, name, args = None, None, {}
         # Ensure args_str is a JSON string and args_obj is a dict
         if isinstance(args, str):
@@ -353,12 +357,13 @@ class MCPClient:
             # Safety: counts must match
             if len(tool_outputs) != len(normalized_calls):
                 self.logger.error("Tool call/result count mismatch: %d calls vs %d results", len(normalized_calls), len(tool_outputs))
+                raise RuntimeError(f"Tool call/result count mismatch: {len(normalized_calls)} calls vs {len(tool_outputs)} results")
 
             for tc_id, tname, out_str in tool_outputs:
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc_id,
-                    "content": out_str if isinstance(out_str, str) else json.dumps(out_str, ensure_ascii=False),
+                    "content": out_str,
                 })
 
              # Get stream response from Ollama with the tool results
