@@ -64,7 +64,7 @@ class SubAgent:
         )
         
         # Set system prompt
-        self.model_config_manager.set_system_prompt(system_prompt)
+        self.model_config_manager.system_prompt = system_prompt
         
         # Agent state
         self.sessions = {}
