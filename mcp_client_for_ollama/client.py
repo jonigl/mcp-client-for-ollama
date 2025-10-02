@@ -25,6 +25,7 @@ from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
 from .utils.hil_manager import HumanInTheLoopManager
 from .utils.fzf_style_completion import FZFStyleCompleter
+from .agents.manager import AgentManager
 
 
 class MCPClient:
@@ -50,6 +51,12 @@ class MCPClient:
         self.tool_display_manager = ToolDisplayManager(console=self.console)
         # Initialize the HIL manager
         self.hil_manager = HumanInTheLoopManager(console=self.console)
+        # Initialize the agent manager
+        self.agent_manager = AgentManager(
+            console=self.console,
+            ollama_client=self.ollama,
+            exit_stack=self.exit_stack
+        )
         # Store server and tool data
         self.sessions = {}  # Dict to store multiple sessions
         # UI components
@@ -502,6 +509,14 @@ class MCPClient:
                     await self.reload_servers()
                     continue
 
+                if query.lower() in ['agent', 'ag']:
+                    await self.agent_menu()
+                    continue
+
+                if query.lower() in ['list-agents', 'la']:
+                    self.agent_manager.display_agents()
+                    continue
+
                 if query.lower() in ['human-in-the-loop', 'hil']:
                     self.hil_manager.toggle()
                     continue
@@ -562,6 +577,10 @@ class MCPClient:
             "• Type [bold]show-tool-execution[/bold] or [bold]ste[/bold] to toggle tool execution display\n"
             "• Type [bold]human-in-the-loop[/bold] or [bold]hil[/bold] to toggle Human-in-the-Loop confirmations\n"
             "• Type [bold]reload-servers[/bold] or [bold]rs[/bold] to reload MCP servers\n\n"
+
+            "[bold cyan]Specialized Agents:[/bold cyan]\n"
+            "• Type [bold]agent[/bold] or [bold]ag[/bold] to manage specialized agents\n"
+            "• Type [bold]list-agents[/bold] or [bold]la[/bold] to list all agents\n\n"
 
             "[bold cyan]Context:[/bold cyan]\n"
             "• Type [bold]context[/bold] or [bold]c[/bold] to toggle context retention\n"
@@ -848,8 +867,212 @@ class MCPClient:
 
         return True
 
+    async def agent_menu(self):
+        """Interactive menu for managing specialized agents"""
+        from rich.prompt import Prompt
+        
+        while True:
+            self.clear_console()
+            self.console.print(Panel(
+                "[bold yellow]Agent Management Menu[/bold yellow]\n\n"
+                "[bold cyan]Available Actions:[/bold cyan]\n"
+                "1. Create a new agent\n"
+                "2. List all agents\n"
+                "3. Execute task with agent\n"
+                "4. Load agent from config file\n"
+                "5. Remove an agent\n"
+                "6. Show agent details\n"
+                "7. Back to main menu",
+                title="Specialized Agents",
+                border_style="cyan"
+            ))
+            
+            choice = Prompt.ask(
+                "[bold]Select an action[/bold]",
+                choices=["1", "2", "3", "4", "5", "6", "7"],
+                default="7"
+            )
+            
+            if choice == "1":
+                await self.create_agent_interactive()
+            elif choice == "2":
+                self.agent_manager.display_agents()
+                await self.get_user_input("Press Enter to continue")
+            elif choice == "3":
+                await self.execute_agent_task_interactive()
+            elif choice == "4":
+                await self.load_agent_from_config_interactive()
+            elif choice == "5":
+                await self.remove_agent_interactive()
+            elif choice == "6":
+                await self.show_agent_details_interactive()
+            elif choice == "7":
+                break
+    
+    async def create_agent_interactive(self):
+        """Interactive agent creation"""
+        from rich.prompt import Prompt
+        
+        self.console.print(Panel(
+            "[bold]Create New Agent[/bold]",
+            border_style="green"
+        ))
+        
+        agent_type = Prompt.ask(
+            "Agent type",
+            choices=["web3_audit", "base"],
+            default="web3_audit"
+        )
+        
+        name = Prompt.ask("Agent name", default=f"{agent_type}-agent")
+        model = Prompt.ask("Model", default="qwen2.5:7b")
+        
+        config = {}
+        if agent_type == "base":
+            description = Prompt.ask("Description")
+            system_prompt = Prompt.ask("System prompt")
+            config = {
+                "description": description,
+                "system_prompt": system_prompt
+            }
+        
+        agent = self.agent_manager.create_agent(agent_type, name, model, config)
+        
+        if agent:
+            connect = Prompt.ask(
+                "Connect to MCP servers?",
+                choices=["yes", "no"],
+                default="no"
+            )
+            
+            if connect == "yes":
+                self.console.print("[cyan]Available connection options:[/cyan]")
+                self.console.print("1. Use same servers as main client")
+                self.console.print("2. Specify custom servers")
+                
+                server_choice = Prompt.ask(
+                    "Choose option",
+                    choices=["1", "2"],
+                    default="1"
+                )
+                
+                if server_choice == "1":
+                    # Use same connection parameters as main client
+                    await agent.connect_to_servers(
+                        server_paths=self.server_connection_params.get('server_paths'),
+                        server_urls=self.server_connection_params.get('server_urls'),
+                        config_path=self.server_connection_params.get('config_path')
+                    )
+                else:
+                    config_path = Prompt.ask("Server config path (or press Enter to skip)")
+                    if config_path and config_path.strip():
+                        await agent.connect_to_servers(config_path=config_path)
+        
+        await self.get_user_input("Press Enter to continue")
+    
+    async def execute_agent_task_interactive(self):
+        """Execute a task using an agent"""
+        from rich.prompt import Prompt
+        
+        agents = self.agent_manager.list_agents()
+        
+        if not agents:
+            self.console.print("[yellow]No agents available. Create one first.[/yellow]")
+            await self.get_user_input("Press Enter to continue")
+            return
+        
+        self.agent_manager.display_agents()
+        self.console.print()
+        
+        agent_name = Prompt.ask(
+            "Agent name",
+            choices=agents,
+            default=agents[0]
+        )
+        
+        task = Prompt.ask("Task description")
+        
+        await self.agent_manager.execute_agent_task(agent_name, task)
+        await self.get_user_input("Press Enter to continue")
+    
+    async def load_agent_from_config_interactive(self):
+        """Load agent from configuration file"""
+        from rich.prompt import Prompt
+        
+        self.console.print(Panel(
+            "[bold]Load Agent from Config[/bold]\n\n"
+            "Config file should be YAML or JSON format.\n"
+            "Example configs available in config/agents/ directory.",
+            border_style="cyan"
+        ))
+        
+        config_path = Prompt.ask("Config file path")
+        
+        if config_path and config_path.strip():
+            await self.agent_manager.create_agent_from_config(config_path)
+        
+        await self.get_user_input("Press Enter to continue")
+    
+    async def remove_agent_interactive(self):
+        """Remove an agent"""
+        from rich.prompt import Prompt
+        
+        agents = self.agent_manager.list_agents()
+        
+        if not agents:
+            self.console.print("[yellow]No agents to remove.[/yellow]")
+            await self.get_user_input("Press Enter to continue")
+            return
+        
+        self.agent_manager.display_agents()
+        self.console.print()
+        
+        agent_name = Prompt.ask(
+            "Agent to remove",
+            choices=agents + ["cancel"],
+            default="cancel"
+        )
+        
+        if agent_name != "cancel":
+            self.agent_manager.remove_agent(agent_name)
+        
+        await self.get_user_input("Press Enter to continue")
+    
+    async def show_agent_details_interactive(self):
+        """Show details of an agent"""
+        from rich.prompt import Prompt
+        import json
+        
+        agents = self.agent_manager.list_agents()
+        
+        if not agents:
+            self.console.print("[yellow]No agents available.[/yellow]")
+            await self.get_user_input("Press Enter to continue")
+            return
+        
+        self.agent_manager.display_agents()
+        self.console.print()
+        
+        agent_name = Prompt.ask(
+            "Agent name",
+            choices=agents,
+            default=agents[0]
+        )
+        
+        agent = self.agent_manager.get_agent(agent_name)
+        if agent:
+            info = agent.get_info()
+            self.console.print(Panel(
+                json.dumps(info, indent=2),
+                title=f"Agent Details: {agent_name}",
+                border_style="cyan"
+            ))
+        
+        await self.get_user_input("Press Enter to continue")
+
     async def cleanup(self):
         """Clean up resources"""
+        await self.agent_manager.cleanup_all()
         await self.exit_stack.aclose()
 
     async def reload_servers(self):

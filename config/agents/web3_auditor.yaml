@@ -1,0 +1,45 @@
+# Web3 Security Auditor Agent Configuration
+# This agent is specialized for smart contract security auditing
+
+type: web3_audit
+name: web3-auditor
+model: qwen2.5:7b
+
+# System prompt (optional - uses default if not specified)
+# system_prompt: |
+#   Your custom system prompt here...
+
+# MCP Servers to connect to
+servers:
+  # Example: Filesystem server for reading contract files
+  paths:
+    - /path/to/filesystem-server.py
+  
+  # Example: Remote audit tool server
+  # urls:
+  #   - https://audit-tools.example.com/mcp
+  
+  # Or use a config file
+  # config_file: ~/.config/ollmcp/audit-servers.json
+
+# Tools to enable (optional - enables all by default)
+enabled_tools:
+  - filesystem.read_file
+  - filesystem.list_directory
+  - bash.execute_command
+  # Add more tools as needed
+
+# Agent-specific configuration
+audit_config:
+  severity_levels:
+    - Critical
+    - High
+    - Medium
+    - Low
+    - Info
+  
+  tools_to_use:
+    - slither
+    - mythril
+    - foundry
+    - hardhat

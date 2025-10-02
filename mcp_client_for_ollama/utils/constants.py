@@ -44,6 +44,8 @@ INTERACTIVE_COMMANDS = {
     'reset-config': 'Reset to default config',
     'reload-servers': 'Reload MCP servers',
     'human-in-the-loop': 'Toggle HIL confirmations',
+    'agent': 'Manage specialized agents',
+    'list-agents': 'List all agents',
     'quit': 'Exit the application',
     'exit': 'Exit the application',
     'bye': 'Exit the application'
