@@ -407,7 +407,7 @@ class ServerConnector:
             server: Server configuration dictionary
 
         Returns:
-            Dictionary of headers
+            Dictionary of headers with lowercase keys
         """
         # Try to get headers directly from server dict
         headers = server.get("headers", {})
@@ -416,10 +416,13 @@ class ServerConnector:
         if not headers and "config" in server:
             headers = server["config"].get("headers", {})
 
+        # Normalize all header names to lowercase per RFC 7230
+        headers = {k.lower(): v for k, v in headers.items()}
+
         # Always add MCP Protocol Version header for HTTP connections
         server_type = server.get("type", "script")
         if server_type in ["sse", "streamable_http"]:
-            headers["MCP-Protocol-Version"] = MCP_PROTOCOL_VERSION
+            headers["mcp-protocol-version"] = MCP_PROTOCOL_VERSION
 
         return headers
 
