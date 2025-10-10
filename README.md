@@ -37,6 +37,7 @@
   - [Model Selection](#model-selection)
   - [Advanced Model Configuration](#advanced-model-configuration)
   - [Server Reloading for Development](#server-reloading-for-development)
+  - [Specialized Agents](#specialized-agents)
   - [Human-in-the-Loop (HIL) Tool Execution](#human-in-the-loop-hil-tool-execution)
   - [Performance Metrics](#performance-metrics)
 - [Autocomplete and Prompt Features](#autocomplete-and-prompt-features)
@@ -59,6 +60,7 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 - 🎨 **Rich Terminal Interface**: Interactive console UI with modern styling
 - 🌊 **Streaming Responses**: View model outputs in real-time as they're generated
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
+- 🤖 **Specialized Agents**: Create and run specialized subagents for complex workflows like Web3 security auditing, with support for Foundry, Hardhat, Slither, and other audit tools
 - 🧑‍💻 **Human-in-the-Loop (HIL)**: Review and approve tool executions before they run for enhanced control and safety
 - 🎮 **Advanced Model Configuration**: Fine-tune 15+ model parameters including context window size, temperature, sampling, repetition control, and more
 - 💬 **System Prompt Customization**: Define and edit the system prompt to control model behavior and persona
@@ -357,6 +359,53 @@ Simply type `reload-servers` or `rs` in the chat interface, and the client will:
 4. Display the updated server and tool status
 
 This feature dramatically improves the development experience when building and testing MCP servers.
+
+### Specialized Agents
+
+The client now supports **specialized subagents** - independent AI agents configured for specific tasks. This is particularly powerful for complex workflows like Web3 security auditing.
+
+**Key Features:**
+- 🎯 **Task-Specific Agents**: Create agents optimized for specific workflows (auditing, testing, analysis)
+- 🧠 **Custom System Prompts**: Each agent has its own personality and expertise
+- 🔧 **Independent Tool Access**: Agents can have different tool configurations
+- 🌐 **Separate Server Connections**: Connect agents to different MCP servers
+- 📝 **Configuration Files**: Define agents using YAML or JSON files
+
+**Quick Start:**
+1. Type `agent` or `ag` to open the agent management menu
+2. Choose "Create a new agent" or "Load agent from config file"
+3. Select agent type (e.g., `web3_audit` for smart contract security)
+4. Connect to MCP servers with required tools (filesystem, bash, etc.)
+5. Execute tasks like "Analyze the smart contract at /path/to/Contract.sol"
+
+**Example Use Case - Web3 Security Audit:**
+```
+# Create a Web3 audit agent
+Agent type: web3_audit
+Agent name: security-auditor
+Model: qwen2.5:7b
+
+# Execute comprehensive audit task
+Task: "Analyze all contracts in /project/src and run Slither analysis"
+
+# Agent will:
+- Read contract files
+- Run static analysis tools (Slither, Mythril)
+- Execute Foundry tests if available
+- Generate a comprehensive security report with findings
+```
+
+**Built-in Agent Types:**
+- **Web3AuditAgent**: Pre-configured for smart contract security auditing with expertise in vulnerability detection, code review, and running security tools (Slither, Mythril, Foundry)
+- **BaseAgent**: Generic agent type for custom configurations
+
+**Configuration Examples:**
+Three example agent configurations are provided in `config/agents/`:
+- `web3_auditor.yaml`: General Web3 security auditing
+- `foundry_tester.yaml`: Foundry testing and fuzzing specialist
+- `hardhat_analyzer.json`: Hardhat project analysis
+
+For detailed documentation, see [docs/AGENTS.md](docs/AGENTS.md).
 
 ### Human-in-the-Loop (HIL) Tool Execution
 

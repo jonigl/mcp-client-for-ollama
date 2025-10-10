@@ -14,6 +14,7 @@ dependencies = [
     "prompt-toolkit~=3.0.51",
     "rich~=14.1.0",
     "typer~=0.16.0",
+    "pyyaml~=6.0",
 ]
 
 [project.scripts]
@@ -29,7 +30,7 @@ Homepage = "https://github.com/jonigl/mcp-client-for-ollama"
 Issues = "https://github.com/jonigl/mcp-client-for-ollama/issues"
 
 [tool.setuptools]
-packages = ["mcp_client_for_ollama", "mcp_client_for_ollama.config", "mcp_client_for_ollama.models", "mcp_client_for_ollama.server", "mcp_client_for_ollama.tools", "mcp_client_for_ollama.utils"]
+packages = ["mcp_client_for_ollama", "mcp_client_for_ollama.agents", "mcp_client_for_ollama.config", "mcp_client_for_ollama.models", "mcp_client_for_ollama.server", "mcp_client_for_ollama.tools", "mcp_client_for_ollama.utils"]
 
 [dependency-groups]
 dev = [
