@@ -4,12 +4,14 @@ This module provides specialized subagent functionality for complex workflows
 like Web3 security auditing, code generation, testing, documentation, and more.
 
 Features:
-- Multiple specialized agent types (Researcher, Coder, Writer, Tester, Reviewer, Web3 Auditor)
+- Multiple specialized agent types (Researcher, Coder, Writer, Tester, Reviewer, Web3 Auditor, FileSystem, RAG)
 - Agent-to-agent communication and collaboration
 - Persistent agent memory
 - Multi-agent orchestration
 - Autonomous agent operation
 - Workflow execution
+- File system operations (read, write, edit, delete)
+- RAG capabilities for knowledge management
 """
 
 from .base import SubAgent
@@ -20,6 +22,8 @@ from .coder import CoderAgent
 from .writer import WriterAgent
 from .tester import TesterAgent
 from .reviewer import ReviewerAgent
+from .filesystem import FileSystemAgent
+from .rag import RAGAgent
 from .communication import MessageBroker, AgentMessage, MessageType
 from .memory import AgentMemory, MemoryEntry
 from .orchestrator import AgentOrchestrator, Task, TaskStatus
@@ -33,6 +37,8 @@ __all__ = [
     "WriterAgent",
     "TesterAgent",
     "ReviewerAgent",
+    "FileSystemAgent",
+    "RAGAgent",
     "MessageBroker",
     "AgentMessage",
     "MessageType",

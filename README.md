@@ -57,12 +57,14 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 
 ### 🤖 Autonomous Multi-Agent System
 
-- **Multiple Specialized Agents**: Researcher, Coder, Writer, Tester, Reviewer, Web3 Auditor - each optimized for specific tasks
+- **Multiple Specialized Agents**: Researcher, Coder, Writer, Tester, Reviewer, Web3 Auditor, FileSystem, RAG - each optimized for specific tasks
 - **Agent Collaboration**: Agents can communicate, delegate tasks, and work together autonomously
 - **Persistent Memory**: Each agent maintains context and memories across sessions
 - **Orchestration System**: Coordinate multiple agents for complex workflows with parallel or sequential execution
 - **Code Execution**: Agents can execute code, run tests, and interact with development tools
 - **True Autonomy**: Agents operate independently with background message listening and auto-response
+- **File System Operations**: Full CRUD capabilities (create, read, update, delete) for files and directories
+- **RAG Capabilities**: Retrieval-Augmented Generation for knowledge management and context-aware responses
 
 ### 🎯 Core Features
 
@@ -375,11 +377,13 @@ This feature dramatically improves the development experience when building and 
 The client now features a **truly autonomous multi-agent system** with multiple specialized agents that can work together, similar to advanced systems like Crush or Claude Code.
 
 **🤖 Autonomous Multi-Agent Capabilities:**
-- **Multiple Agent Types**: Researcher, Coder, Writer, Tester, Reviewer, Web3 Auditor - each optimized for specific tasks
+- **Multiple Agent Types**: Researcher, Coder, Writer, Tester, Reviewer, Web3 Auditor, FileSystem, RAG - each optimized for specific tasks
 - **Agent Collaboration**: Agents communicate, delegate tasks, and work together autonomously
 - **Persistent Memory**: Each agent maintains context and memories across sessions
 - **Orchestration**: Coordinate multiple agents for complex workflows (parallel or sequential)
 - **Code Execution**: Agents can execute code, run tests, and interact with development tools
+- **File Operations**: Full CRUD capabilities for files and directories
+- **RAG**: Retrieval-Augmented Generation for knowledge management
 
 **🎯 Available Agent Types:**
 
@@ -389,6 +393,8 @@ The client now features a **truly autonomous multi-agent system** with multiple 
 4. **TesterAgent**: Unit tests, integration tests, test execution, coverage analysis
 5. **ReviewerAgent**: Code review, security analysis, performance review, architecture validation
 6. **Web3AuditAgent**: Smart contract security auditing with Foundry, Hardhat, Slither integration
+7. **FileSystemAgent**: File operations (read, write, edit, delete, move, copy, search)
+8. **RAGAgent**: Document ingestion, semantic search, knowledge base management
 
 **Quick Start - Creating Agents:**
 ```

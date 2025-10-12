@@ -17,6 +17,8 @@ from .coder import CoderAgent
 from .writer import WriterAgent
 from .tester import TesterAgent
 from .reviewer import ReviewerAgent
+from .filesystem import FileSystemAgent
+from .rag import RAGAgent
 from .communication import MessageBroker
 from .orchestrator import AgentOrchestrator
 
@@ -56,7 +58,7 @@ class AgentManager:
         """Create a new specialized agent.
         
         Args:
-            agent_type: Type of agent ("web3_audit", "researcher", "coder", "writer", "tester", "reviewer", "base")
+            agent_type: Type of agent ("web3_audit", "researcher", "coder", "writer", "tester", "reviewer", "filesystem", "rag", "base")
             name: Unique name for the agent
             model: Ollama model to use
             config: Additional configuration options
@@ -110,6 +112,18 @@ class AgentManager:
                 )
             elif agent_type == "reviewer":
                 agent = ReviewerAgent(
+                    model=model or "qwen2.5:7b",
+                    custom_prompt=config.get("system_prompt") if config else None,
+                    **common_params
+                )
+            elif agent_type == "filesystem":
+                agent = FileSystemAgent(
+                    model=model or "qwen2.5:7b",
+                    custom_prompt=config.get("system_prompt") if config else None,
+                    **common_params
+                )
+            elif agent_type == "rag":
+                agent = RAGAgent(
                     model=model or "qwen2.5:7b",
                     custom_prompt=config.get("system_prompt") if config else None,
                     **common_params
