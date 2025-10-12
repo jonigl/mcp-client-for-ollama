@@ -12,6 +12,15 @@ from contextlib import AsyncExitStack
 
 from .base import SubAgent
 from .web3_audit import Web3AuditAgent
+from .researcher import ResearcherAgent
+from .coder import CoderAgent
+from .writer import WriterAgent
+from .tester import TesterAgent
+from .reviewer import ReviewerAgent
+from .filesystem import FileSystemAgent
+from .rag import RAGAgent
+from .communication import MessageBroker
+from .orchestrator import AgentOrchestrator
 
 
 class AgentManager:
@@ -34,6 +43,10 @@ class AgentManager:
         self.ollama = ollama_client
         self.exit_stack = exit_stack
         self.agents: Dict[str, SubAgent] = {}
+        
+        # Multi-agent system components
+        self.message_broker = MessageBroker()
+        self.orchestrator = AgentOrchestrator(console, self.message_broker)
     
     def create_agent(
         self,
@@ -45,7 +58,7 @@ class AgentManager:
         """Create a new specialized agent.
         
         Args:
-            agent_type: Type of agent ("web3_audit", "base", etc.)
+            agent_type: Type of agent ("web3_audit", "researcher", "coder", "writer", "tester", "reviewer", "filesystem", "rag", "base")
             name: Unique name for the agent
             model: Ollama model to use
             config: Additional configuration options
@@ -58,14 +71,62 @@ class AgentManager:
             return None
         
         try:
+            # Common parameters
+            common_params = {
+                "name": name,
+                "console": self.console,
+                "ollama_client": self.ollama,
+                "parent_exit_stack": self.exit_stack,
+                "message_broker": self.message_broker
+            }
+            
             if agent_type == "web3_audit":
                 agent = Web3AuditAgent(
-                    name=name,
                     model=model or "qwen2.5:7b",
-                    console=self.console,
-                    ollama_client=self.ollama,
-                    parent_exit_stack=self.exit_stack,
-                    custom_prompt=config.get("system_prompt") if config else None
+                    custom_prompt=config.get("system_prompt") if config else None,
+                    **common_params
+                )
+            elif agent_type == "researcher":
+                agent = ResearcherAgent(
+                    model=model or "qwen2.5:7b",
+                    custom_prompt=config.get("system_prompt") if config else None,
+                    **common_params
+                )
+            elif agent_type == "coder":
+                agent = CoderAgent(
+                    model=model or "qwen2.5-coder:7b",
+                    custom_prompt=config.get("system_prompt") if config else None,
+                    **common_params
+                )
+            elif agent_type == "writer":
+                agent = WriterAgent(
+                    model=model or "qwen2.5:7b",
+                    custom_prompt=config.get("system_prompt") if config else None,
+                    **common_params
+                )
+            elif agent_type == "tester":
+                agent = TesterAgent(
+                    model=model or "qwen2.5:7b",
+                    custom_prompt=config.get("system_prompt") if config else None,
+                    **common_params
+                )
+            elif agent_type == "reviewer":
+                agent = ReviewerAgent(
+                    model=model or "qwen2.5:7b",
+                    custom_prompt=config.get("system_prompt") if config else None,
+                    **common_params
+                )
+            elif agent_type == "filesystem":
+                agent = FileSystemAgent(
+                    model=model or "qwen2.5:7b",
+                    custom_prompt=config.get("system_prompt") if config else None,
+                    **common_params
+                )
+            elif agent_type == "rag":
+                agent = RAGAgent(
+                    model=model or "qwen2.5:7b",
+                    custom_prompt=config.get("system_prompt") if config else None,
+                    **common_params
                 )
             elif agent_type == "base":
                 if not config or "description" not in config or "system_prompt" not in config:
@@ -75,19 +136,24 @@ class AgentManager:
                     return None
                 
                 agent = SubAgent(
-                    name=name,
                     description=config["description"],
                     model=model or "qwen2.5:7b",
                     system_prompt=config["system_prompt"],
-                    console=self.console,
-                    ollama_client=self.ollama,
-                    parent_exit_stack=self.exit_stack
+                    **common_params
                 )
             else:
                 self.console.print(f"[red]Unknown agent type: {agent_type}[/red]")
                 return None
             
             self.agents[name] = agent
+            
+            # Register with orchestrator if capabilities are specified
+            capabilities = config.get("capabilities", []) if config else []
+            if agent_type != "base":
+                # Add type as a capability
+                capabilities.append(agent_type)
+            self.orchestrator.register_agent(agent, capabilities)
+            
             self.console.print(f"[green]Created agent '{name}' of type '{agent_type}'[/green]")
             return agent
             
@@ -260,3 +326,72 @@ class AgentManager:
         for agent in self.agents.values():
             await agent.cleanup()
         self.agents.clear()
+    
+    async def execute_workflow(
+        self,
+        workflow_name: str,
+        tasks: List[str],
+        parallel: bool = False
+    ) -> Dict[str, Any]:
+        """Execute a multi-agent workflow.
+        
+        Args:
+            workflow_name: Name for this workflow
+            tasks: List of task descriptions
+            parallel: Whether to execute tasks in parallel
+            
+        Returns:
+            Dict with workflow results
+        """
+        return await self.orchestrator.execute_workflow(workflow_name, tasks, parallel)
+    
+    async def start_autonomous_agents(self, agent_names: Optional[List[str]] = None) -> None:
+        """Start agents in autonomous mode.
+        
+        Args:
+            agent_names: List of agent names to start (all if None)
+        """
+        agents_to_start = agent_names or list(self.agents.keys())
+        
+        for name in agents_to_start:
+            if name in self.agents:
+                self.agents[name].start_autonomous_mode()
+        
+        self.console.print(Panel(
+            f"Started {len(agents_to_start)} agents in autonomous mode",
+            title="Autonomous Mode",
+            border_style="green"
+        ))
+    
+    async def stop_autonomous_agents(self, agent_names: Optional[List[str]] = None) -> None:
+        """Stop autonomous mode for agents.
+        
+        Args:
+            agent_names: List of agent names to stop (all if None)
+        """
+        agents_to_stop = agent_names or list(self.agents.keys())
+        
+        for name in agents_to_stop:
+            if name in self.agents:
+                self.agents[name].stop_autonomous_mode()
+        
+        self.console.print(Panel(
+            f"Stopped {len(agents_to_stop)} agents",
+            title="Autonomous Mode Stopped",
+            border_style="yellow"
+        ))
+    
+    def get_orchestrator_status(self) -> Dict[str, Any]:
+        """Get orchestrator status and statistics.
+        
+        Returns:
+            Dict with orchestrator information
+        """
+        workload = self.orchestrator.get_agent_workload()
+        
+        return {
+            "registered_agents": len(self.orchestrator.agents),
+            "total_tasks": len(self.orchestrator.tasks),
+            "active_workflows": len(self.orchestrator.active_workflows),
+            "agent_workload": workload
+        }
