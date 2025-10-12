@@ -52,6 +52,7 @@ You have access to tools for:
         console: Optional[Console] = None,
         ollama_client: Optional[ollama.AsyncClient] = None,
         parent_exit_stack: Optional[AsyncExitStack] = None,
+        message_broker = None,
         custom_prompt: Optional[str] = None
     ):
         """Initialize Web3 audit agent.
@@ -62,6 +63,7 @@ You have access to tools for:
             console: Rich console for output
             ollama_client: Ollama client instance
             parent_exit_stack: Parent's exit stack for resource management
+            message_broker: Message broker for agent communication
             custom_prompt: Custom system prompt (uses default if None)
         """
         description = "Specialized agent for Web3 smart contract security auditing"
@@ -74,7 +76,8 @@ You have access to tools for:
             system_prompt=system_prompt,
             console=console,
             ollama_client=ollama_client,
-            parent_exit_stack=parent_exit_stack
+            parent_exit_stack=parent_exit_stack,
+            message_broker=message_broker
         )
         
         # Audit-specific settings

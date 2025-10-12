@@ -60,7 +60,7 @@ class TestWeb3AuditAgent:
         agent = Web3AuditAgent()
         
         assert agent.name == "web3-auditor"
-        assert "security auditor" in agent.description.lower()
+        assert "security auditing" in agent.description.lower()
         assert agent.model_manager.get_current_model() == "qwen2.5:7b"
         assert "security" in agent.model_config_manager.get_system_prompt().lower()
         assert len(agent.audit_findings) == 0

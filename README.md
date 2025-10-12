@@ -55,12 +55,22 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 
 ## Features
 
+### 🤖 Autonomous Multi-Agent System
+
+- **Multiple Specialized Agents**: Researcher, Coder, Writer, Tester, Reviewer, Web3 Auditor - each optimized for specific tasks
+- **Agent Collaboration**: Agents can communicate, delegate tasks, and work together autonomously
+- **Persistent Memory**: Each agent maintains context and memories across sessions
+- **Orchestration System**: Coordinate multiple agents for complex workflows with parallel or sequential execution
+- **Code Execution**: Agents can execute code, run tests, and interact with development tools
+- **True Autonomy**: Agents operate independently with background message listening and auto-response
+
+### 🎯 Core Features
+
 - 🌐 **Multi-Server Support**: Connect to multiple MCP servers simultaneously
 - 🚀 **Multiple Transport Types**: Supports STDIO, SSE, and Streamable HTTP server connections
 - 🎨 **Rich Terminal Interface**: Interactive console UI with modern styling
 - 🌊 **Streaming Responses**: View model outputs in real-time as they're generated
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
-- 🤖 **Specialized Agents**: Create and run specialized subagents for complex workflows like Web3 security auditing, with support for Foundry, Hardhat, Slither, and other audit tools
 - 🧑‍💻 **Human-in-the-Loop (HIL)**: Review and approve tool executions before they run for enhanced control and safety
 - 🎮 **Advanced Model Configuration**: Fine-tune 15+ model parameters including context window size, temperature, sampling, repetition control, and more
 - 💬 **System Prompt Customization**: Define and edit the system prompt to control model behavior and persona
@@ -362,50 +372,100 @@ This feature dramatically improves the development experience when building and 
 
 ### Specialized Agents
 
-The client now supports **specialized subagents** - independent AI agents configured for specific tasks. This is particularly powerful for complex workflows like Web3 security auditing.
+The client now features a **truly autonomous multi-agent system** with multiple specialized agents that can work together, similar to advanced systems like Crush or Claude Code.
 
-**Key Features:**
-- 🎯 **Task-Specific Agents**: Create agents optimized for specific workflows (auditing, testing, analysis)
-- 🧠 **Custom System Prompts**: Each agent has its own personality and expertise
-- 🔧 **Independent Tool Access**: Agents can have different tool configurations
-- 🌐 **Separate Server Connections**: Connect agents to different MCP servers
-- 📝 **Configuration Files**: Define agents using YAML or JSON files
+**🤖 Autonomous Multi-Agent Capabilities:**
+- **Multiple Agent Types**: Researcher, Coder, Writer, Tester, Reviewer, Web3 Auditor - each optimized for specific tasks
+- **Agent Collaboration**: Agents communicate, delegate tasks, and work together autonomously
+- **Persistent Memory**: Each agent maintains context and memories across sessions
+- **Orchestration**: Coordinate multiple agents for complex workflows (parallel or sequential)
+- **Code Execution**: Agents can execute code, run tests, and interact with development tools
 
-**Quick Start:**
-1. Type `agent` or `ag` to open the agent management menu
-2. Choose "Create a new agent" or "Load agent from config file"
-3. Select agent type (e.g., `web3_audit` for smart contract security)
-4. Connect to MCP servers with required tools (filesystem, bash, etc.)
-5. Execute tasks like "Analyze the smart contract at /path/to/Contract.sol"
+**🎯 Available Agent Types:**
 
-**Example Use Case - Web3 Security Audit:**
+1. **ResearcherAgent**: Information gathering, web research, fact-checking, document analysis
+2. **CoderAgent**: Code generation, bug fixing, refactoring, feature implementation
+3. **WriterAgent**: Documentation, README files, reports, API docs, tutorials
+4. **TesterAgent**: Unit tests, integration tests, test execution, coverage analysis
+5. **ReviewerAgent**: Code review, security analysis, performance review, architecture validation
+6. **Web3AuditAgent**: Smart contract security auditing with Foundry, Hardhat, Slither integration
+
+**Quick Start - Creating Agents:**
 ```
-# Create a Web3 audit agent
-Agent type: web3_audit
-Agent name: security-auditor
-Model: qwen2.5:7b
+# Open agent menu
+> agent
 
-# Execute comprehensive audit task
-Task: "Analyze all contracts in /project/src and run Slither analysis"
+# Create specialized agents
+1. Create a new agent → researcher → my-researcher
+2. Create a new agent → coder → my-coder
+3. Create a new agent → writer → my-writer
 
-# Agent will:
-- Read contract files
-- Run static analysis tools (Slither, Mythril)
-- Execute Foundry tests if available
-- Generate a comprehensive security report with findings
+# Execute tasks
+> Execute task with agent → my-researcher
+Task: "Research best practices for microservices"
 ```
 
-**Built-in Agent Types:**
-- **Web3AuditAgent**: Pre-configured for smart contract security auditing with expertise in vulnerability detection, code review, and running security tools (Slither, Mythril, Foundry)
-- **BaseAgent**: Generic agent type for custom configurations
+**Multi-Agent Workflow Example:**
+```python
+# Create a development team
+manager.create_agent("researcher", "researcher", "qwen2.5:7b")
+manager.create_agent("coder", "coder", "qwen2.5-coder:7b")
+manager.create_agent("tester", "tester", "qwen2.5:7b")
+manager.create_agent("reviewer", "reviewer", "qwen2.5:7b")
+manager.create_agent("writer", "writer", "qwen2.5:7b")
+
+# Execute coordinated workflow
+await manager.execute_workflow(
+    "feature-development",
+    [
+        "Research: Best practices for user authentication",
+        "Code: Implement authentication system",
+        "Test: Write unit and integration tests",
+        "Review: Security and code quality review",
+        "Document: Create API documentation"
+    ],
+    parallel=False  # Execute sequentially
+)
+```
+
+**Autonomous Collaboration:**
+```python
+# Start agents in autonomous mode
+await manager.start_autonomous_agents()
+
+# Agents can now:
+# - Listen for messages from other agents
+# - Delegate tasks to specialized agents
+# - Share information and collaborate
+# - Work on multiple tasks in parallel
+
+# Example: Researcher delegates code examples to Coder,
+# then asks Writer to document the implementation
+```
+
+**Agent Memory & Context:**
+```python
+# Agents remember important information
+await researcher.remember(
+    "Key finding about distributed systems",
+    importance=5,
+    tags=["research", "architecture"]
+)
+
+# Recall memories when needed
+context = await researcher.recall(query="distributed systems", limit=5)
+```
 
 **Configuration Examples:**
-Three example agent configurations are provided in `config/agents/`:
-- `web3_auditor.yaml`: General Web3 security auditing
-- `foundry_tester.yaml`: Foundry testing and fuzzing specialist
-- `hardhat_analyzer.json`: Hardhat project analysis
+Agent configurations are provided in `config/agents/`:
+- `web3_auditor.yaml`: Web3 security auditing specialist
+- `foundry_tester.yaml`: Foundry testing specialist
+- `hardhat_analyzer.json`: Hardhat analysis specialist
+- Create your own custom agent configurations
 
-For detailed documentation, see [docs/AGENTS.md](docs/AGENTS.md).
+For detailed documentation, see:
+- [Multi-Agent System Guide](docs/MULTI_AGENT_SYSTEM.md) - Complete guide to autonomous agents
+- [Agent Basics](docs/AGENTS.md) - Agent fundamentals and configuration
 
 ### Human-in-the-Loop (HIL) Tool Execution
 
