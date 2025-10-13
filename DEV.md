@@ -58,8 +58,8 @@ To create a new release:
 
 2. Commit the changes:
    ```bash
-   git add .
-   git commit -m "Bump version to X.Y.Z"
+   git add -A
+   git commit -m "chore(release): bump version to X.Y.Z"
    ```
 
 3. Push the changes and create a tag:
