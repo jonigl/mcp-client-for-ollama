@@ -1014,6 +1014,11 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
     try:
         await client.connect_to_servers(mcp_server, mcp_server_url, config_path, auto_discovery_final)
         client.auto_load_default_config()
+
+        # If model was explicitly provided via CLI flag (not default), override any loaded config
+        if model != DEFAULT_MODEL:
+            client.model_manager.set_model(model)
+
         await client.chat_loop()
     finally:
         await client.cleanup()
