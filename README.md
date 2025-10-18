@@ -43,6 +43,7 @@
 - [Configuration Management](#configuration-management)
 - [Server Configuration Format](#server-configuration-format)
 - [Compatible Models](#compatible-models)
+  - [Ollama Cloud Models](#ollama-cloud-models)
 - [Where Can I Find More MCP Servers?](#where-can-i-find-more-mcp-servers)
 - [Related Projects](#related-projects)
 - [License](#license)
@@ -56,6 +57,7 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 
 - 🌐 **Multi-Server Support**: Connect to multiple MCP servers simultaneously
 - 🚀 **Multiple Transport Types**: Supports STDIO, SSE, and Streamable HTTP server connections
+- ☁️ **Ollama Cloud Support**: Works seamlessly with Ollama Cloud models for tool calling, enabling access to powerful cloud-hosted models while using local MCP tools
 - 🎨 **Rich Terminal Interface**: Interactive console UI with modern styling
 - 🌊 **Streaming Responses**: View model outputs in real-time as they're generated
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
@@ -528,6 +530,30 @@ The following Ollama models work well with tool use:
 - mistral
 
 For a complete list of Ollama models with tool use capabilities, visit the [official Ollama models page](https://ollama.com/search?c=tools).
+
+### Ollama Cloud Models
+
+MCP Client for Ollama now supports [Ollama Cloud models](https://github.com/ollama/ollama/blob/main/docs/cloud.md), allowing you to use powerful cloud-hosted models with tool calling capabilities while leveraging your local MCP tools. Cloud models can run without a powerful local GPU, making it possible to access larger models that wouldn't fit on a personal computer.
+
+**Supported Ollama Cloud models include for example:**
+- `gpt-oss:20b-cloud`
+- `gpt-oss:120b-cloud`
+- `deepseek-v3.1:671b-cloud`
+- `qwen3-coder:480b-cloud`
+
+**To use Ollama Cloud models with this client:**
+
+1. First, pull the cloud model:
+   ```bash
+   ollama pull gpt-oss:120b-cloud
+   ```
+
+2. Run the client with your chosen cloud model:
+   ```bash
+   ollmcp --model gpt-oss:120b-cloud
+   ```
+
+For more information about Ollama Cloud, visit the [Ollama Cloud documentation](https://docs.ollama.com/cloud).
 
 ### How Tool Calls Work
 
