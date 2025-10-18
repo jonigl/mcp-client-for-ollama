@@ -275,6 +275,14 @@ class MCPClient:
             show_metrics=self.show_metrics
         )
 
+        # response_text will be either empty or contain a response
+        # Append the assistant's response to messages helps maintain context and fix ollama cloud tool call issues
+        messages.append({
+            "role": "assistant",
+            "content": response_text,
+            "tool_calls": tool_calls
+        })
+
         # Update actual token count from metrics if available
         if metrics and metrics.get('eval_count'):
             self.actual_token_count += metrics['eval_count']
