@@ -313,7 +313,7 @@ class MCPClient:
                     messages.append({
                         "role": "tool",
                         "content": tool_response,
-                        "name": tool_name
+                        "tool_name": tool_name
                     })
                     continue
 
@@ -330,7 +330,7 @@ class MCPClient:
                 messages.append({
                     "role": "tool",
                     "content": tool_response,
-                    "name": tool_name
+                    "tool_name": tool_name
                 })
 
             # Get stream response from Ollama with the tool results
