@@ -1,6 +1,6 @@
 [project]
 name = "mcp-client-for-ollama"
-version = "0.18.1"
+version = "0.18.3"
 description = "MCP Client for Ollama - A client for connecting to Model Context Protocol servers using Ollama"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -9,12 +9,16 @@ authors = [
     {name = "Jonathan Löwenstern"}
 ]
 dependencies = [
-    "mcp~=1.12.4",
-    "ollama~=0.5.3",
+    "mcp~=1.16.0",
+    "ollama~=0.6.0",
     "prompt-toolkit~=3.0.51",
     "rich~=14.1.0",
-    "typer~=0.16.0",
+    "typer~=0.19.2",
     "pyyaml~=6.0",
+    "web3",
+    "eth-account",
+    "pycryptodome",
+    "requests",
 ]
 
 [project.scripts]
@@ -34,5 +38,5 @@ packages = ["mcp_client_for_ollama", "mcp_client_for_ollama.agents", "mcp_client
 
 [dependency-groups]
 dev = [
-    "pytest>=8.4.1",
+    "pytest~=8.4.2",
 ]
