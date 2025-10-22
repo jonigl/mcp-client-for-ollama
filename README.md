@@ -553,6 +553,9 @@ MCP Client for Ollama now supports [Ollama Cloud models](https://github.com/olla
    ollmcp --model gpt-oss:120b-cloud
    ```
 
+> [!NOTE]
+> The model `deepseek-v3.1:671b-cloud` only supports tool use when thinking mode is turned off. You can toggle thinking mode in `ollmcp` by typing either `thinking-mode` or `tm`.
+
 For more information about Ollama Cloud, visit the [Ollama Cloud documentation](https://docs.ollama.com/cloud).
 
 ### How Tool Calls Work
