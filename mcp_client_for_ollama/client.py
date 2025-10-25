@@ -624,7 +624,7 @@ class MCPClient:
         if not self.thinking_mode:
             self.console.print(Panel(
                 f"[bold yellow]Thinking mode is currently disabled[/bold yellow]\n\n"
-                f"Enable thinking mode first using [bold cyan]thinking[/bold cyan] or [bold cyan]th[/bold cyan] command.\n"
+                f"Enable thinking mode first using [bold cyan]thinking-mode[/bold cyan] or [bold cyan]tm[/bold cyan] command.\n"
                 f"This setting only applies when thinking mode is active.",
                 title="Show Thinking Setting", border_style="yellow", expand=False
             ))
