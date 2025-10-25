@@ -553,7 +553,7 @@ Here a minimal working example let's say this is your `~/.config/ollmcp/mcp-serv
 ```
 
 > [!TIP]
-> When using github copilot's MCP server, make sure to replace `"mytoken"` with your actual GitHub Copilot API token.
+> When using GitHub MCP server, make sure to replace `"mytoken"` with your actual GitHub API token.
 
 With that file in place you can connect using:
 
