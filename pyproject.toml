@@ -9,7 +9,7 @@ authors = [
     {name = "Jonathan Löwenstern"}
 ]
 dependencies = [
-    "mcp~=1.16.0",
+    "mcp>=1.16,<1.20",
     "ollama~=0.6.0",
     "prompt-toolkit~=3.0.51",
     "rich~=14.1.0",
