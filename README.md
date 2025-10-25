@@ -42,6 +42,7 @@
 - [Autocomplete and Prompt Features](#autocomplete-and-prompt-features)
 - [Configuration Management](#configuration-management)
 - [Server Configuration Format](#server-configuration-format)
+  - [Tips: Where to Put MCP Server Configs and a Working Example](#tips-where-to-put-mcp-server-configs-and-a-working-example)
 - [Compatible Models](#compatible-models)
   - [Ollama Cloud Models](#ollama-cloud-models)
 - [Where Can I Find More MCP Servers?](#where-can-i-find-more-mcp-servers)
@@ -519,6 +520,57 @@ The JSON configuration file supports STDIO, SSE, and Streamable HTTP server type
 > [!NOTE]
 > **MCP 1.10.1 Transport Support**: The client now supports the latest Streamable HTTP transport with improved performance and reliability. If you specify a URL without a type, the client will default to using Streamable HTTP transport.
 
+### Tips: where to put MCP server configs and a working example
+
+A common point of confusion is where to store MCP server configuration files and how the TUI's save/load feature is used. Here's a short, practical guide that has helped other users:
+
+- The TUI's `save-config` / `load-config` (or `sc` / `lc`) commands are intended to save *TUI preferences* like which tools you enabled, your selected model, thinking mode, and other client-side settings. They are not required to register MCP server connections with the client.
+- For MCP server JSON files (the `mcpServers` object shown above) we recommend keeping them outside the TUI config directory or in a clear subfolder, for example:
+
+```
+~/.config/ollmcp/mcp-servers/config.json
+```
+
+You can then point `ollmcp` at that file at startup with `-j` / `--servers-json`.
+
+> [!IMPORTANT]
+> When using HTTP-based MCP servers, use the `streamable_http` type (not just `http`).
+
+Here a minimal working example let's say this is your `~/.config/ollmcp/mcp-servers/config.json`:
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "type": "streamable_http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer mytoken"
+      }
+    }
+  }
+}
+```
+
+> [!TIP]
+> When using github copilot's MCP server, make sure to replace `"mytoken"` with your actual GitHub Copilot API token.
+
+With that file in place you can connect using:
+
+```
+ollmcp -j ~/.config/ollmcp/mcp-servers/config.json
+```
+
+Here you can find a GitHub issue related to this common pitfall: https://github.com/jonigl/mcp-client-for-ollama/issues/112#issuecomment-3446569030
+
+#### Demo
+
+A short demo (asciicast) that should help anyone reproduce the working setup quickly. This example uses an [MCP server example with streamable HTTP protocol](https://github.com/jonigl/mcp-server-with-streamable-http-example) usage:
+
+[![asciicast](https://asciinema.org/a/751387.svg)](https://asciinema.org/a/751387)
+
+
+
 ## Compatible Models
 
 The following Ollama models work well with tool use:
@@ -579,6 +631,7 @@ This repository contains reference implementations for the Model Context Protoco
 ## Related Projects
 
 - **[Ollama MCP Bridge](https://github.com/jonigl/ollama-mcp-bridge)** - A Python API layer that sits in front of Ollama, automatically adding tools from multiple MCP servers to every chat request. This project provides a transparent proxy solution that pre-loads all MCP servers at startup and seamlessly integrates their tools into the Ollama API.
+- **[MCP Server with Streamable HTTP Example](https://github.com/jonigl/mcp-server-with-streamable-http-example)** - An example MCP server demonstrating the usage of the streamable HTTP protocol.
 
 ## License
 
