@@ -136,8 +136,8 @@ ollmcp
 #### MCP Server Configuration:
 
 - `--mcp-server`, `-s`: Path to one or more MCP server scripts (.py or .js). Can be specified multiple times.
-- `--mcp-server-url`, `-u`: URL to one or more SSE or Streamable HTTP MCP servers. Can be specified multiple times.
-- `--servers-json`, `-j`: Path to a JSON file with server configurations.
+- `--mcp-server-url`, `-u`: URL to one or more SSE or Streamable HTTP MCP servers. Can be specified multiple times. See [Common MCP endpoint paths](#common-mcp-endpoint-paths) for typical endpoints.
+- `--servers-json`, `-j`: Path to a JSON file with server configurations. See [Server Configuration Format](#server-configuration-format) for details.
 - `--auto-discovery`, `-a`: Auto-discover servers from Claude's default config file (default behavior if no other options provided).
 
 > [!TIP]
@@ -534,7 +534,7 @@ A common point of confusion is where to store MCP server configuration files and
 You can then point `ollmcp` at that file at startup with `-j` / `--servers-json`.
 
 > [!IMPORTANT]
-> When using HTTP-based MCP servers, use the `streamable_http` type (not just `http`).
+> When using HTTP-based MCP servers, use the `streamable_http` type (not just `http`). Also check the [Common MCP endpoint paths](#common-mcp-endpoint-paths) section below for typical endpoints.
 
 Here a minimal working example let's say this is your `~/.config/ollmcp/mcp-servers/config.json`:
 
@@ -569,7 +569,12 @@ A short demo (asciicast) that should help anyone reproduce the working setup qui
 
 [![asciicast](https://asciinema.org/a/751387.svg)](https://asciinema.org/a/751387)
 
+#### Common MCP endpoint paths
 
+Streamable HTTP MCP servers typically expose the MCP endpoint at `/mcp` (e.g., `https://host/mcp`), while SSE servers commonly use `/sse` (e.g., `https://host/sse`). Below is an excerpt from the MCP specification (2025-06-18):
+> The server MUST provide a single HTTP endpoint path (hereafter referred to as the MCP endpoint) that supports both POST and GET methods. For example, this could be a URL like https://example.com/mcp.
+
+You can find more details in the [MCP specification version 2025-06-18 - Transports](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports).
 
 ## Compatible Models
 
