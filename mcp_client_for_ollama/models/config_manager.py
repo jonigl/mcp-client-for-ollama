@@ -286,7 +286,7 @@ class ModelConfigManager:
             f"[bold][orange3]12.[/orange3] frequency_penalty:[/bold] {format_value(self.frequency_penalty)}\n"
             f"[bold][orange3]13.[/orange3] stop:[/bold] {format_value(self.stop)}\n"
             f"[bold][orange3]14.[/orange3] num_ctx:[/bold] {format_value(self.num_ctx)}\n"
-            f"[bold][orange3]14.[/orange3] num_batch:[/bold] {format_value(self.num_batch)}",
+            f"[bold][orange3]15.[/orange3] num_batch:[/bold] {format_value(self.num_batch)}",
             title="[bold blue]🎮 Model Parameters[/bold blue]",
             border_style="blue", expand=False))
         self.console.print("\n[bold yellow]Note:[/bold yellow] Unset values will use Ollama's defaults.")
