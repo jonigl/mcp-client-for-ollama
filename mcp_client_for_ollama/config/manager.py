@@ -243,6 +243,9 @@ class ConfigManager:
                 validated["modelConfig"]["stop"] = model_config["stop"] if model_config["stop"] is not None else None
             if "num_ctx" in model_config:
                 validated["modelConfig"]["num_ctx"] = model_config["num_ctx"] if model_config["num_ctx"] is not None else None
+            if "num_batch" in model_config:
+                validated["modelConfig"]["num_batch"] = model_config["num_batch"] if model_config["num_batch"] is not None else None
+
 
         if "displaySettings" in config_data and isinstance(config_data["displaySettings"], dict):
             if "showToolExecution" in config_data["displaySettings"]:

@@ -41,6 +41,7 @@ class ModelConfigManager:
         self.frequency_penalty = None      # float
         self.stop = None                   # list[str]
         self.num_ctx = None                # int
+        self.num_batch =  None
 
         # Parameter explanations
         self.parameter_explanations = {
@@ -133,6 +134,12 @@ class ModelConfigManager:
                 "range": "1 – model maximum (e.g., 1 – 32768 for qwen3:0.6b); model-dependent",
                 "effect": "Controls how much conversation history and context the model can access when generating responses.",
                 "recommendation": "Use higher values for complex conversations requiring more context; balance with memory usage and performance."
+            },
+            "num_batch":{
+                "description":"",
+                "range":"",
+                "effect":"",
+                "recommendation":""
             }
         }
 
@@ -157,7 +164,8 @@ class ModelConfigManager:
             "presence_penalty": self.presence_penalty,
             "frequency_penalty": self.frequency_penalty,
             "stop": self.stop,
-            "num_ctx": self.num_ctx
+            "num_ctx": self.num_ctx,
+            "num_batch": self.num_batch
         }
 
     def get_ollama_options(self) -> Dict[str, Any]:
@@ -198,6 +206,8 @@ class ModelConfigManager:
             options["stop"] = self.stop
         if self.num_ctx is not None:
             options["num_ctx"] = self.num_ctx
+        if self.num_batch is not None:
+            options["num_batch"] = self.num_batch
         return options
 
     def get_system_prompt(self) -> str:
@@ -244,6 +254,8 @@ class ModelConfigManager:
             self.stop = config["stop"]
         if "num_ctx" in config:
             self.num_ctx = config["num_ctx"]
+        if "num_batch" in config:
+            self.num_batch = config["num_batch"]
 
     def display_current_config(self) -> None:
         """Display the current model configuration."""
@@ -273,7 +285,8 @@ class ModelConfigManager:
             f"[bold][orange3]11.[/orange3] presence_penalty:[/bold] {format_value(self.presence_penalty)}\n"
             f"[bold][orange3]12.[/orange3] frequency_penalty:[/bold] {format_value(self.frequency_penalty)}\n"
             f"[bold][orange3]13.[/orange3] stop:[/bold] {format_value(self.stop)}\n"
-            f"[bold][orange3]14.[/orange3] num_ctx:[/bold] {format_value(self.num_ctx)}",
+            f"[bold][orange3]14.[/orange3] num_ctx:[/bold] {format_value(self.num_ctx)}\n"
+            f"[bold][orange3]14.[/orange3] num_batch:[/bold] {format_value(self.num_batch)}",
             title="[bold blue]🎮 Model Parameters[/bold blue]",
             border_style="blue", expand=False))
         self.console.print("\n[bold yellow]Note:[/bold yellow] Unset values will use Ollama's defaults.")
@@ -325,7 +338,7 @@ class ModelConfigManager:
         for param in [
             "num_keep", "seed", "num_predict", "top_k", "top_p", "min_p",
             "typical_p", "repeat_last_n", "temperature", "repeat_penalty",
-            "presence_penalty", "frequency_penalty", "stop", "num_ctx"
+            "presence_penalty", "frequency_penalty", "stop", "num_ctx","num_batch"
         ]:
             info = self.parameter_explanations[param]
             table.add_row(
@@ -447,6 +460,7 @@ class ModelConfigManager:
                 self.frequency_penalty = None
                 self.stop = None
                 self.num_ctx = None
+                self.num_batch = None
                 result_message = "[green]All parameters unset (using Ollama defaults).[/green]"
                 result_style = "green"
                 continue
@@ -522,6 +536,10 @@ class ModelConfigManager:
                         case 14:
                             self.num_ctx = None
                             result_message = "[green]num_ctx unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 15:
+                            self.num_batch = None
+                            result_message = "[green]num_batch unset (using Ollama default(512)).[/green]"
                             result_style = "green"
                         case _:
                             result_message = "[red]Invalid parameter number.[/red]"
@@ -736,6 +754,19 @@ class ModelConfigManager:
                             result_style = "green"
                         else:
                             result_message = "[red]num_ctx must be a positive integer.[/red]"
+                            result_style = "red"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid integer.[/red]"
+                        result_style = "red"
+                case "15":
+                    try:
+                        new_value = IntPrompt.ask("Batch Size (num_batch, size of batches by which prompt is divided)", default=self.num_batch)
+                        if new_value >= 1:
+                            self.num_batch = new_value
+                            result_message = f"[green]num_batch set to {new_value}.[/green]"
+                            result_style = "green"
+                        else:
+                            result_message = "[red]num_batch must be a positive integer.[/red]"
                             result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid integer.[/red]"
