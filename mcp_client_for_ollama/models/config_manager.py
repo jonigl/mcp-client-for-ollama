@@ -136,10 +136,10 @@ class ModelConfigManager:
                 "recommendation": "Use higher values for complex conversations requiring more context; balance with memory usage and performance."
             },
             "num_batch":{
-                "description":"",
-                "range":"",
-                "effect":"",
-                "recommendation":""
+                "description":"Sets the batch size for which the prompt request will be divided into during processing.",
+                "range":"1 - context size (1 = no batching), default for ollama == 512",
+                "effect":"Directly impacts processing speed and response time. Increasing the batch size increases throughput(tokens/sec) upto a point of saturation upon which it starts to deteriorate.",
+                "recommendation":"Vary the batch size while observing the performance and memory, choose the best size for your usecase"
             }
         }
 
