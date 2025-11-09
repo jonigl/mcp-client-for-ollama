@@ -41,7 +41,7 @@ class ModelConfigManager:
         self.frequency_penalty = None      # float
         self.stop = None                   # list[str]
         self.num_ctx = None                # int
-        self.num_batch =  None
+        self.num_batch =  None             # int
 
         # Parameter explanations
         self.parameter_explanations = {
