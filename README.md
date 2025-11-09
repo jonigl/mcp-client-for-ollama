@@ -312,6 +312,7 @@ The `model-config` (`mc`) command opens the advanced model settings interface, a
 - **Repeat Last N / Repeat Penalty**: Reduce repetition
 - **Presence/Frequency Penalty**: Encourage new topics, reduce repeats
 - **Stop Sequences**: Custom stopping points (up to 8)
+ - **Batch Size (num_batch)**: Controls internal batching of requests; larger values can increase throughput but use more memory.
 
 #### Commands
 
