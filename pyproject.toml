@@ -9,11 +9,11 @@ authors = [
     {name = "Jonathan Löwenstern"}
 ]
 dependencies = [
-    "mcp~=1.16.0",
+    "mcp~=1.21.0",
     "ollama~=0.6.0",
-    "prompt-toolkit~=3.0.51",
-    "rich~=14.1.0",
-    "typer~=0.19.2",
+    "prompt-toolkit~=3.0.52",
+    "rich~=14.2.0",
+    "typer~=0.20.0",
 ]
 
 [project.scripts]
