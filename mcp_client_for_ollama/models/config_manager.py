@@ -539,7 +539,7 @@ class ModelConfigManager:
                             result_style = "green"
                         case 15:
                             self.num_batch = None
-                            result_message = "[green]num_batch unset (using Ollama default(512)).[/green]"
+                            result_message = "[green]num_batch unset (using Ollama default).[/green]"
                             result_style = "green"
                         case _:
                             result_message = "[red]Invalid parameter number.[/red]"
