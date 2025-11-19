@@ -298,9 +298,12 @@ class MCPClient:
         # Keep looping while the model requests tools and we have capacity
         while pending_tool_calls and enabled_tools:
             if loop_count >= self.loop_limit:
-                self.console.print(
-                    f"[yellow]Loop limit reached ({self.loop_limit}). Skipping additional tool calls.[/yellow]"
-                )
+                self.console.print(Panel(
+                    f"[yellow]Your current loop limit is set to [bold]{self.loop_limit}[/bold] and has been reached. Skipping additional tool calls.[/yellow]\n"
+                    f"You will probably want to increase this limit if your model requires more tool interactions to complete tasks.\n"
+                    f"You can change the loop limit with the [bold cyan]loop-limit[/bold cyan] command.",
+                    title="[bold]Loop Limit Reached[/bold]", border_style="yellow", expand=False
+                ))
                 break
 
             loop_count += 1
@@ -597,7 +600,7 @@ class MCPClient:
             "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n"
             "• Type [bold]show-metrics[/bold] or [bold]sm[/bold] to toggle performance metrics display\n\n"
 
-            "[bold cyan]Agent Mode:[/bold cyan]\n"
+            "[bold cyan]Agent Mode:[/bold cyan] [bold magenta](New!)[/bold magenta]\n"
             "• Type [bold]loop-limit[/bold] or [bold]ll[/bold] to set the maximum tool loop iterations\n\n"
 
             "[bold cyan]MCP Servers and Tools:[/bold cyan]\n"
@@ -724,7 +727,7 @@ class MCPClient:
             if new_limit < 1:
                 raise ValueError
             self.loop_limit = new_limit
-            self.console.print(f"[green]Agent loop limit set to {self.loop_limit}![/green]")
+            self.console.print(f"[green]🤖 Agent loop limit set to {self.loop_limit}![/green]")
         except ValueError:
             self.console.print("[red]Invalid loop limit. Please enter a positive integer.[/red]")
 
