@@ -358,6 +358,7 @@ class MCPClient:
                 "model": model,
                 "messages": messages,
                 "stream": True,
+                "tools": available_tools,
                 "options": model_options
             }
 
