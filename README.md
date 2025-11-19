@@ -644,6 +644,10 @@ Some models may request multiple tool calls in a single conversation. The client
 > [!NOTE]
 > If you want to prevent using Agent Mode, simply set the loop limit to `1`.
 
+#### Agent Mode Quick Demo:
+
+[![asciicast](https://asciinema.org/a/476qpEamCX9TFQt4jNEXIgHxS.svg)](https://asciinema.org/a/476qpEamCX9TFQt4jNEXIgHxS)
+
 ## Where Can I Find More MCP Servers?
 
 You can explore a collection of MCP servers in the official [MCP Servers repository](https://github.com/modelcontextprotocol/servers).
