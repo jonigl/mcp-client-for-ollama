@@ -32,6 +32,8 @@
 - [Usage](#usage)
   - [Command-line Arguments](#command-line-arguments)
   - [Usage Examples](#usage-examples)
+  - [How Tool Calls Work](#how-tool-calls-work)
+  - ✨**NEW** [Agent Mode](#agent-mode)
 - [Interactive Commands](#interactive-commands)
   - [Tool and Server Selection](#tool-and-server-selection)
   - [Model Selection](#model-selection)
@@ -56,6 +58,7 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 
 ## Features
 
+- 🤖 **Agent Mode**: Iterative tool execution when models request multiple tool calls, with a configurable loop limit to prevent infinite loops
 - 🌐 **Multi-Server Support**: Connect to multiple MCP servers simultaneously
 - 🚀 **Multiple Transport Types**: Supports STDIO, SSE, and Streamable HTTP server connections
 - ☁️ **Ollama Cloud Support**: Works seamlessly with Ollama Cloud models for tool calling, enabling access to powerful cloud-hosted models while using local MCP tools
@@ -244,24 +247,24 @@ During chat, use these commands:
 
 | Command          | Shortcut         | Description                                         |
 |------------------|------------------|-----------------------------------------------------|
+| `clear`          | `cc`             | Clear conversation history and context              |
+| `cls`            | `clear-screen`   | Clear the terminal screen                           |
+| `context`        | `c`              | Toggle context retention                            |
+| `context-info`   | `ci`             | Display context statistics                          |
 | `help`           | `h`              | Display help and available commands                 |
-| `tools`          | `t`              | Open the tool selection interface                   |
+| `human-in-loop`  | `hil`            | Toggle Human-in-the-Loop confirmations for tool execution |
+| `load-config`    | `lc`             | Load tool and model configuration from a file       |
+| `loop-limit`     | `ll`             | Set maximum iterative tool-loop iterations (Agent Mode). Default: 3 |
 | `model`          | `m`              | List and select a different Ollama model            |
 | `model-config`   | `mc`             | Configure advanced model parameters and system prompt|
-| `context`        | `c`              | Toggle context retention                            |
-| `thinking-mode`  | `tm`             | Toggle thinking mode (e.g., gpt-oss, deepseek-r1, qwen3) |
+| `quit`, `exit`, `bye`   | `q` or `Ctrl+D`  | Exit the client                                     |
+| `reload-servers` | `rs`             | Reload all MCP servers with current configuration   |
+| `reset-config`   | `rc`             | Reset configuration to defaults (all tools enabled) |
+| `save-config`    | `sc`             | Save current tool and model configuration to a file |
+| `show-metrics`   | `sm`             | Toggle performance metrics display                  |
 | `show-thinking`  | `st`             | Toggle thinking text visibility                     |
 | `show-tool-execution` | `ste`       | Toggle tool execution display visibility            |
-| `show-metrics`   | `sm`             | Toggle performance metrics display                  |
-| `human-in-loop`  | `hil`            | Toggle Human-in-the-Loop confirmations for tool execution |
-| `clear`          | `cc`             | Clear conversation history and context              |
-| `context-info`   | `ci`             | Display context statistics                          |
-| `cls`            | `clear-screen`   | Clear the terminal screen                           |
-| `save-config`    | `sc`             | Save current tool and model configuration to a file |
-| `load-config`    | `lc`             | Load tool and model configuration from a file       |
-| `reset-config`   | `rc`             | Reset configuration to defaults (all tools enabled) |
-| `reload-servers` | `rs`             | Reload all MCP servers with current configuration   |
-| `quit`, `exit`, `bye`   | `q` or `Ctrl+D`  | Exit the client                                     |
+| `tools`          | `t`              | Open the tool selection interface                   |
 
 
 ### Tool and Server Selection
@@ -621,12 +624,29 @@ For more information about Ollama Cloud, visit the [Ollama Cloud documentation](
 1. The client sends your query to Ollama with a list of available tools
 2. If Ollama decides to use a tool, the client:
    - Displays the tool execution with formatted arguments and syntax highlighting
-   - **NEW**: Shows a Human-in-the-Loop confirmation prompt (if enabled) allowing you to review and approve the tool call
+   - Shows a Human-in-the-Loop confirmation prompt (if enabled) allowing you to review and approve the tool call
    - Extracts the tool name and arguments from the model response
    - Calls the appropriate MCP server with these arguments (only if approved or HIL is disabled)
    - Shows the tool response in a structured, easy-to-read format
-   - Sends the tool result back to Ollama for final processing
+   - Sends the tool result back to Ollama
+   - If in Agent Mode, repeats the process if the model requests more tool calls
+3. Finally, the client:
    - Displays the model's final response incorporating the tool results
+
+### Agent Mode
+
+Some models may request multiple tool calls in a single conversation. The client supports an **Agent Mode** that allows for iterative tool execution:
+- When the model requests a tool call, the client executes it and sends the result back to the model
+- This process repeats until the model provides a final answer or reaches the configured loop limit
+- You can set the maximum number of iterations using the `loop-limit` (`ll`) command
+- The default loop limit is `3` to prevent infinite loops
+
+> [!NOTE]
+> If you want to prevent using Agent Mode, simply set the loop limit to `1`.
+
+#### Agent Mode Quick Demo:
+
+[![asciicast](https://asciinema.org/a/476qpEamCX9TFQt4jNEXIgHxS.svg)](https://asciinema.org/a/476qpEamCX9TFQt4jNEXIgHxS)
 
 ## Where Can I Find More MCP Servers?
 

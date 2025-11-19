@@ -69,6 +69,8 @@ class MCPClient:
         self.show_tool_execution = True  # By default, show tool execution displays
         # Metrics display settings
         self.show_metrics = False  # By default, don't show metrics after each query
+        # Agent mode settings
+        self.loop_limit = 3  # Maximum follow-up tool loops per query
         self.default_configuration_status = False  # Track if default configuration was loaded successfully
 
         # Store server connection parameters for reloading
@@ -259,7 +261,8 @@ class MCPClient:
         }
 
         # Add thinking parameter if thinking mode is enabled and model supports it
-        if await self.supports_thinking_mode():
+        supports_thinking = await self.supports_thinking_mode()
+        if supports_thinking:
             chat_params["think"] = self.thinking_mode
 
         # Initial Ollama API call with the query and available tools
@@ -286,9 +289,26 @@ class MCPClient:
         # Update actual token count from metrics if available
         if metrics and metrics.get('eval_count'):
             self.actual_token_count += metrics['eval_count']
-        # Check if there are any tool calls in the response
-        if len(tool_calls) > 0 and self.tool_manager.get_enabled_tool_objects():
-            for tool in tool_calls:
+
+        enabled_tools = self.tool_manager.get_enabled_tool_objects()
+
+        loop_count = 0
+        pending_tool_calls = tool_calls
+
+        # Keep looping while the model requests tools and we have capacity
+        while pending_tool_calls and enabled_tools:
+            if loop_count >= self.loop_limit:
+                self.console.print(Panel(
+                    f"[yellow]Your current loop limit is set to [bold]{self.loop_limit}[/bold] and has been reached. Skipping additional tool calls.[/yellow]\n"
+                    f"You will probably want to increase this limit if your model requires more tool interactions to complete tasks.\n"
+                    f"You can change the loop limit with the [bold cyan]loop-limit[/bold cyan] command.",
+                    title="[bold]Loop Limit Reached[/bold]", border_style="yellow", expand=False
+                ))
+                break
+
+            loop_count += 1
+
+            for tool in pending_tool_calls:
                 tool_name = tool.function.name
                 tool_args = tool.function.arguments
 
@@ -338,26 +358,38 @@ class MCPClient:
                 "model": model,
                 "messages": messages,
                 "stream": True,
+                "tools": available_tools,
                 "options": model_options
             }
 
             # Add thinking parameter if thinking mode is enabled and model supports it
-            if await self.supports_thinking_mode():
+            if supports_thinking:
                 chat_params_followup["think"] = self.thinking_mode
 
             stream = await self.ollama.chat(**chat_params_followup)
 
             # Process the streaming response with thinking mode support
-            response_text, _, followup_metrics = await self.streaming_manager.process_streaming_response(
+            followup_response, pending_tool_calls, followup_metrics = await self.streaming_manager.process_streaming_response(
                 stream,
                 thinking_mode=self.thinking_mode,
                 show_thinking=self.show_thinking,
                 show_metrics=self.show_metrics
             )
 
+            messages.append({
+                "role": "assistant",
+                "content": followup_response,
+                "tool_calls": pending_tool_calls
+            })
+
             # Update actual token count from followup metrics if available
             if followup_metrics and followup_metrics.get('eval_count'):
                 self.actual_token_count += followup_metrics['eval_count']
+
+            if followup_response:
+                response_text = followup_response
+
+            enabled_tools = self.tool_manager.get_enabled_tool_objects()
 
         if not response_text:
             self.console.print("[red]No content response received.[/red]")
@@ -456,6 +488,10 @@ class MCPClient:
 
                 if query.lower() in ['show-thinking', 'st']:
                     await self.toggle_show_thinking()
+                    continue
+
+                if query.lower() in ['loop-limit', 'll']:
+                    await self.set_loop_limit()
                     continue
 
                 if query.lower() in ['show-tool-execution', 'ste']:
@@ -565,6 +601,9 @@ class MCPClient:
             "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n"
             "• Type [bold]show-metrics[/bold] or [bold]sm[/bold] to toggle performance metrics display\n\n"
 
+            "[bold cyan]Agent Mode:[/bold cyan] [bold magenta](New!)[/bold magenta]\n"
+            "• Type [bold]loop-limit[/bold] or [bold]ll[/bold] to set the maximum tool loop iterations\n\n"
+
             "[bold cyan]MCP Servers and Tools:[/bold cyan]\n"
             "• Type [bold]tools[/bold] or [bold]t[/bold] to configure tools\n"
             "• Type [bold]show-tool-execution[/bold] or [bold]ste[/bold] to toggle tool execution display\n"
@@ -671,6 +710,28 @@ class MCPClient:
         else:
             self.console.print("[cyan]🔇 Performance metrics will be hidden for a cleaner output.[/cyan]")
 
+    async def set_loop_limit(self):
+        """Configure the maximum number of follow-up tool loops per query."""
+        user_input = await self.get_user_input(f"Loop limit (current: {self.loop_limit})")
+
+        if user_input is None:
+            return
+
+        value = user_input.strip()
+
+        if not value:
+            self.console.print("[yellow]Loop limit unchanged.[/yellow]")
+            return
+
+        try:
+            new_limit = int(value)
+            if new_limit < 1:
+                raise ValueError
+            self.loop_limit = new_limit
+            self.console.print(f"[green]🤖 Agent loop limit set to {self.loop_limit}![/green]")
+        except ValueError:
+            self.console.print("[red]Invalid loop limit. Please enter a positive integer.[/red]")
+
     def clear_context(self):
         """Clear conversation history and token count"""
         original_history_length = len(self.chat_history)
@@ -695,6 +756,7 @@ class MCPClient:
             f"{thinking_status}"
             f"Tool execution display: [{'green' if self.show_tool_execution else 'red'}]{'Enabled' if self.show_tool_execution else 'Disabled'}[/{'green' if self.show_tool_execution else 'red'}]\n"
             f"Performance metrics: [{'green' if self.show_metrics else 'red'}]{'Enabled' if self.show_metrics else 'Disabled'}[/{'green' if self.show_metrics else 'red'}]\n"
+            f"Agent loop limit: [cyan]{self.loop_limit}[/cyan]\n"
             f"Human-in-the-Loop confirmations: [{'green' if self.hil_manager.is_enabled() else 'red'}]{'Enabled' if self.hil_manager.is_enabled() else 'Disabled'}[/{'green' if self.hil_manager.is_enabled() else 'red'}]\n"
             f"Conversation entries: {history_count}\n"
             f"Total tokens generated: {self.actual_token_count:,}",
@@ -729,6 +791,9 @@ class MCPClient:
             "modelSettings": {
                 "thinkingMode": self.thinking_mode,
                 "showThinking": self.show_thinking
+            },
+            "agentSettings": {
+                "loopLimit": self.loop_limit
             },
             "modelConfig": self.model_config_manager.get_config(),
             "displaySettings": {
@@ -787,6 +852,14 @@ class MCPClient:
             if "showThinking" in config_data["modelSettings"]:
                 self.show_thinking = config_data["modelSettings"]["showThinking"]
 
+        if "agentSettings" in config_data:
+            if "loopLimit" in config_data["agentSettings"]:
+                try:
+                    loop_limit = int(config_data["agentSettings"]["loopLimit"])
+                    self.loop_limit = max(1, loop_limit)
+                except (TypeError, ValueError):
+                    pass
+
         # Load model configuration if specified
         if "modelConfig" in config_data:
             self.model_config_manager.set_config(config_data["modelConfig"])
@@ -832,6 +905,17 @@ class MCPClient:
             else:
                 # Default show thinking to True if not specified
                 self.show_thinking = True
+
+        if "agentSettings" in config_data:
+            if "loopLimit" in config_data["agentSettings"]:
+                try:
+                    self.loop_limit = max(1, int(config_data["agentSettings"]["loopLimit"]))
+                except (TypeError, ValueError):
+                    self.loop_limit = 3
+            else:
+                self.loop_limit = 3
+        else:
+            self.loop_limit = 3
 
         # Reset display settings from the default configuration
         if "displaySettings" in config_data:
