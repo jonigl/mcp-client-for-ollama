@@ -150,7 +150,8 @@ class ConfigManager:
             "• All tools enabled\n"
             "• Context retention enabled\n"
             "• Thinking mode enabled\n"
-            "• Thinking text hidden",
+            "• Thinking text hidden\n"
+            "• Agent loop limit reset",
             title="Config Reset", border_style="green", expand=False
         ))
 
@@ -210,6 +211,14 @@ class ConfigManager:
                 validated["modelSettings"]["thinkingMode"] = bool(config_data["modelSettings"]["thinkingMode"])
             if "showThinking" in config_data["modelSettings"]:
                 validated["modelSettings"]["showThinking"] = bool(config_data["modelSettings"]["showThinking"])
+
+        if "agentSettings" in config_data and isinstance(config_data["agentSettings"], dict):
+            if "loopLimit" in config_data["agentSettings"]:
+                try:
+                    loop_limit = int(config_data["agentSettings"]["loopLimit"])
+                    validated["agentSettings"]["loopLimit"] = max(1, loop_limit)
+                except (TypeError, ValueError):
+                    pass
 
         if "modelConfig" in config_data and isinstance(config_data["modelConfig"], dict):
             model_config = config_data["modelConfig"]
