@@ -43,7 +43,11 @@ class MCPClient:
         # Initialize the model config manager
         self.model_config_manager = ModelConfigManager(console=self.console)
         # Initialize the tool manager with server connector reference
-        self.tool_manager = ToolManager(console=self.console, server_connector=self.server_connector)
+        self.tool_manager = ToolManager(
+            console=self.console, 
+            server_connector=self.server_connector,
+            model_config_manager=self.model_config_manager
+        )
         # Initialize the streaming manager
         self.streaming_manager = StreamingManager(console=self.console)
         # Initialize the tool display manager
@@ -314,6 +318,30 @@ class MCPClient:
 
                 # Parse server name and actual tool name from the qualified name
                 server_name, actual_tool_name = tool_name.split('.', 1) if '.' in tool_name else (None, tool_name)
+
+                # Handle built-in tools
+                if server_name == "builtin":
+                    tool_response = ""
+                    if actual_tool_name == "set_system_prompt":
+                        new_prompt = tool_args.get("prompt")
+                        if new_prompt is not None:
+                            self.model_config_manager.system_prompt = new_prompt
+                            tool_response = "System prompt updated successfully."
+                        else:
+                            tool_response = "Error: 'prompt' argument is required."
+                    elif actual_tool_name == "get_system_prompt":
+                        current_prompt = self.model_config_manager.get_system_prompt()
+                        tool_response = f"The current system prompt is: '{current_prompt}'" if current_prompt else "There is no system prompt currently set."
+                    else:
+                        tool_response = f"Error: Unknown built-in tool '{actual_tool_name}'"
+                    
+                    messages.append({
+                        "role": "tool",
+                        "content": tool_response,
+                        "tool_name": tool_name
+                    })
+                    self.tool_display_manager.display_tool_response(tool_name, tool_args, tool_response, show=self.show_tool_execution)
+                    continue
 
                 if not server_name or server_name not in self.sessions:
                     self.console.print(f"[red]Error: Unknown server for tool {tool_name}[/red]")
