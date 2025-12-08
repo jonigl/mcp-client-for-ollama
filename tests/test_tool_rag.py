@@ -107,9 +107,9 @@ def test_retrieve_relevant_tools_github_query(tool_rag, mock_tools):
     """Test retrieving tools for GitHub-related query."""
     tool_rag.embed_tools(mock_tools, use_cache=False)
     
-    results = tool_rag.retrieve_relevant_tools("show me GitHub issues", top_k=2)
+    results = tool_rag.retrieve_relevant_tools("show me GitHub issues", threshold=0.3, max_tools=2)
     
-    assert len(results) == 2
+    assert len(results) <= 2
     # GitHub tools should be top results
     assert any("github" in tool.name for tool in results)
 
@@ -118,9 +118,9 @@ def test_retrieve_relevant_tools_filesystem_query(tool_rag, mock_tools):
     """Test retrieving tools for filesystem-related query."""
     tool_rag.embed_tools(mock_tools, use_cache=False)
     
-    results = tool_rag.retrieve_relevant_tools("read a file from disk", top_k=2)
+    results = tool_rag.retrieve_relevant_tools("read a file from disk", threshold=0.3, max_tools=2)
     
-    assert len(results) == 2
+    assert len(results) <= 2
     # Filesystem tools should be top results
     assert any("filesystem" in tool.name for tool in results)
 
@@ -129,9 +129,9 @@ def test_retrieve_relevant_tools_aws_query(tool_rag, mock_tools):
     """Test retrieving tools for AWS-related query."""
     tool_rag.embed_tools(mock_tools, use_cache=False)
     
-    results = tool_rag.retrieve_relevant_tools("list my S3 buckets", top_k=2)
+    results = tool_rag.retrieve_relevant_tools("list my S3 buckets", threshold=0.3, max_tools=2)
     
-    assert len(results) == 2
+    assert len(results) <= 2
     # AWS tool should be in top results
     assert any("aws" in tool.name for tool in results)
 
@@ -142,15 +142,15 @@ def test_retrieve_before_embed_raises_error(tool_rag):
         tool_rag.retrieve_relevant_tools("test query")
 
 
-def test_retrieve_respects_top_k(tool_rag, mock_tools):
-    """Test that top_k parameter is respected."""
+def test_retrieve_respects_max_tools(tool_rag, mock_tools):
+    """Test that max_tools parameter is respected."""
     tool_rag.embed_tools(mock_tools, use_cache=False)
     
-    results = tool_rag.retrieve_relevant_tools("test query", top_k=3)
-    assert len(results) == 3
+    results = tool_rag.retrieve_relevant_tools("test query", threshold=0.0, max_tools=3)
+    assert len(results) <= 3
     
-    results = tool_rag.retrieve_relevant_tools("test query", top_k=10)
-    assert len(results) == len(mock_tools)  # Can't exceed available tools
+    results = tool_rag.retrieve_relevant_tools("test query", threshold=0.0, max_tools=10)
+    assert len(results) <= len(mock_tools)  # Can't exceed available tools
 
 
 def test_clear_cache(tool_rag, mock_tools):
