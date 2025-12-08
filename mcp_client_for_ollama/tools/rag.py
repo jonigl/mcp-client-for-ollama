@@ -149,16 +149,20 @@ class ToolRAG:
     def retrieve_relevant_tools(
         self,
         query: str,
-        top_k: int = 15
+        threshold: float = 0.65,
+        min_tools: int = 0,
+        max_tools: int = 20
     ) -> List[Tool]:
-        """Retrieve the most relevant tools for a given query.
+        """Retrieve relevant tools for a given query using similarity threshold.
 
         Args:
             query: User query to find relevant tools for
-            top_k: Number of tools to retrieve
+            threshold: Minimum similarity score (0-1) for a tool to be considered relevant
+            min_tools: Minimum number of tools to return (fallback if none meet threshold)
+            max_tools: Maximum number of tools to return (cap for performance)
 
         Returns:
-            List of the top_k most relevant Tool objects
+            List of relevant Tool objects, filtered by threshold and bounded by min/max
 
         Raises:
             ValueError: If tools haven't been embedded yet
@@ -178,12 +182,22 @@ class ToolRAG:
         # Compute similarity scores
         similarity_scores = util.cos_sim(query_embedding, self.embeddings)[0]
         
-        # Get top-k indices
-        top_k = min(top_k, len(self.tools))
-        scores, indices = torch.topk(similarity_scores, k=top_k)
+        # Get all tools with their scores, sorted by score
+        scored_tools = [(self.tools[i], float(similarity_scores[i])) for i in range(len(self.tools))]
+        scored_tools.sort(key=lambda x: x[1], reverse=True)
         
-        # Return the corresponding tools
-        return [self.tools[idx] for idx in indices]
+        # Filter by threshold
+        relevant_tools = [tool for tool, score in scored_tools if score >= threshold]
+        
+        # Apply minimum bound (fallback to top-k if none meet threshold)
+        if len(relevant_tools) < min_tools:
+            relevant_tools = [tool for tool, _ in scored_tools[:min_tools]]
+        
+        # Apply maximum bound (cap for performance)
+        if len(relevant_tools) > max_tools:
+            relevant_tools = relevant_tools[:max_tools]
+        
+        return relevant_tools
 
     def clear_cache(self) -> None:
         """Clear all cached embeddings."""
