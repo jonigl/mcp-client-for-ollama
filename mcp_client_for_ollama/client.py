@@ -82,6 +82,8 @@ class MCPClient:
         self.loop_limit = 3  # Maximum follow-up tool loops per query
         self.default_configuration_status = False  # Track if default configuration was loaded successfully
         self.abort_current_query = False  # Flag to abort the current query execution
+        self.monitor_paused = False  # Flag to pause cancellation monitoring
+        self.monitor_paused_ack = asyncio.Event()  # Event to acknowledge pause
 
         # Store server connection parameters for reloading
         self.server_connection_params = {
@@ -340,9 +342,21 @@ class MCPClient:
                 self.tool_display_manager.display_tool_execution(tool_name, tool_args, show=self.show_tool_execution)
 
                 # Request HIL confirmation if enabled
-                should_execute = await self.hil_manager.request_tool_confirmation(
-                    tool_name, tool_args
-                )
+                self.monitor_paused = True
+                # Wait for monitor to acknowledge pause if we are on a system that uses it
+                if os.name != 'nt':
+                    try:
+                        # Wait up to 1 second for the monitor to pause
+                        await asyncio.wait_for(self.monitor_paused_ack.wait(), timeout=1.0)
+                    except asyncio.TimeoutError:
+                        pass
+
+                try:
+                    should_execute = await self.hil_manager.request_tool_confirmation(
+                        tool_name, tool_args
+                    )
+                finally:
+                    self.monitor_paused = False
 
                 if not should_execute:
                     tool_response = "Tool call was skipped by user"
@@ -454,6 +468,11 @@ class MCPClient:
         if os.name == 'nt':
             # Windows implementation
             while not self.abort_current_query:
+                # Check if monitoring should be suspended (e.g. during HIL prompts)
+                if self.monitor_paused:
+                    await asyncio.sleep(0.1)
+                    continue
+
                 if msvcrt.kbhit(): # pylint: disable=E0606
                     ch = msvcrt.getch()
                     # msvcrt.getch() returns bytes, decode to string
@@ -477,8 +496,28 @@ class MCPClient:
                 tty.setcbreak(fd)  # pylint: disable=E0606
 
                 while not self.abort_current_query:
+                    # Check if monitoring should be suspended (e.g. during HIL prompts)
+                    if self.monitor_paused:
+                        # Restore terminal settings to allow other input methods to work
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+                        # Signal that we have paused
+                        self.monitor_paused_ack.set()
+
+                        # Wait until suspension is lifted
+                        while self.monitor_paused and not self.abort_current_query:
+                            await asyncio.sleep(0.1)
+
+                        # Reset ack
+                        self.monitor_paused_ack.clear()
+
+                        # Re-enable cbreak mode if we're still running
+                        if not self.abort_current_query:
+                            tty.setcbreak(fd)
+
                     # Check if there is input ready with a short timeout
-                    if select.select([sys.stdin], [], [], 0.1)[0]:
+                    # We check monitor_paused again to be safe
+                    if not self.monitor_paused and select.select([sys.stdin], [], [], 0.1)[0]:
                         ch = sys.stdin.read(1)
                         if ch.lower() == 'a':
                             self.abort_current_query = True
