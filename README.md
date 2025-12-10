@@ -375,6 +375,8 @@ The Human-in-the-Loop feature provides an additional safety layer by allowing yo
 - 🔍 **Learning**: Understand what tools the model wants to use and why
 - 🎯 **Control**: Selective execution of only the tools you approve
 - 🚫 **Prevention**: Stop unwanted tool calls from executing
+- 🔄 **Session Mode**: Auto-approve all tools for the current query session
+- 🛑 **Query Abort**: Abort entire query without saving to history
 
 #### HIL Confirmation Display
 
@@ -384,6 +386,18 @@ When HIL is enabled, you'll see a confirmation prompt before each tool execution
 
 ![ollmcp HIL confirmation screenshot](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-hil-feature.png?raw=true)
 
+#### HIL Confirmation Options
+
+When prompted, you can choose from the following options:
+
+- **y/yes**: Execute this specific tool call
+- **n/no**: Skip this tool call and continue with the query
+- **s/session**: Execute this and all subsequent tool calls for the current query without further prompts
+- **d/disable**: Permanently disable HIL confirmations (can be re-enabled with `hil` command)
+- **a/abort**: Abort the entire query immediately without saving to history
+
+> [!TIP]
+> The **session** option is particularly useful when the model needs to execute multiple tools in sequence. Instead of confirming each one individually, you can approve all tools for the current query session, then HIL will reset automatically for the next query.
 
 ### Human-in-the-Loop (HIL) Configuration
 
@@ -391,12 +405,16 @@ When HIL is enabled, you'll see a confirmation prompt before each tool execution
 - **Toggle Command**: Use `human-in-loop` or `hil` to toggle on/off
 - **Persistent Settings**: HIL preference is saved with your configuration
 - **Quick Disable**: Choose "disable" during any confirmation to turn off permanently
+- **Session Auto-Approve**: Use "session" during confirmation to approve all tools for current query
+- **Query Abort**: Use "abort" during confirmation to immediately stop the query without saving
 - **Re-enable**: Use the `hil` command anytime to turn confirmations back on
 
 **Benefits:**
 - **Enhanced Safety**: Prevent accidental or unwanted tool executions
 - **Awareness**: Understand what actions the model is attempting to perform
 - **Selective Control**: Choose which operations to allow on a case-by-case basis
+- **Flexible Workflow**: Session mode for efficient multi-tool queries, individual approval for sensitive operations
+- **Clean Abort**: Stop problematic queries immediately without polluting conversation history
 - **Peace of Mind**: Full visibility and control over automated actions
 
 ### Performance Metrics
