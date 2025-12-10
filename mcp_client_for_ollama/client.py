@@ -32,7 +32,7 @@ from .models.config_manager import ModelConfigManager
 from .tools.manager import ToolManager
 from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
-from .utils.hil_manager import HumanInTheLoopManager
+from .utils.hil_manager import HumanInTheLoopManager, AbortQueryException
 from .utils.fzf_style_completion import FZFStyleCompleter
 
 
@@ -355,6 +355,10 @@ class MCPClient:
                     should_execute = await self.hil_manager.request_tool_confirmation(
                         tool_name, tool_args
                     )
+                except AbortQueryException:
+                    # User aborted - set abort flag so monitor exits cleanly
+                    self.abort_current_query = True
+                    raise
                 finally:
                     self.monitor_paused = False
 
@@ -482,6 +486,7 @@ class MCPClient:
                         char = ''
 
                     if char == 'a':
+                        self.console.print("[bold red]🛑 Aborting query...[/bold red]")
                         self.abort_current_query = True
                         break
                 # Yield control to allow other tasks to run
@@ -489,8 +494,9 @@ class MCPClient:
         else:
             # Unix (macOS/Linux) implementation
             fd = sys.stdin.fileno()
-            old_settings = termios.tcgetattr(fd) # pylint: disable=E0606
+            old_settings = None
             try:
+                old_settings = termios.tcgetattr(fd) # pylint: disable=E0606
                 # Use cbreak mode to read characters without waiting for newline
                 # but keep signals like Ctrl+C working
                 tty.setcbreak(fd)  # pylint: disable=E0606
@@ -499,7 +505,8 @@ class MCPClient:
                     # Check if monitoring should be suspended (e.g. during HIL prompts)
                     if self.monitor_paused:
                         # Restore terminal settings to allow other input methods to work
-                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                        if old_settings:
+                            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
                         # Signal that we have paused
                         self.monitor_paused_ack.set()
@@ -514,21 +521,34 @@ class MCPClient:
                         # Re-enable cbreak mode if we're still running
                         if not self.abort_current_query:
                             tty.setcbreak(fd)
+                        else:
+                            # If aborting, just exit the loop
+                            break
 
                     # Check if there is input ready with a short timeout
                     # We check monitor_paused again to be safe
-                    if not self.monitor_paused and select.select([sys.stdin], [], [], 0.1)[0]:
-                        ch = sys.stdin.read(1)
-                        if ch.lower() == 'a':
-                            self.abort_current_query = True
-                            break
+                    if not self.monitor_paused and not self.abort_current_query:
+                        if select.select([sys.stdin], [], [], 0.1)[0]:
+                            ch = sys.stdin.read(1)
+                            if ch.lower() == 'a':
+                                self.console.print("[bold red]🛑 Aborting query...[/bold red]")
+                                self.abort_current_query = True
+                                break
                     # Yield control to allow other tasks to run
                     await asyncio.sleep(0.1)
+            except asyncio.CancelledError:
+                # Task was cancelled, just restore terminal settings and exit
+                pass
             except Exception:
+                # Silently ignore other exceptions in monitoring
                 pass
             finally:
-                # Restore terminal settings
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)  # type: ignore
+                # Always restore terminal settings on exit, if old settings exist
+                if old_settings:
+                    try:
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)  # type: ignore
+                    except Exception:
+                        pass
 
     async def display_check_for_updates(self):
         # Check for updates
@@ -659,8 +679,13 @@ class MCPClient:
                     continue
 
                 try:
-                    # Reset abort flag
+                    # Reset HIL session state for new query
+                    self.hil_manager.reset_session()
+
+                    # Reset abort flag and monitor state
                     self.abort_current_query = False
+                    self.monitor_paused = False
+                    self.monitor_paused_ack.clear()
 
                     # Create tasks for query processing and cancellation monitoring
                     query_task = asyncio.create_task(self.process_query(query))
@@ -674,23 +699,27 @@ class MCPClient:
                         )
 
                         if monitor_task in done:
-                            # Monitor finished, meaning 'a' was pressed
-                            self.console.print("\n[yellow]Generation aborted by user.[/yellow]")
+                            # Monitor finished, meaning 'a' was pressed during streaming
+                            self.console.print("\n[yellow]Query aborted. Nothing saved to history.[/yellow]")
                             query_task.cancel()
                             try:
                                 await query_task
-                            except asyncio.CancelledError:
+                            except (asyncio.CancelledError, AbortQueryException):
                                 pass
                         else:
-                            # Query finished normally, check for exceptions
-                            await query_task
+                            # Query finished - check if it raised an exception
+                            try:
+                                await query_task
+                            except AbortQueryException:
+                                # User aborted the query via HIL - don't save to history
+                                self.console.print("[yellow]Query aborted. Nothing saved to history.[/yellow]")
 
                     except KeyboardInterrupt:
                         self.abort_current_query = True
                         query_task.cancel()
                         try:
                             await query_task
-                        except asyncio.CancelledError:
+                        except (asyncio.CancelledError, AbortQueryException):
                             pass
                     finally:
                         # Ensure monitor task is cancelled when query finishes or is aborted
@@ -740,11 +769,11 @@ class MCPClient:
             "[bold cyan]Model:[/bold cyan]\n"
             "• Type [bold]model[/bold] or [bold]m[/bold] to select a model\n"
             "• Type [bold]model-config[/bold] or [bold]mc[/bold] to configure system prompt and model parameters\n"
-            f"• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode\n"
+            "• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode\n"
             "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n"
             "• Type [bold]show-metrics[/bold] or [bold]sm[/bold] to toggle performance metrics display\n\n"
 
-            "[bold cyan]Agent Mode:[/bold cyan] [bold magenta](New!)[/bold magenta]\n"
+            "[bold cyan]Agent Mode:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
             "• Type [bold]loop-limit[/bold] or [bold]ll[/bold] to set the maximum tool loop iterations\n\n"
 
             "[bold cyan]MCP Servers and Tools:[/bold cyan]\n"

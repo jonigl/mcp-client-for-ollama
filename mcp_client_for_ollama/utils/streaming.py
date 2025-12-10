@@ -44,7 +44,7 @@ class StreamingManager:
             thinking_started = False
             # Show initial working spinner until first chunk arrives
             first_chunk = True
-            self.console.print("\n[bold magenta](New!)[/bold magenta] [yellow]You can press 'a' to abort generation.[/yellow]\n")
+            self.console.print("\n[bold bright_magenta](New!)[/bold bright_magenta] [yellow]You can press 'a' to abort generation.[/yellow]\n")
             status = self.console.status("[cyan]working...", spinner="dots")
             status.start()
 
