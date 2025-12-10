@@ -8,6 +8,14 @@ from rich.prompt import Prompt
 from rich.console import Console
 
 
+class AbortQueryException(Exception):
+    """Exception raised when user chooses to abort the current query.
+
+    This signals that the query should be stopped and not saved to history.
+    """
+    pass
+
+
 class HumanInTheLoopManager:
     """Manages Human-in-the-Loop confirmations for tool execution"""
 
@@ -20,6 +28,10 @@ class HumanInTheLoopManager:
         self.console = console
         # Store HIL settings locally since there's no persistent config object
         self._hil_enabled = True  # Default to enabled
+        # Per-query/session option to auto-execute tools without asking for
+        # the remainder of the current model/query process. This is not
+        # persisted and resets between queries.
+        self._session_auto_execute = False
 
     def is_enabled(self) -> bool:
         """Check if HIL confirmations are enabled"""
@@ -29,8 +41,6 @@ class HumanInTheLoopManager:
         """Toggle HIL confirmations"""
         if self.is_enabled():
             self.set_enabled(False)
-            self.console.print("[yellow]🤖 HIL confirmations disabled[/yellow]")
-            self.console.print("[dim]Tool calls will proceed automatically without confirmation.[/dim]")
         else:
             self.set_enabled(True)
             self.console.print("[green]🧑‍💻 HIL confirmations enabled[/green]")
@@ -39,6 +49,22 @@ class HumanInTheLoopManager:
     def set_enabled(self, enabled: bool) -> None:
         """Set HIL enabled state (used when loading from config)"""
         self._hil_enabled = enabled
+
+    def set_session_auto_execute(self, enabled: bool) -> None:
+        """Enable or disable session-level auto-execution.
+
+        When enabled, tool confirmations will be skipped for the remainder
+        of the current query/process session. This is not persisted.
+        """
+        self._session_auto_execute = enabled
+
+    def reset_session(self) -> None:
+        """Reset any per-query/session HIL state.
+
+        Call this between model/query process loops to ensure session
+        options don't leak into subsequent queries.
+        """
+        self._session_auto_execute = False
 
     async def request_tool_confirmation(self, tool_name: str, tool_args: dict) -> bool:
         """
@@ -53,7 +79,12 @@ class HumanInTheLoopManager:
             bool: should_execute
         """
         if not self.is_enabled():
-            return True, False  # Execute if HIL is disabled
+            return True  # Execute if HIL is disabled
+
+        # If the session-level auto-execute has been enabled earlier in
+        # this query/process, skip prompting and execute automatically.
+        if self._session_auto_execute:
+            return True
 
         self.console.print("\n[bold yellow]🧑‍💻 Human-in-the-Loop Confirmation[/bold yellow]")
 
@@ -79,7 +110,7 @@ class HumanInTheLoopManager:
 
         choice = Prompt.ask(
             "[bold]What would you like to do?[/bold]",
-            choices=["y", "yes", "n", "no", "disable"],
+            choices=["y", "yes", "n", "no", "s", "session", "d", "disable", "a", "abort"],
             default="y",
             show_choices=False
         ).lower()
@@ -91,7 +122,9 @@ class HumanInTheLoopManager:
         self.console.print("[bold cyan]Options:[/bold cyan]")
         self.console.print("  [green]y/yes[/green] - Execute the tool call")
         self.console.print("  [red]n/no[/red] - Skip this tool call")
-        self.console.print("  [yellow]disable[/yellow] - Disable HIL confirmations permanently")
+        self.console.print("  [magenta]s/session[/magenta] - Execute without asking for this session")
+        self.console.print("  [yellow]d/disable[/yellow] - Disable HIL confirmations permanently")
+        self.console.print("  [bold red]a/abort[/bold red] - Abort this query (won't save to history)")
         self.console.print()
 
     def _handle_user_choice(self, choice: str) -> bool:
@@ -104,20 +137,32 @@ class HumanInTheLoopManager:
         Returns:
             bool: should_execute
         """
-        if choice == "disable":
-            self.toggle()  # Disable HIL
+        if choice in ["d", "disable"]:
+            # Notify user that it can be re-enabled
+            self.console.print("\n[yellow]Tool calls will proceed automatically without confirmation.[/yellow]")
+            self.console.print("[cyan]You can re-enable this with the command: human-in-loop or hil[/cyan]\n")
 
-            self.console.print("[dim]You can re-enable this with the command: human-in-loop or hil[/dim]")
-
-            # Ask about current tool call
+            # Ask for confirmation to disable permanently
             execute_current = Prompt.ask(
-                "[bold]Execute this current tool call?[/bold]",
+                "[bold]Are you sure you want to disable HIL confirmations permanently?[/bold]",
                 choices=["y", "yes", "n", "no"],
                 default="y"
             ).lower()
 
             should_execute = execute_current in ["y", "yes"]
+            if should_execute:
+                self.toggle()  # Disable HIL
+                self.console.print("[yellow]🤖 HIL confirmations disabled[/yellow]")
             return should_execute
+
+        elif choice in ["s", "session"]:
+            self.set_session_auto_execute(True)
+            self.console.print("[magenta]🧑‍💻 Tool calls will proceed automatically for the remainder of this session.[/magenta]")
+            return True
+
+        elif choice in ["a", "abort"]:
+            self.console.print("[bold red]🛑 Aborting query...[/bold red]")
+            raise AbortQueryException("Query aborted by user during tool confirmation")
 
         elif choice in ["n", "no"]:
             self.console.print("[yellow]⏭️  Tool call skipped[/yellow]")
