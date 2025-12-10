@@ -83,6 +83,7 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 - 🔌 **Plug-and-Play**: Works immediately with standard MCP-compliant tool servers
 - 🔔 **Update Notifications**: Automatically detects when a new version is available
 - 🖥️ **Modern CLI with Typer**: Grouped options, shell autocompletion, and improved help output
+- ⏹️ **Abort Generation**: You can abort model generation at any time by pressing 'a' during response streaming
 
 ## Requirements
 
@@ -247,6 +248,7 @@ During chat, use these commands:
 
 | Command          | Shortcut         | Description                                         |
 |------------------|------------------|-----------------------------------------------------|
+| `abort`          | `a`              | While model is generating, abort the current response generation |
 | `clear`          | `cc`             | Clear conversation history and context              |
 | `cls`            | `clear-screen`   | Clear the terminal screen                           |
 | `context`        | `c`              | Toggle context retention                            |

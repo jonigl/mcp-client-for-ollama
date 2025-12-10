@@ -1,6 +1,15 @@
 """MCP Client for Ollama - A TUI client for interacting with Ollama models and MCP servers"""
 import asyncio
 import os
+import sys
+import select
+# Only import Unix-specific modules on non-Windows systems
+if os.name != 'nt':
+    import tty # pylint: disable=E0401
+    import termios # pylint: disable=E0401
+else:
+    import msvcrt # pylint: disable=E0401
+
 from contextlib import AsyncExitStack
 from typing import List, Optional
 
@@ -72,6 +81,7 @@ class MCPClient:
         # Agent mode settings
         self.loop_limit = 3  # Maximum follow-up tool loops per query
         self.default_configuration_status = False  # Track if default configuration was loaded successfully
+        self.abort_current_query = False  # Flag to abort the current query execution
 
         # Store server connection parameters for reloading
         self.server_connection_params = {
@@ -275,8 +285,12 @@ class MCPClient:
             stream,
             thinking_mode=self.thinking_mode,
             show_thinking=self.show_thinking,
-            show_metrics=self.show_metrics
+            show_metrics=self.show_metrics,
+            cancellation_check=lambda: self.abort_current_query
         )
+
+        if self.abort_current_query:
+            return ""
 
         # response_text will be either empty or contain a response
         # Append the assistant's response to messages helps maintain context and fix ollama cloud tool call issues
@@ -297,6 +311,9 @@ class MCPClient:
 
         # Keep looping while the model requests tools and we have capacity
         while pending_tool_calls and enabled_tools:
+            if self.abort_current_query:
+                break
+
             if loop_count >= self.loop_limit:
                 self.console.print(Panel(
                     f"[yellow]Your current loop limit is set to [bold]{self.loop_limit}[/bold] and has been reached. Skipping additional tool calls.[/yellow]\n"
@@ -373,8 +390,12 @@ class MCPClient:
                 stream,
                 thinking_mode=self.thinking_mode,
                 show_thinking=self.show_thinking,
-                show_metrics=self.show_metrics
+                show_metrics=self.show_metrics,
+                cancellation_check=lambda: self.abort_current_query
             )
+
+            if self.abort_current_query:
+                break
 
             messages.append({
                 "role": "assistant",
@@ -391,12 +412,13 @@ class MCPClient:
 
             enabled_tools = self.tool_manager.get_enabled_tool_objects()
 
-        if not response_text:
+        if not response_text and not self.abort_current_query:
             self.console.print("[red]No content response received.[/red]")
             response_text = ""
 
         # Append query and response to chat history
-        self.chat_history.append({"query": query, "response": response_text})
+        if not self.abort_current_query:
+            self.chat_history.append({"query": query, "response": response_text})
 
         return response_text
 
@@ -426,6 +448,48 @@ class MCPClient:
             return "quit"
         except EOFError:
             return "quit"
+
+    async def monitor_cancellation(self):
+        """Monitor for 'a' key press to cancel execution"""
+        if os.name == 'nt':
+            # Windows implementation
+            while not self.abort_current_query:
+                if msvcrt.kbhit(): # pylint: disable=E0606
+                    ch = msvcrt.getch()
+                    # msvcrt.getch() returns bytes, decode to string
+                    try:
+                        char = ch.decode('utf-8').lower()
+                    except UnicodeDecodeError:
+                        char = ''
+
+                    if char == 'a':
+                        self.abort_current_query = True
+                        break
+                # Yield control to allow other tasks to run
+                await asyncio.sleep(0.1)
+        else:
+            # Unix (macOS/Linux) implementation
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd) # pylint: disable=E0606
+            try:
+                # Use cbreak mode to read characters without waiting for newline
+                # but keep signals like Ctrl+C working
+                tty.setcbreak(fd)  # pylint: disable=E0606
+
+                while not self.abort_current_query:
+                    # Check if there is input ready with a short timeout
+                    if select.select([sys.stdin], [], [], 0.1)[0]:
+                        ch = sys.stdin.read(1)
+                        if ch.lower() == 'a':
+                            self.abort_current_query = True
+                            break
+                    # Yield control to allow other tasks to run
+                    await asyncio.sleep(0.1)
+            except Exception:
+                pass
+            finally:
+                # Restore terminal settings
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)  # type: ignore
 
     async def display_check_for_updates(self):
         # Check for updates
@@ -556,7 +620,47 @@ class MCPClient:
                     continue
 
                 try:
-                    await self.process_query(query)
+                    # Reset abort flag
+                    self.abort_current_query = False
+
+                    # Create tasks for query processing and cancellation monitoring
+                    query_task = asyncio.create_task(self.process_query(query))
+                    monitor_task = asyncio.create_task(self.monitor_cancellation())
+
+                    try:
+                        # Wait for either the query to finish or the monitor to signal cancellation
+                        done, pending = await asyncio.wait(
+                            [query_task, monitor_task],
+                            return_when=asyncio.FIRST_COMPLETED
+                        )
+
+                        if monitor_task in done:
+                            # Monitor finished, meaning 'a' was pressed
+                            self.console.print("\n[yellow]Generation aborted by user.[/yellow]")
+                            query_task.cancel()
+                            try:
+                                await query_task
+                            except asyncio.CancelledError:
+                                pass
+                        else:
+                            # Query finished normally, check for exceptions
+                            await query_task
+
+                    except KeyboardInterrupt:
+                        self.abort_current_query = True
+                        query_task.cancel()
+                        try:
+                            await query_task
+                        except asyncio.CancelledError:
+                            pass
+                    finally:
+                        # Ensure monitor task is cancelled when query finishes or is aborted
+                        monitor_task.cancel()
+                        try:
+                            await monitor_task
+                        except asyncio.CancelledError:
+                            pass
+
                 except ollama.ResponseError as e:
                     # Extract error message without the traceback
                     error_msg = str(e)
@@ -622,9 +726,10 @@ class MCPClient:
 
 
             "[bold cyan]Basic Commands:[/bold cyan]\n"
+            "• Press [bold]a[/bold] during model generation to abort\n"
             "• Type [bold]help[/bold] or [bold]h[/bold] to show this help message\n"
             "• Type [bold]clear-screen[/bold] or [bold]cls[/bold] to clear the terminal screen\n"
-            "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], [bold]bye[/bold], or [bold]Ctrl+D[/bold] to exit the client\n",
+            "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], [bold]bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n",
             title="[bold]Help[/bold]", border_style="yellow", expand=False))
 
     def toggle_context_retention(self):

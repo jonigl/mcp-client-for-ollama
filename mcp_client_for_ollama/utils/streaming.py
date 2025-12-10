@@ -18,7 +18,7 @@ class StreamingManager:
         """
         self.console = console
 
-    async def process_streaming_response(self, stream, print_response=True, thinking_mode=False, show_thinking=True, show_metrics=False):
+    async def process_streaming_response(self, stream, print_response=True, thinking_mode=False, show_thinking=True, show_metrics=False, cancellation_check=None):
         """Process a streaming response from Ollama with status spinner and content updates
 
         Args:
@@ -27,6 +27,7 @@ class StreamingManager:
             thinking_mode: Whether to handle thinking mode responses
             show_thinking: Whether to keep thinking text visible in final output
             show_metrics: Whether to display performance metrics when streaming completes
+            cancellation_check: Optional callable that returns True if processing should be cancelled
 
         Returns:
             str: Accumulated response text
@@ -43,69 +44,78 @@ class StreamingManager:
             thinking_started = False
             # Show initial working spinner until first chunk arrives
             first_chunk = True
+            self.console.print("[bold magenta](New!)[/bold magenta] [yellow]You can press 'a' to abort generation.[/yellow]")
             status = self.console.status("[cyan]working...", spinner="dots")
             status.start()
 
-            async for chunk in stream:
-                # Capture metrics when chunk is done
-                extracted_metrics = extract_metrics(chunk)
-                if extracted_metrics:
-                    metrics = extracted_metrics
 
-                # Handle thinking content
-                if (thinking_mode and hasattr(chunk, 'message') and
-                    hasattr(chunk.message, 'thinking') and chunk.message.thinking):
-                    # Stop spinner on first thinking chunk ONLY if show_thinking is True
-                    if first_chunk and show_thinking:
-                        status.stop()
-                        first_chunk = False
+            try:
+                async for chunk in stream:
+                    # Check for cancellation
+                    if cancellation_check and cancellation_check():
+                        self.console.print("\n[yellow]Generation aborted by user.[/yellow]")
+                        return accumulated_text, tool_calls, metrics
 
-                    if not thinking_content:
-                        thinking_content = "🤔 **Thinking:**\n\n"
-                        if not thinking_started and show_thinking:
-                            self.console.print(Markdown("🤔 **Thinking:**\n"))
+                    # Capture metrics when chunk is done
+                    extracted_metrics = extract_metrics(chunk)
+                    if extracted_metrics:
+                        metrics = extracted_metrics
+
+                    # Handle thinking content
+                    if (thinking_mode and hasattr(chunk, 'message') and
+                        hasattr(chunk.message, 'thinking') and chunk.message.thinking):
+                        # Stop spinner on first thinking chunk ONLY if show_thinking is True
+                        if first_chunk and show_thinking:
+                            status.stop()
+                            first_chunk = False
+
+                        if not thinking_content:
+                            thinking_content = "🤔 **Thinking:**\n\n"
+                            if not thinking_started and show_thinking:
+                                self.console.print(Markdown("🤔 **Thinking:**\n"))
+                                self.console.print(Markdown("---"))
+                                self.console.print()
+                                thinking_started = True
+                        thinking_content += chunk.message.thinking
+                        # Print thinking content as plain text only if show_thinking is True
+                        if show_thinking:
+                            self.console.print(chunk.message.thinking, end="")
+
+                    # Handle regular content
+                    if (hasattr(chunk, 'message') and hasattr(chunk.message, 'content') and
+                        chunk.message.content):
+                        # Stop spinner on first content chunk (always)
+                        if first_chunk:
+                            status.stop()
+                            first_chunk = False
+
+                        # Print separator and Answer label when transitioning from thinking to content
+                        if not accumulated_text:
+                            self.console.print()
+                            self.console.print(Markdown("📝 **Answer:**"))
                             self.console.print(Markdown("---"))
                             self.console.print()
-                            thinking_started = True
-                    thinking_content += chunk.message.thinking
-                    # Print thinking content as plain text only if show_thinking is True
-                    if show_thinking:
-                        self.console.print(chunk.message.thinking, end="")
 
-                # Handle regular content
-                if (hasattr(chunk, 'message') and hasattr(chunk.message, 'content') and
-                    chunk.message.content):
-                    # Stop spinner on first content chunk (always)
-                    if first_chunk:
-                        status.stop()
-                        first_chunk = False
+                        accumulated_text += chunk.message.content
 
-                    # Print separator and Answer label when transitioning from thinking to content
-                    if not accumulated_text:
-                        self.console.print()
-                        self.console.print(Markdown("📝 **Answer:**"))
-                        self.console.print(Markdown("---"))
-                        self.console.print()
+                        # Print only new content as plain text (will render full markdown at end)
+                        self.console.print(chunk.message.content, end="")
 
-                    accumulated_text += chunk.message.content
+                    # Handle tool calls
+                    if (hasattr(chunk, 'message') and hasattr(chunk.message, 'tool_calls') and
+                        chunk.message.tool_calls):
+                        # Stop spinner on first tool call chunk (always) - just in case no content arrives
+                        if first_chunk:
+                            status.stop()
+                            first_chunk = False
 
-                    # Print only new content as plain text (will render full markdown at end)
-                    self.console.print(chunk.message.content, end="")
-
-                # Handle tool calls
-                if (hasattr(chunk, 'message') and hasattr(chunk.message, 'tool_calls') and
-                    chunk.message.tool_calls):
-                    # Stop spinner on first tool call chunk (always) - just in case no content arrives
-                    if first_chunk:
-                        status.stop()
-                        first_chunk = False
-
-                    for tool in chunk.message.tool_calls:
-                        tool_calls.append(tool)
+                        for tool in chunk.message.tool_calls:
+                            tool_calls.append(tool)
+            finally:
+                status.stop()
 
             # Print newline at end
             self.console.print()
-
             # Render final markdown content properly
             if accumulated_text:
                 # Render in markdown format and state this
@@ -119,6 +129,10 @@ class StreamingManager:
         else:
             # Silent processing without display
             async for chunk in stream:
+                # Check for cancellation
+                if cancellation_check and cancellation_check():
+                    return accumulated_text, tool_calls, metrics
+
                 # Capture metrics when chunk is done
                 extracted_metrics = extract_metrics(chunk)
                 if extracted_metrics:
