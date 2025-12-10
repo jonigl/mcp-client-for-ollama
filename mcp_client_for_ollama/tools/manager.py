@@ -20,36 +20,85 @@ class ToolManager:
     an interactive interface, and organizing tools by server.
     """
 
-    def __init__(self, console: Optional[Console] = None, server_connector=None):
+    def __init__(self, console: Optional[Console] = None, server_connector=None, model_config_manager=None):
         """Initialize the ToolManager.
 
         Args:
             console: Rich console for output (optional)
             server_connector: Server connector to notify of tool state changes (optional)
+            model_config_manager: Model config manager to modify model settings (optional)
         """
         self.console = console or Console()
         self.available_tools = []
         self.enabled_tools = {}
         self.server_connector = server_connector
+        self.model_config_manager = model_config_manager
+        self._create_builtin_tools()
+
+    def _create_builtin_tools(self):
+        """Create and register built-in tools."""
+        if not self.model_config_manager:
+            return
+
+        set_prompt_tool = Tool(
+            name="builtin.set_system_prompt",
+            description="Update the system prompt for the assistant. Use this to change your instructions or persona.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": "The new system prompt. Use a concise and clear prompt to define the persona and instructions for the AI assistant."
+                    }
+                },
+                "required": ["prompt"]
+            }
+        )
+        
+        get_prompt_tool = Tool(
+            name="builtin.get_system_prompt",
+            description="Get the current system prompt for the assistant.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            }
+        )
+
+        self.available_tools.append(set_prompt_tool)
+        self.available_tools.append(get_prompt_tool)
+        # Enable them by default
+        self.enabled_tools[set_prompt_tool.name] = True
+        self.enabled_tools[get_prompt_tool.name] = True
 
     def set_available_tools(self, tools: List[Tool]) -> None:
-        """Set the available tools.
+        """Set the available tools from servers, preserving built-in tools.
 
         Args:
-            tools: List of available tools
+            tools: List of available tools from servers
         """
-        self.available_tools = tools
+        # Filter out any existing non-builtin tools, keeping the built-in ones that were added during initialization.
+        self.available_tools = [t for t in self.available_tools if t.name.startswith('builtin.')]
+        # Add the new tools from the server.
+        self.available_tools.extend(tools)
 
-    def set_enabled_tools(self, enabled_tools: Dict[str, bool]) -> None:
-        """Set the enabled status of tools.
+    def set_enabled_tools(self, server_enabled_tools: Dict[str, bool]) -> None:
+        """Set the enabled status of tools from servers, preserving built-in tool statuses.
 
         Args:
-            enabled_tools: Dictionary mapping tool names to enabled status
+            server_enabled_tools: Dictionary mapping tool names to enabled status from servers
         """
-        self.enabled_tools = enabled_tools
+        # Preserve the enabled status of built-in tools that were set during init
+        builtin_enabled = {
+            name: status for name, status in self.enabled_tools.items() if name.startswith('builtin.')
+        }
 
-        # Notify server connector of tool status changes
-        self._notify_server_connector_batch(enabled_tools)
+        # The new state is the server tools...
+        self.enabled_tools = server_enabled_tools
+        # ...updated with the built-in tools.
+        self.enabled_tools.update(builtin_enabled)
+
+        # Notify server connector of tool status changes for ONLY the server tools
+        self._notify_server_connector_batch(server_enabled_tools)
 
     # Helper methods for common operations
     def _notify_server_connector(self, tool_name: str, enabled: bool) -> None:
@@ -196,7 +245,8 @@ class ToolManager:
             server_status = "[yellow]~[/yellow]"  # Some enabled
 
         # Create panel title with server number, status and name
-        panel_title = f"[bold orange3]S{server_idx+1}. {server_status} {server_name}[/bold orange3]"
+        display_server_name = "Built-in Tools" if server_name == "builtin" else server_name
+        panel_title = f"[bold orange3]S{server_idx+1}. {server_status} {display_server_name}[/bold orange3]"
         # Create panel subtitle with tools count
         panel_subtitle = f"[green]{enabled_count}/{total_count} tools enabled[/green]"
 
