@@ -30,6 +30,7 @@ from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
 from .tools.manager import ToolManager
+from .tools.rag import ToolRAG
 from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
 from .utils.hil_manager import HumanInTheLoopManager, AbortQueryException
@@ -39,7 +40,8 @@ from .utils.fzf_style_completion import FZFStyleCompleter
 class MCPClient:
     """Main client class for interacting with Ollama and MCP servers"""
 
-    def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST):
+    def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST, enable_tool_rag: bool = False, 
+                 tool_rag_threshold: float = 0.65, tool_rag_min_tools: int = 0, tool_rag_max_tools: int = 20):
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
         self.ollama = ollama.AsyncClient(host=host)
@@ -57,6 +59,12 @@ class MCPClient:
         self.streaming_manager = StreamingManager(console=self.console)
         # Initialize the tool display manager
         self.tool_display_manager = ToolDisplayManager(console=self.console)
+        # Initialize Tool RAG if enabled
+        self.enable_tool_rag = enable_tool_rag
+        self.tool_rag_threshold = tool_rag_threshold
+        self.tool_rag_min_tools = tool_rag_min_tools
+        self.tool_rag_max_tools = tool_rag_max_tools
+        self.tool_rag: Optional[ToolRAG] = ToolRAG() if enable_tool_rag else None
         # Initialize the HIL manager
         self.hil_manager = HumanInTheLoopManager(console=self.console)
         # Store server and tool data
@@ -164,6 +172,12 @@ class MCPClient:
         # Set up the tool manager with the available tools and their enabled status
         self.tool_manager.set_available_tools(available_tools)
         self.tool_manager.set_enabled_tools(enabled_tools)
+        
+        # Embed tools for RAG if enabled
+        if self.enable_tool_rag and self.tool_rag and available_tools:
+            self.console.print("[dim]Embedding tools for intelligent filtering...[/dim]")
+            self.tool_rag.embed_tools(available_tools)
+            self.console.print(f"[green]✓ Tool RAG enabled with {len(available_tools)} tools[/green]")
 
     def select_tools(self):
         """Let the user select which tools to enable using interactive prompts with server-based grouping"""
@@ -244,6 +258,22 @@ class MCPClient:
 
         # Get enabled tools from the tool manager
         enabled_tool_objects = self.tool_manager.get_enabled_tool_objects()
+        
+        # Apply Tool RAG filtering if enabled
+        if self.enable_tool_rag and self.tool_rag and enabled_tool_objects:
+            try:
+                enabled_tool_objects = self.tool_rag.retrieve_relevant_tools(
+                    query,
+                    threshold=self.tool_rag_threshold,
+                    min_tools=self.tool_rag_min_tools,
+                    max_tools=self.tool_rag_max_tools
+                )
+                # Filter to only enabled tools
+                enabled_tools_set = set(t.name for t in self.tool_manager.get_enabled_tool_objects())
+                enabled_tool_objects = [t for t in enabled_tool_objects if t.name in enabled_tools_set]
+            except Exception as e:
+                self.console.print(f"[yellow]Warning: Tool RAG filtering failed ({e}), using all enabled tools[/yellow]")
+                enabled_tool_objects = self.tool_manager.get_enabled_tool_objects()
 
         if not enabled_tool_objects:
             self.console.print("[yellow]Warning: No tools are enabled. Model will respond without tool access.[/yellow]")
@@ -1199,6 +1229,28 @@ def main(
         help="Ollama host URL",
         rich_help_panel="Ollama Configuration"
     ),
+    
+    # Tool RAG Configuration
+    enable_tool_rag: bool = typer.Option(
+        False, "--enable-tool-rag",
+        help="Enable intelligent tool filtering using semantic search (recommended for 50+ tools)",
+        rich_help_panel="Tool RAG Configuration"
+    ),
+    tool_rag_threshold: float = typer.Option(
+        0.65, "--tool-rag-threshold",
+        help="Minimum similarity score (0-1) for a tool to be considered relevant",
+        rich_help_panel="Tool RAG Configuration"
+    ),
+    tool_rag_min_tools: int = typer.Option(
+        0, "--tool-rag-min-tools",
+        help="Minimum number of tools to send (fallback if none meet threshold)",
+        rich_help_panel="Tool RAG Configuration"
+    ),
+    tool_rag_max_tools: int = typer.Option(
+        20, "--tool-rag-max-tools",
+        help="Maximum number of tools to send (performance cap)",
+        rich_help_panel="Tool RAG Configuration"
+    ),
 
     # General Options
     version: Optional[bool] = typer.Option(
@@ -1217,15 +1269,19 @@ def main(
         auto_discovery = True
 
     # Run the async main function
-    asyncio.run(async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host))
+    asyncio.run(async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host, 
+                          enable_tool_rag, tool_rag_threshold, tool_rag_min_tools, tool_rag_max_tools))
 
-async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host):
+async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host, 
+                    enable_tool_rag, tool_rag_threshold, tool_rag_min_tools, tool_rag_max_tools):
     """Asynchronous main function to run the MCP Client for Ollama"""
 
     console = Console()
 
     # Create a temporary client to check if Ollama is running
-    client = MCPClient(model=model, host=host)
+    client = MCPClient(model=model, host=host, enable_tool_rag=enable_tool_rag, 
+                      tool_rag_threshold=tool_rag_threshold, tool_rag_min_tools=tool_rag_min_tools, 
+                      tool_rag_max_tools=tool_rag_max_tools)
     if not await client.model_manager.check_ollama_running():
         console.print(Panel(
             "[bold red]Error: Ollama is not running![/bold red]\n\n"
