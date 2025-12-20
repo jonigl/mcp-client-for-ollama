@@ -42,11 +42,14 @@ def default_config() -> dict:
             "frequency_penalty": None,
             "stop": None,
             "num_ctx": None,
-            "num_batch" : None
+            "num_batch" : None,
+            "logprobs": None,
+            "top_logprobs": None
         },
         "displaySettings": {
             "showToolExecution": True,
-            "showMetrics": False
+            "showMetrics": False,
+            "showLogprobs": False
         },
         "hilSettings": {
             "enabled": True
