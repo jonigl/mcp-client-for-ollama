@@ -33,11 +33,13 @@ class StreamingManager:
             str: Accumulated response text
             list: Tool calls if any
             dict: Metrics if captured, None otherwise
+            list: Logprobs data if available, None otherwise
         """
         accumulated_text = ""
         thinking_content = ""
         tool_calls = []
         metrics = None  # Store metrics from final chunk
+        logprobs_data = []  # Store logprobs from chunks
 
         if print_response:
             # Thinking header flag
@@ -54,12 +56,16 @@ class StreamingManager:
                     # Check for cancellation
                     if cancellation_check and cancellation_check():
                         self.console.print("\n[yellow]Generation aborted by user.[/yellow]")
-                        return accumulated_text, tool_calls, metrics
+                        return accumulated_text, tool_calls, metrics, logprobs_data
 
                     # Capture metrics when chunk is done
                     extracted_metrics = extract_metrics(chunk)
                     if extracted_metrics:
                         metrics = extracted_metrics
+
+                    # Capture logprobs if present (at response level, not message level)
+                    if hasattr(chunk, 'logprobs') and chunk.logprobs:
+                        logprobs_data.extend(chunk.logprobs)
 
                     # Handle thinking content
                     if (thinking_mode and hasattr(chunk, 'message') and
@@ -131,12 +137,16 @@ class StreamingManager:
             async for chunk in stream:
                 # Check for cancellation
                 if cancellation_check and cancellation_check():
-                    return accumulated_text, tool_calls, metrics
+                    return accumulated_text, tool_calls, metrics, logprobs_data
 
                 # Capture metrics when chunk is done
                 extracted_metrics = extract_metrics(chunk)
                 if extracted_metrics:
                     metrics = extracted_metrics
+
+                # Capture logprobs if present (at response level, not message level)
+                if hasattr(chunk, 'logprobs') and chunk.logprobs:
+                    logprobs_data.extend(chunk.logprobs)
 
                 if (thinking_mode and hasattr(chunk, 'message') and
                     hasattr(chunk.message, 'thinking') and chunk.message.thinking):
@@ -155,4 +165,4 @@ class StreamingManager:
         if show_metrics and metrics:
             display_metrics(self.console, metrics)
 
-        return accumulated_text, tool_calls, metrics
+        return accumulated_text, tool_calls, metrics, logprobs_data

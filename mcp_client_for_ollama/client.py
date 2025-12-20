@@ -34,6 +34,7 @@ from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
 from .utils.hil_manager import HumanInTheLoopManager, AbortQueryException
 from .utils.fzf_style_completion import FZFStyleCompleter
+from .utils.logprobs_display import display_logprobs
 
 
 class MCPClient:
@@ -78,6 +79,8 @@ class MCPClient:
         self.show_tool_execution = True  # By default, show tool execution displays
         # Metrics display settings
         self.show_metrics = False  # By default, don't show metrics after each query
+        # Logprobs display settings
+        self.show_logprobs = False  # By default, don't show logprobs after each query
         # Agent mode settings
         self.loop_limit = 3  # Maximum follow-up tool loops per query
         self.default_configuration_status = False  # Track if default configuration was loaded successfully
@@ -277,13 +280,20 @@ class MCPClient:
         if supports_thinking:
             chat_params["think"] = self.thinking_mode
 
+        # Add logprobs parameters if configured
+        if self.model_config_manager.logprobs is not None:
+            chat_params["logprobs"] = self.model_config_manager.logprobs
+        if self.model_config_manager.top_logprobs is not None:
+            chat_params["top_logprobs"] = self.model_config_manager.top_logprobs
+
         # Initial Ollama API call with the query and available tools
         stream = await self.ollama.chat(**chat_params)
 
         # Process the streaming response with thinking mode support
         response_text = ""
         tool_calls = []
-        response_text, tool_calls, metrics = await self.streaming_manager.process_streaming_response(
+        logprobs_data = []
+        response_text, tool_calls, metrics, logprobs_data = await self.streaming_manager.process_streaming_response(
             stream,
             thinking_mode=self.thinking_mode,
             show_thinking=self.show_thinking,
@@ -293,6 +303,10 @@ class MCPClient:
 
         if self.abort_current_query:
             return ""
+
+        # Display logprobs immediately if requested and available
+        if self.show_logprobs and logprobs_data:
+            display_logprobs(self.console, logprobs_data)
 
         # response_text will be either empty or contain a response
         # Append the assistant's response to messages helps maintain context and fix ollama cloud tool call issues
@@ -401,10 +415,16 @@ class MCPClient:
             if supports_thinking:
                 chat_params_followup["think"] = self.thinking_mode
 
+            # Add logprobs parameters if configured
+            if self.model_config_manager.logprobs is not None:
+                chat_params_followup["logprobs"] = self.model_config_manager.logprobs
+            if self.model_config_manager.top_logprobs is not None:
+                chat_params_followup["top_logprobs"] = self.model_config_manager.top_logprobs
+
             stream = await self.ollama.chat(**chat_params_followup)
 
             # Process the streaming response with thinking mode support
-            followup_response, pending_tool_calls, followup_metrics = await self.streaming_manager.process_streaming_response(
+            followup_response, pending_tool_calls, followup_metrics, followup_logprobs = await self.streaming_manager.process_streaming_response(
                 stream,
                 thinking_mode=self.thinking_mode,
                 show_thinking=self.show_thinking,
@@ -414,6 +434,10 @@ class MCPClient:
 
             if self.abort_current_query:
                 break
+
+            # Display logprobs immediately if requested and available
+            if self.show_logprobs and followup_logprobs:
+                display_logprobs(self.console, followup_logprobs)
 
             messages.append({
                 "role": "assistant",
@@ -625,6 +649,10 @@ class MCPClient:
                     self.toggle_show_metrics()
                     continue
 
+                if query.lower() in ['show-logprobs', 'slp']:
+                    self.toggle_show_logprobs()
+                    continue
+
                 if query.lower() in ['clear', 'cc']:
                     self.clear_context()
                     continue
@@ -771,7 +799,8 @@ class MCPClient:
             "• Type [bold]model-config[/bold] or [bold]mc[/bold] to configure system prompt and model parameters\n"
             "• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode\n"
             "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n"
-            "• Type [bold]show-metrics[/bold] or [bold]sm[/bold] to toggle performance metrics display\n\n"
+            "• Type [bold]show-metrics[/bold] or [bold]sm[/bold] to toggle performance metrics display\n"
+            "• Type [bold]show-logprobs[/bold] or [bold]slp[/bold] to toggle log probabilities display\n\n"
 
             "[bold cyan]Agent Mode:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
             "• Type [bold]loop-limit[/bold] or [bold]ll[/bold] to set the maximum tool loop iterations\n\n"
@@ -883,6 +912,18 @@ class MCPClient:
         else:
             self.console.print("[cyan]🔇 Performance metrics will be hidden for a cleaner output.[/cyan]")
 
+    def toggle_show_logprobs(self):
+        """Toggle whether logprobs are shown after each query"""
+        self.show_logprobs = not self.show_logprobs
+        status = "enabled" if self.show_logprobs else "disabled"
+        self.console.print(f"[green]Log probabilities display {status}![/green]")
+
+        if self.show_logprobs:
+            self.console.print("[cyan]📊 Token log probabilities will be displayed after each query.[/cyan]")
+            self.console.print("[dim]Note: You must also enable logprobs in model-config for data to be available.[/dim]")
+        else:
+            self.console.print("[cyan]🔇 Token log probabilities will be hidden for a cleaner output.[/cyan]")
+
     async def set_loop_limit(self):
         """Configure the maximum number of follow-up tool loops per query."""
         user_input = await self.get_user_input(f"Loop limit (current: {self.loop_limit})")
@@ -929,6 +970,7 @@ class MCPClient:
             f"{thinking_status}"
             f"Tool execution display: [{'green' if self.show_tool_execution else 'red'}]{'Enabled' if self.show_tool_execution else 'Disabled'}[/{'green' if self.show_tool_execution else 'red'}]\n"
             f"Performance metrics: [{'green' if self.show_metrics else 'red'}]{'Enabled' if self.show_metrics else 'Disabled'}[/{'green' if self.show_metrics else 'red'}]\n"
+            f"Log probabilities: [{'green' if self.show_logprobs else 'red'}]{'Enabled' if self.show_logprobs else 'Disabled'}[/{'green' if self.show_logprobs else 'red'}]\n"
             f"Agent loop limit: [cyan]{self.loop_limit}[/cyan]\n"
             f"Human-in-the-Loop confirmations: [{'green' if self.hil_manager.is_enabled() else 'red'}]{'Enabled' if self.hil_manager.is_enabled() else 'Disabled'}[/{'green' if self.hil_manager.is_enabled() else 'red'}]\n"
             f"Conversation entries: {history_count}\n"
@@ -971,7 +1013,8 @@ class MCPClient:
             "modelConfig": self.model_config_manager.get_config(),
             "displaySettings": {
                 "showToolExecution": self.show_tool_execution,
-                "showMetrics": self.show_metrics
+                "showMetrics": self.show_metrics,
+                "showLogprobs": self.show_logprobs
             },
             "hilSettings": {
                 "enabled": self.hil_manager.is_enabled()
@@ -1043,6 +1086,8 @@ class MCPClient:
                 self.show_tool_execution = config_data["displaySettings"]["showToolExecution"]
             if "showMetrics" in config_data["displaySettings"]:
                 self.show_metrics = config_data["displaySettings"]["showMetrics"]
+            if "showLogprobs" in config_data["displaySettings"]:
+                self.show_logprobs = config_data["displaySettings"]["showLogprobs"]
 
         # Load HIL settings if specified
         if "hilSettings" in config_data:
@@ -1102,6 +1147,11 @@ class MCPClient:
             else:
                 # Default show metrics to False if not specified
                 self.show_metrics = False
+            if "showLogprobs" in config_data["displaySettings"]:
+                self.show_logprobs = config_data["displaySettings"]["showLogprobs"]
+            else:
+                # Default show logprobs to False if not specified
+                self.show_logprobs = False
 
         # Reset HIL settings from the default configuration
         if "hilSettings" in config_data:

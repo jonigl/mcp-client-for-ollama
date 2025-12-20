@@ -42,6 +42,8 @@ class ModelConfigManager:
         self.stop = None                   # list[str]
         self.num_ctx = None                # int
         self.num_batch =  None             # int
+        self.logprobs = None               # bool
+        self.top_logprobs = None           # int (0-20)
 
         # Parameter explanations
         self.parameter_explanations = {
@@ -140,6 +142,18 @@ class ModelConfigManager:
                 "range":"1 - context size (1 = no batching), default for ollama == 512",
                 "effect":"Directly impacts processing speed and response time. Increasing the batch size increases throughput(tokens/sec) upto a point of saturation upon which it starts to deteriorate.",
                 "recommendation":"Vary the batch size while observing the performance and memory, choose the best size for your usecase"
+            },
+            "logprobs": {
+                "description": "Returns log probabilities for each generated token, showing the model's confidence (higher logprob = more confident).",
+                "range": "true or false",
+                "effect": "When enabled, includes token-level log probability information in the response for analysis and debugging.",
+                "recommendation": "Enable for debugging and understanding model behavior."
+            },
+            "top_logprobs": {
+                "description": "Number of top alternative tokens and their log probabilities to return for each position.",
+                "range": "0 – 20; requires logprobs=true",
+                "effect": "Shows alternative token choices the model considered, revealing decision boundaries.",
+                "recommendation": "Use 3-5 for reasonable detail; higher values provide more alternatives but increase response size."
             }
         }
 
@@ -165,7 +179,9 @@ class ModelConfigManager:
             "frequency_penalty": self.frequency_penalty,
             "stop": self.stop,
             "num_ctx": self.num_ctx,
-            "num_batch": self.num_batch
+            "num_batch": self.num_batch,
+            "logprobs": self.logprobs,
+            "top_logprobs": self.top_logprobs
         }
 
     def get_ollama_options(self) -> Dict[str, Any]:
@@ -256,6 +272,10 @@ class ModelConfigManager:
             self.num_ctx = config["num_ctx"]
         if "num_batch" in config:
             self.num_batch = config["num_batch"]
+        if "logprobs" in config:
+            self.logprobs = config["logprobs"]
+        if "top_logprobs" in config:
+            self.top_logprobs = config["top_logprobs"]
 
     def display_current_config(self) -> None:
         """Display the current model configuration."""
@@ -286,7 +306,9 @@ class ModelConfigManager:
             f"[bold][orange3]12.[/orange3] frequency_penalty:[/bold] {format_value(self.frequency_penalty)}\n"
             f"[bold][orange3]13.[/orange3] stop:[/bold] {format_value(self.stop)}\n"
             f"[bold][orange3]14.[/orange3] num_ctx:[/bold] {format_value(self.num_ctx)}\n"
-            f"[bold][orange3]15.[/orange3] num_batch:[/bold] {format_value(self.num_batch)}",
+            f"[bold][orange3]15.[/orange3] num_batch:[/bold] {format_value(self.num_batch)}\n"
+            f"[bold][orange3]16.[/orange3] logprobs:[/bold] {format_value(self.logprobs)}\n"
+            f"[bold][orange3]17.[/orange3] top_logprobs:[/bold] {format_value(self.top_logprobs)}",
             title="[bold blue]🎮 Model Parameters[/bold blue]",
             border_style="blue", expand=False))
         self.console.print("\n[bold yellow]Note:[/bold yellow] Unset values will use Ollama's defaults.")
@@ -461,6 +483,8 @@ class ModelConfigManager:
                 self.stop = None
                 self.num_ctx = None
                 self.num_batch = None
+                self.logprobs = None
+                self.top_logprobs = None
                 result_message = "[green]All parameters unset (using Ollama defaults).[/green]"
                 result_style = "green"
                 continue
@@ -540,6 +564,14 @@ class ModelConfigManager:
                         case 15:
                             self.num_batch = None
                             result_message = "[green]num_batch unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 16:
+                            self.logprobs = None
+                            result_message = "[green]logprobs unset (using Ollama default).[/green]"
+                            result_style = "green"
+                        case 17:
+                            self.top_logprobs = None
+                            result_message = "[green]top_logprobs unset (using Ollama default).[/green]"
                             result_style = "green"
                         case _:
                             result_message = "[red]Invalid parameter number.[/red]"
@@ -767,6 +799,37 @@ class ModelConfigManager:
                             result_style = "green"
                         else:
                             result_message = "[red]num_batch must be a positive integer.[/red]"
+                            result_style = "red"
+                    except ValueError:
+                        result_message = "[red]Please enter a valid integer.[/red]"
+                        result_style = "red"
+
+                case "16":
+                    current_val = "true" if self.logprobs else "false" if self.logprobs is False else "true"
+                    new_value = Prompt.ask("Enable Log Probabilities (true/false)", default=current_val)
+                    if new_value and new_value.lower() in ['true', 't', 'yes', 'y', '1']:
+                        self.logprobs = True
+                        result_message = "[green]logprobs enabled.[/green]"
+                        result_style = "green"
+                    elif new_value and new_value.lower() in ['false', 'f', 'no', 'n', '0']:
+                        self.logprobs = False
+                        result_message = "[green]logprobs disabled.[/green]"
+                        result_style = "green"
+                    else:
+                        result_message = "[red]Please enter true or false.[/red]"
+                        result_style = "red"
+
+                case "17":
+                    try:
+                        new_value = IntPrompt.ask("Top Log Probabilities (0-20, number of alternative tokens to show)", default=self.top_logprobs)
+                        if 0 <= new_value <= 20:
+                            self.top_logprobs = new_value
+                            result_message = f"[green]top_logprobs set to {new_value}.[/green]"
+                            result_style = "green"
+                            if self.logprobs is not True:
+                                result_message += "\n[yellow]Note: logprobs must be enabled (option 16) for this to take effect.[/yellow]"
+                        else:
+                            result_message = "[red]top_logprobs must be between 0 and 20.[/red]"
                             result_style = "red"
                     except ValueError:
                         result_message = "[red]Please enter a valid integer.[/red]"

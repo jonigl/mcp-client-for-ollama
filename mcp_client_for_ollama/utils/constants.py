@@ -43,6 +43,7 @@ INTERACTIVE_COMMANDS = {
     'reload-servers': 'Reload MCP servers',
     'reset-config': 'Reset to default config',
     'save-config': 'Save current configuration',
+    'show-logprobs': 'Toggle log probabilities display',
     'show-metrics': 'Toggle performance metrics display',
     'show-thinking': 'Toggle thinking visibility',
     'show-tool-execution': 'Toggle tool execution display',

@@ -254,6 +254,10 @@ class ConfigManager:
                 validated["modelConfig"]["num_ctx"] = model_config["num_ctx"] if model_config["num_ctx"] is not None else None
             if "num_batch" in model_config:
                 validated["modelConfig"]["num_batch"] = model_config["num_batch"] if model_config["num_batch"] is not None else None
+            if "logprobs" in model_config:
+                validated["modelConfig"]["logprobs"] = model_config["logprobs"] if model_config["logprobs"] is not None else None
+            if "top_logprobs" in model_config:
+                validated["modelConfig"]["top_logprobs"] = model_config["top_logprobs"] if model_config["top_logprobs"] is not None else None
 
 
         if "displaySettings" in config_data and isinstance(config_data["displaySettings"], dict):
@@ -261,6 +265,8 @@ class ConfigManager:
                 validated["displaySettings"]["showToolExecution"] = bool(config_data["displaySettings"]["showToolExecution"])
             if "showMetrics" in config_data["displaySettings"]:
                 validated["displaySettings"]["showMetrics"] = bool(config_data["displaySettings"]["showMetrics"])
+            if "showLogprobs" in config_data["displaySettings"]:
+                validated["displaySettings"]["showLogprobs"] = bool(config_data["displaySettings"]["showLogprobs"])
 
         if "hilSettings" in config_data and isinstance(config_data["hilSettings"], dict):
             if "enabled" in config_data["hilSettings"]:
