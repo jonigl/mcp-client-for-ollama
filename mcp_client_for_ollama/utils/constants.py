@@ -39,6 +39,7 @@ INTERACTIVE_COMMANDS = {
     'loop-limit': 'Set agent max loop limit',
     'model-config': 'Configure model parameters',
     'model': 'Select Ollama model',
+    'prompts': 'Browse available MCP prompts',
     'quit': 'Exit the application',
     'reload-servers': 'Reload MCP servers',
     'reset-config': 'Reset to default config',

@@ -40,6 +40,7 @@
   - [Advanced Model Configuration](#advanced-model-configuration)
   - [Server Reloading for Development](#server-reloading-for-development)
   - [Human-in-the-Loop (HIL) Tool Execution](#human-in-the-loop-hil-tool-execution)
+  - ✨**NEW** [MCP Prompts](#mcp-prompts)
   - [Performance Metrics](#performance-metrics)
 - [Autocomplete and Prompt Features](#autocomplete-and-prompt-features)
 - [Configuration Management](#configuration-management)
@@ -59,6 +60,7 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 ## Features
 
 - 🤖 **Agent Mode**: Iterative tool execution when models request multiple tool calls, with a configurable loop limit to prevent infinite loops
+- 📋 **MCP Prompts Support**: Browse, invoke, and manage prompts from MCP servers with argument collection, preview, and safe rollback
 - 🌐 **Multi-Server Support**: Connect to multiple MCP servers simultaneously
 - 🚀 **Multiple Transport Types**: Supports STDIO, SSE, and Streamable HTTP server connections
 - ☁️ **Ollama Cloud Support**: Works seamlessly with Ollama Cloud models for tool calling, enabling access to powerful cloud-hosted models while using local MCP tools
@@ -259,6 +261,8 @@ During chat, use these commands:
 | `loop-limit`     | `ll`             | Set maximum iterative tool-loop iterations (Agent Mode). Default: 3 |
 | `model`          | `m`              | List and select a different Ollama model            |
 | `model-config`   | `mc`             | Configure advanced model parameters and system prompt|
+| `prompts`        | `pr`             | Browse and view all available MCP prompts           |
+| `/prompt_name`   | -                | Invoke a specific prompt by name (e.g., `/summarize`) |
 | `quit`, `exit`, `bye`   | `q` or `Ctrl+D`  | Exit the client                                     |
 | `reload-servers` | `rs`             | Reload all MCP servers with current configuration   |
 | `reset-config`   | `rc`             | Reset configuration to defaults (all tools enabled) |
@@ -417,6 +421,72 @@ When prompted, you can choose from the following options:
 - **Clean Abort**: Stop problematic queries immediately without polluting conversation history
 - **Peace of Mind**: Full visibility and control over automated actions
 
+### MCP Prompts
+
+MCP Prompts provide reusable, server-defined conversation starters and context templates. Servers can expose prompts with descriptions, required arguments, and pre-formatted messages that help you quickly start specific types of conversations or inject structured context into your chat.
+
+#### Features
+
+- 📋 **Browse Prompts**: View all available prompts from connected servers with descriptions and argument requirements
+- ⚡️ **Quick Invocation**: Use `/prompt_name` syntax to instantly invoke any prompt
+- 🔤 **Autocomplete**: Type `/` to see prompt suggestions with fuzzy matching
+- 📝 **Argument Collection**: Interactive prompts guide you through required parameters
+- 👁️ **Preview**: Review prompt content before injection to ensure it fits your needs
+- 🎯 **Flexible Injection**: Choose to execute immediately or inject-only (add to history without triggering model)
+- 🧠 **Context-Aware**: Automatically adapts behavior based on whether prompt ends with user or assistant message
+- 🔄 **Safe Rollback**: Automatic history cleanup if you abort or encounter errors
+- 💬 **Text Content**: Supports text-based prompt messages (image/audio/resource support coming soon)
+
+#### How to Use MCP Prompts
+
+**Browse Available Prompts:**
+```
+prompts  # or 'pr'
+```
+This displays all prompts grouped by server, showing their names, required arguments, and descriptions.
+
+**Invoke a Prompt:**
+```
+/prompt_name
+```
+For example, if a server provides a "summarize" prompt:
+```
+/summarize
+```
+
+**Autocomplete:**
+- Type `/` to see all available prompts with descriptions
+- Continue typing to filter prompts with fuzzy matching
+- Use arrow keys to navigate and press Enter to select
+
+> [!TIP]
+> Prompts are discovered automatically when you connect to MCP servers. If a server supports prompts, they'll be available immediately in the `prompts` list and autocomplete.
+
+**Workflow:**
+1. Type `/prompt_name` or select from autocomplete
+2. If the prompt requires arguments, you'll be prompted to provide them
+3. Review the prompt preview showing what will be injected
+4. Choose how to use the prompt:
+   - **y/yes** (default): Send the prompt to the model and get a response
+     - For prompts ending with a **user message**: Uses that message as the query
+     - For prompts ending with an **assistant message**: Adds "Please respond based on the above context." as the query
+   - **i/inject**: Just add the prompt to conversation history without triggering the model (lets you type your own query afterward)
+   - **n/no**: Cancel and return to chat
+5. The prompt is injected based on your choice
+6. If you abort during model generation (press 'a'), changes are automatically rolled back
+
+**Example:**
+![ollmcp prompt feature screenshot](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-prompt-feature.png?raw=true)
+
+> [!WARNING]
+> **Content Type Limitations**: MCP Prompts currently support **text content only**. The following content types are not yet supported and will be automatically skipped:
+> - 🖼️ **Images** - Image content in prompts
+> - 🎵 **Audio** - Audio content in prompts
+> - 📦 **Resources** - Embedded resource content
+>
+> If a prompt contains these unsupported types, you'll see a warning during the preview, and only the text portions will be injected. Make sure your prompt still makes sense without the multimedia content before proceeding. Full multimedia support is planned for a future release.
+
+
 ### Performance Metrics
 
 The Performance Metrics feature displays detailed model performance data after each query in a bordered panel. The metrics show duration timings, token counts, and generation rates directly from Ollama's response.
@@ -464,6 +534,14 @@ The Performance Metrics feature displays detailed model performance data after e
 - Case-insensitive matching for convenience
 - Centralized command list for consistency
 
+### MCP Prompts Autocomplete
+
+- Type `/` to trigger prompt autocomplete
+- Fuzzy matching on prompt names and descriptions
+- Shows prompt arguments and descriptions in the menu
+- Terminal-width-aware description truncation
+- Arrow (`▶`) highlights the best match
+
 ### Contextual Prompt
 
 The chat prompt now gives you clear, contextual information at a glance:
@@ -482,6 +560,9 @@ qwen3/show-thinking/12-tools❯
 - `❯` Prompt symbol
 
 This makes it easy to see your current context before entering a query.
+
+> [!TIP]
+> Type `/` after the prompt symbol to see autocomplete suggestions for available MCP prompts.
 
 ## Configuration Management
 
