@@ -40,8 +40,9 @@ class ServerConnector:
         self.available_tools = []  # List to store all available tools
         self.enabled_tools = {}  # Dict to store tool enabled status
         self.session_ids = {}  # Dict to store session IDs for HTTP connections
+        self.prompts_by_server = {}  # Dict to store prompts grouped by server
 
-    async def connect_to_servers(self, server_paths=None, server_urls=None, config_path=None, auto_discovery=False) -> Tuple[dict, list, dict]:
+    async def connect_to_servers(self, server_paths=None, server_urls=None, config_path=None, auto_discovery=False) -> Tuple[dict, list, dict, dict]:
         """Connect to one or more MCP servers
 
         Args:
@@ -51,7 +52,7 @@ class ServerConnector:
             auto_discovery: Whether to automatically discover servers
 
         Returns:
-            Tuple of (sessions, available_tools, enabled_tools)
+            Tuple of (sessions, available_tools, enabled_tools, prompts_by_server)
         """
         all_servers = []
 
@@ -124,7 +125,7 @@ class ServerConnector:
                 title="Error", border_style="red", expand=False
             ))
 
-        return self.sessions, self.available_tools, self.enabled_tools
+        return self.sessions, self.available_tools, self.enabled_tools, self.prompts_by_server
 
     async def _connect_to_server(self, server: Dict[str, Any]) -> bool:
         """Connect to a single MCP server
@@ -227,7 +228,20 @@ class ServerConnector:
             self.sessions[server_name]["tools"] = server_tools
             self.available_tools.extend(server_tools)
 
-            self.console.print(f"[green]Successfully connected to {server_name} with {len(server_tools)} tools[/green]")
+            # Try to get prompts from this server
+            server_prompts = []
+            try:
+                # Attempt to list prompts - will fail gracefully if not supported
+                prompts_response = await session.list_prompts()
+                server_prompts = prompts_response.prompts if hasattr(prompts_response, 'prompts') else []
+                if server_prompts:
+                    self.prompts_by_server[server_name] = server_prompts
+            except (AttributeError, NotImplementedError, Exception):
+                # Server doesn't support prompts or feature not available
+                pass
+
+            prompt_count_msg = f" and {len(server_prompts)} prompt(s)" if server_prompts else ""
+            self.console.print(f"[green]Successfully connected to {server_name} with {len(server_tools)} tool(s){prompt_count_msg}[/green]")
             return True
 
         except FileNotFoundError as e:
@@ -439,3 +453,4 @@ class ServerConnector:
         self.available_tools.clear()
         self.enabled_tools.clear()
         self.session_ids.clear()
+        self.prompts_by_server.clear()

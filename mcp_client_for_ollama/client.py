@@ -10,7 +10,7 @@ if os.name != 'nt':
 else:
     import msvcrt # pylint: disable=E0401
 
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, contextmanager
 from typing import List, Optional
 
 import typer
@@ -30,6 +30,8 @@ from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
 from .tools.manager import ToolManager
+from .prompts.manager import PromptManager
+from .prompts.handler import PromptHandler
 from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
 from .utils.hil_manager import HumanInTheLoopManager, AbortQueryException
@@ -53,6 +55,10 @@ class MCPClient:
         self.model_config_manager = ModelConfigManager(console=self.console)
         # Initialize the tool manager with server connector reference
         self.tool_manager = ToolManager(console=self.console, server_connector=self.server_connector)
+        # Initialize the prompt manager
+        self.prompt_manager = PromptManager(console=self.console)
+        # Initialize the prompt handler
+        self.prompt_handler = PromptHandler(console=self.console, prompt_manager=self.prompt_manager)
         # Initialize the streaming manager
         self.streaming_manager = StreamingManager(console=self.console)
         # Initialize the tool display manager
@@ -91,6 +97,73 @@ class MCPClient:
             'config_path': None,
             'auto_discovery': False
         }
+
+    @contextmanager
+    def _temporary_history_extension(self, entries: List[dict]):
+        """Context manager for temporarily extending chat history with automatic rollback
+
+        Args:
+            entries: List of history entries to append temporarily
+        """
+        backup = self.chat_history.copy()
+        try:
+            self.chat_history.extend(entries)
+            yield
+        except Exception:
+            self.chat_history = backup
+            raise
+
+    async def _process_query_with_monitoring(self, query: str):
+        """Process a query with cancellation monitoring
+
+        Args:
+            query: The query to process
+        """
+        # Reset HIL session state for new query
+        self.hil_manager.reset_session()
+
+        # Reset abort flag and monitor state
+        self.abort_current_query = False
+        self.monitor_paused = False
+        self.monitor_paused_ack.clear()
+
+        # Create tasks for query processing and cancellation monitoring
+        query_task = asyncio.create_task(self.process_query(query))
+        monitor_task = asyncio.create_task(self.monitor_cancellation())
+
+        try:
+            done, pending = await asyncio.wait(
+                [query_task, monitor_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+
+            if monitor_task in done:
+                query_task.cancel()
+                try:
+                    await query_task
+                except (asyncio.CancelledError, AbortQueryException):
+                    pass
+                raise AbortQueryException("User aborted query")
+            else:
+                try:
+                    await query_task
+                except AbortQueryException:
+                    raise
+
+        except KeyboardInterrupt:
+            self.abort_current_query = True
+            query_task.cancel()
+            try:
+                await query_task
+            except (asyncio.CancelledError, AbortQueryException):
+                pass
+            raise
+        finally:
+            monitor_task.cancel()
+            try:
+                await monitor_task
+            except asyncio.CancelledError:
+                pass
 
     def display_current_model(self):
         """Display the currently selected model"""
@@ -151,7 +224,7 @@ class MCPClient:
         }
 
         # Connect to servers using the server connector
-        sessions, available_tools, enabled_tools = await self.server_connector.connect_to_servers(
+        sessions, available_tools, enabled_tools, prompts_by_server = await self.server_connector.connect_to_servers(
             server_paths=server_paths,
             server_urls=server_urls,
             config_path=config_path,
@@ -164,6 +237,14 @@ class MCPClient:
         # Set up the tool manager with the available tools and their enabled status
         self.tool_manager.set_available_tools(available_tools)
         self.tool_manager.set_enabled_tools(enabled_tools)
+
+        # Set up the prompt manager with available prompts
+        self.prompt_manager.set_prompts(prompts_by_server)
+
+        # Update the FZF completer with available prompts
+        if self.prompt_session and self.prompt_session.completer:
+            prompt_list = self.prompt_manager.list_all()
+            self.prompt_session.completer.set_prompts(prompt_list)
 
     def select_tools(self):
         """Let the user select which tools to enable using interactive prompts with server-based grouping"""
@@ -673,61 +754,27 @@ class MCPClient:
                     self.hil_manager.toggle()
                     continue
 
+                if query.lower() in ['prompts', 'pr']:
+                    self.browse_prompts()
+                    continue
+
+                # Check if query starts with / (prompt invocation)
+                if query.startswith('/'):
+                    await self.handle_prompt_invocation(query)
+                    continue
+
                 # Check if query is too short and not a special command
                 if len(query.strip()) < 5:
                     self.console.print("[yellow]Query must be at least 5 characters long.[/yellow]")
                     continue
 
                 try:
-                    # Reset HIL session state for new query
-                    self.hil_manager.reset_session()
+                    # Process query with monitoring
+                    await self._process_query_with_monitoring(query)
 
-                    # Reset abort flag and monitor state
-                    self.abort_current_query = False
-                    self.monitor_paused = False
-                    self.monitor_paused_ack.clear()
-
-                    # Create tasks for query processing and cancellation monitoring
-                    query_task = asyncio.create_task(self.process_query(query))
-                    monitor_task = asyncio.create_task(self.monitor_cancellation())
-
-                    try:
-                        # Wait for either the query to finish or the monitor to signal cancellation
-                        done, pending = await asyncio.wait(
-                            [query_task, monitor_task],
-                            return_when=asyncio.FIRST_COMPLETED
-                        )
-
-                        if monitor_task in done:
-                            # Monitor finished, meaning 'a' was pressed during streaming
-                            self.console.print("\n[yellow]Query aborted. Nothing saved to history.[/yellow]")
-                            query_task.cancel()
-                            try:
-                                await query_task
-                            except (asyncio.CancelledError, AbortQueryException):
-                                pass
-                        else:
-                            # Query finished - check if it raised an exception
-                            try:
-                                await query_task
-                            except AbortQueryException:
-                                # User aborted the query via HIL - don't save to history
-                                self.console.print("[yellow]Query aborted. Nothing saved to history.[/yellow]")
-
-                    except KeyboardInterrupt:
-                        self.abort_current_query = True
-                        query_task.cancel()
-                        try:
-                            await query_task
-                        except (asyncio.CancelledError, AbortQueryException):
-                            pass
-                    finally:
-                        # Ensure monitor task is cancelled when query finishes or is aborted
-                        monitor_task.cancel()
-                        try:
-                            await monitor_task
-                        except asyncio.CancelledError:
-                            pass
+                except AbortQueryException:
+                    # User aborted the query - don't save to history
+                    self.console.print("[yellow]Query aborted. Nothing saved to history.[/yellow]")
 
                 except ollama.ResponseError as e:
                     # Extract error message without the traceback
@@ -781,6 +828,11 @@ class MCPClient:
             "• Type [bold]show-tool-execution[/bold] or [bold]ste[/bold] to toggle tool execution display\n"
             "• Type [bold]human-in-the-loop[/bold] or [bold]hil[/bold] to toggle Human-in-the-Loop confirmations\n"
             "• Type [bold]reload-servers[/bold] or [bold]rs[/bold] to reload MCP servers\n\n"
+
+            "[bold cyan]MCP Prompts:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
+            "• Type [bold]prompts[/bold] or [bold]pr[/bold] to browse available prompts\n"
+            "• Type [bold]/prompt_name[/bold] to invoke a prompt\n"
+            "• Type [bold]/[/bold] to see prompt autocomplete suggestions\n\n"
 
             "[bold cyan]Context:[/bold cyan]\n"
             "• Type [bold]context[/bold] or [bold]c[/bold] to toggle context retention\n"
@@ -1116,6 +1168,34 @@ class MCPClient:
     async def cleanup(self):
         """Clean up resources"""
         await self.exit_stack.aclose()
+
+    def browse_prompts(self):
+        """Display all available prompts grouped by server"""
+        self.clear_console()
+        self.prompt_handler.browse_prompts()
+
+        # Redisplay context
+        self.clear_console()
+        self.display_available_tools()
+        self.display_current_model()
+        self._display_chat_history()
+
+    async def handle_prompt_invocation(self, user_input: str):
+        """Handle prompt invocation via /prompt_name syntax
+
+        Args:
+            user_input: User input starting with / (e.g., "/summarize")
+        """
+        # Extract prompt name (remove leading /)
+        prompt_name = user_input[1:].strip()
+
+        # Delegate to prompt handler
+        await self.prompt_handler.invoke_prompt(
+            prompt_name,
+            self.sessions,
+            self._process_query_with_monitoring,
+            self._temporary_history_extension
+        )
 
     async def reload_servers(self):
         """Reload all MCP servers with the same connection parameters"""
