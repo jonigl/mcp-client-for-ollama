@@ -33,6 +33,17 @@ class FZFStyleCompleter(Completer):
         Yields:
             Completion objects for matching prompts
         """
+        # If no prompts available, show a helpful message
+        if not self.prompts:
+            # Use a non-selectable completion that just shows info
+            yield Completion(
+                "[no-prompts]",
+                start_position=-len(prompt_query),
+                display=" No prompts available",
+                display_meta="No prompts found from connected MCP servers"
+            )
+            return
+
         # Filter and rank prompts by matching
         matches = []
         for prompt in self.prompts:

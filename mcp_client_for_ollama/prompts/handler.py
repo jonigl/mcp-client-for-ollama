@@ -22,9 +22,8 @@ class PromptHandler:
         prompts_by_server = self.prompt_manager.get_prompts_by_server()
         display_prompt_list(self.console, prompts_by_server)
 
-        if self.prompt_manager.has_prompts():
-            self.console.print("\n[dim]Press Enter to return to chat...[/dim]")
-            input()
+        self.console.print("\n[dim]Press Enter to return to chat...[/dim]")
+        input()
 
     async def invoke_prompt(self, prompt_name: str, sessions: Dict[str, Any],
                           process_query_fn, history_context_manager) -> bool:
@@ -41,6 +40,11 @@ class PromptHandler:
         """
         if not prompt_name:
             self.console.print("[yellow]Please specify a prompt name after /[/yellow]")
+            return False
+
+        # Check if any prompts are available
+        if not self.prompt_manager.has_prompts():
+            self.console.print("[yellow]No prompts are available from your connected MCP servers.[/yellow]")
             return False
 
         # Find the prompt
