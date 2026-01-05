@@ -55,7 +55,7 @@ class FZFStyleCompleter(Completer):
                 matches.append(prompt)
 
         # Return prompt completions
-        for i, prompt in enumerate(matches[:10]):  # Limit to 10 matches
+        for i, prompt in enumerate(matches):
             name = prompt['name']
             description = prompt.get('description', '') or ''
             arguments = prompt.get('arguments', [])

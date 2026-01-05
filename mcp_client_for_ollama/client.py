@@ -25,7 +25,7 @@ import ollama
 from . import __version__
 from .config.manager import ConfigManager
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
@@ -74,7 +74,9 @@ class MCPClient:
         # Command completer for interactive prompts
         self.prompt_session = PromptSession(
             completer=FZFStyleCompleter(),
-            style=Style.from_dict(DEFAULT_COMPLETION_STYLE)
+            style=Style.from_dict(DEFAULT_COMPLETION_STYLE),
+            complete_style='multi-column',
+            reserve_space_for_menu=MAX_COMPLETION_MENU_ROWS
         )
         # Context retention settings
         self.retain_context = True  # By default, retain conversation context
@@ -836,8 +838,7 @@ class MCPClient:
     def print_help(self):
         """Print available commands"""
         self.console.print(Panel(
-            "[bold yellow]Available Commands:[/bold yellow]\n\n"
-
+            "\n"
             "[bold cyan]Model:[/bold cyan]\n"
             "• Type [bold]model[/bold] or [bold]m[/bold] to select a model\n"
             "• Type [bold]model-config[/bold] or [bold]mc[/bold] to configure system prompt and model parameters\n"
@@ -864,7 +865,7 @@ class MCPClient:
             "• Type [bold]clear[/bold] or [bold]cc[/bold] to clear conversation context\n"
             "• Type [bold]context-info[/bold] or [bold]ci[/bold] to display context info\n\n"
 
-            "[bold cyan]History:[/bold cyan]\n"
+            "[bold cyan]History:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
             "• Type [bold]full-history[/bold] or [bold]fh[/bold] to view full conversation history\n"
             "• Type [bold]export-history[/bold] or [bold]eh[/bold] to export history to JSON\n"
             "• Type [bold]import-history[/bold] or [bold]ih[/bold] to import history from JSON\n\n"
@@ -876,11 +877,11 @@ class MCPClient:
 
 
             "[bold cyan]Basic Commands:[/bold cyan]\n"
-            "• Press [bold]a[/bold] during model generation to abort\n"
+            "• Press [bold]a[/bold] during model generation to abort [bold bright_magenta](New!)[/bold bright_magenta]\n"
             "• Type [bold]help[/bold] or [bold]h[/bold] to show this help message\n"
             "• Type [bold]clear-screen[/bold] or [bold]cls[/bold] to clear the terminal screen\n"
             "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], [bold]bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n",
-            title="[bold]Help[/bold]", border_style="yellow", expand=False))
+            title="[bold]Help - Available Commands[/bold]", border_style="yellow", expand=False))
 
     def toggle_context_retention(self):
         """Toggle whether to retain previous conversation context when sending queries"""
@@ -967,7 +968,7 @@ class MCPClient:
 
     async def set_loop_limit(self):
         """Configure the maximum number of follow-up tool loops per query."""
-        user_input = await self.get_user_input(f"Loop limit (current: {self.loop_limit})")
+        user_input = await get_input_no_autocomplete(f"Set agent loop limit (current: {self.loop_limit})")
 
         if user_input is None:
             return
@@ -1197,7 +1198,12 @@ class MCPClient:
 
     async def cleanup(self):
         """Clean up resources"""
-        await self.exit_stack.aclose()
+        try:
+            await self.exit_stack.aclose()
+        except Exception:
+            # Suppress cleanup exceptions (BrokenResourceError, etc.)
+            # These can occur during stdio server shutdown race conditions
+            pass
 
     def browse_prompts(self):
         """Display all available prompts grouped by server"""
@@ -1326,8 +1332,19 @@ def main(
     if not (mcp_server or mcp_server_url or servers_json or auto_discovery):
         auto_discovery = True
 
-    # Run the async main function
-    asyncio.run(async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host))
+    # Run the async main function with proper cleanup
+    # Use manual loop management to ensure subprocesses cleanup before loop closes
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host))
+    finally:
+        try:
+            # Ensure executor cleanup completes before closing loop
+            loop.run_until_complete(loop.shutdown_default_executor())
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        finally:
+            loop.close()
 
 async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host):
     """Asynchronous main function to run the MCP Client for Ollama"""
@@ -1388,7 +1405,12 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
 
         await client.chat_loop()
     finally:
-        await client.cleanup()
+        try:
+            await client.cleanup()
+        except Exception:
+            # Suppress any cleanup errors (BrokenResourceError, etc.)
+            # These can occur during stdio server shutdown race conditions
+            pass
 
 if __name__ == "__main__":
     app()
