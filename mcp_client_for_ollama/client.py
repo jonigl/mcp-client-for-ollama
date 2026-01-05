@@ -25,7 +25,7 @@ import ollama
 from . import __version__
 from .config.manager import ConfigManager
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
@@ -36,6 +36,8 @@ from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
 from .utils.hil_manager import HumanInTheLoopManager, AbortQueryException
 from .utils.fzf_style_completion import FZFStyleCompleter
+from .utils.history import display_full_history, export_history, import_history
+from .utils.input import get_input_no_autocomplete
 
 
 class MCPClient:
@@ -271,7 +273,7 @@ class MCPClient:
             self.console.print(Panel("[bold]Chat History[/bold]", border_style="blue", expand=False))
 
             # Display the last few conversations (limit to keep the interface clean)
-            max_history = 3
+            max_history = DEFAULT_HISTORY_DISPLAY_LIMIT
             history_to_show = self.chat_history[-max_history:]
 
             for i, entry in enumerate(history_to_show):
@@ -722,7 +724,7 @@ class MCPClient:
 
                 if query.lower() in ['save-config', 'sc']:
                     # Ask for config name, defaulting to "default"
-                    config_name = await self.get_user_input("Config name (or press Enter for default)")
+                    config_name = await get_input_no_autocomplete("Config name (or press Enter for default)")
                     if not config_name or config_name.strip() == "":
                         config_name = "default"
                     self.save_configuration(config_name)
@@ -730,7 +732,7 @@ class MCPClient:
 
                 if query.lower() in ['load-config', 'lc']:
                     # Ask for config name, defaulting to "default"
-                    config_name = await self.get_user_input("Config name to load (or press Enter for default)")
+                    config_name = await get_input_no_autocomplete("Config name to load (or press Enter for default)")
                     if not config_name or config_name.strip() == "":
                         config_name = "default"
                     self.load_configuration(config_name)
@@ -756,6 +758,29 @@ class MCPClient:
 
                 if query.lower() in ['prompts', 'pr']:
                     self.browse_prompts()
+                    continue
+
+                if query.lower() in ['full-history', 'fh']:
+                    display_full_history(self.chat_history, self.console)
+                    continue
+
+                if query.lower() in ['export-history', 'eh']:
+                    filename = await get_input_no_autocomplete("Export filename (or press Enter for default)")
+                    if not filename or filename.strip() == "":
+                        export_history(self.chat_history, self.console)
+                    else:
+                        export_history(self.chat_history, self.console, filename.strip())
+                    continue
+
+                if query.lower() in ['import-history', 'ih']:
+                    filepath = await get_input_no_autocomplete("Path to history file to import")
+                    if filepath and filepath.strip():
+                        imported = import_history(filepath.strip(), self.console)
+                        if imported is not None:
+                            self.chat_history = imported
+                            self.console.print("[green]Current chat history replaced with imported history.[/green]")
+                    else:
+                        self.console.print("[yellow]Import cancelled: No filepath provided.[/yellow]")
                     continue
 
                 # Check if query starts with / (prompt invocation)
@@ -838,6 +863,11 @@ class MCPClient:
             "• Type [bold]context[/bold] or [bold]c[/bold] to toggle context retention\n"
             "• Type [bold]clear[/bold] or [bold]cc[/bold] to clear conversation context\n"
             "• Type [bold]context-info[/bold] or [bold]ci[/bold] to display context info\n\n"
+
+            "[bold cyan]History:[/bold cyan]\n"
+            "• Type [bold]full-history[/bold] or [bold]fh[/bold] to view full conversation history\n"
+            "• Type [bold]export-history[/bold] or [bold]eh[/bold] to export history to JSON\n"
+            "• Type [bold]import-history[/bold] or [bold]ih[/bold] to import history from JSON\n\n"
 
             "[bold cyan]Configuration:[/bold cyan]\n"
             "• Type [bold]save-config[/bold] or [bold]sc[/bold] to save the current configuration\n"
