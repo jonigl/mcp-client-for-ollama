@@ -967,7 +967,7 @@ class MCPClient:
 
     async def set_loop_limit(self):
         """Configure the maximum number of follow-up tool loops per query."""
-        user_input = await self.get_user_input(f"Loop limit (current: {self.loop_limit})")
+        user_input = await get_input_no_autocomplete(f"Set agent loop limit (current: {self.loop_limit})")
 
         if user_input is None:
             return
