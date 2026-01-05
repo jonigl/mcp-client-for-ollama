@@ -42,6 +42,7 @@
   - [Human-in-the-Loop (HIL) Tool Execution](#human-in-the-loop-hil-tool-execution)
   - ✨**NEW** [MCP Prompts](#mcp-prompts)
   - [Performance Metrics](#performance-metrics)
+  - ✨**NEW** [History Management](#history-management)
 - [Autocomplete and Prompt Features](#autocomplete-and-prompt-features)
 - [Configuration Management](#configuration-management)
 - [Server Configuration Format](#server-configuration-format)
@@ -60,9 +61,9 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 ## Features
 
 - 🤖 **Agent Mode**: Iterative tool execution when models request multiple tool calls, with a configurable loop limit to prevent infinite loops
-- 📋 **MCP Prompts Support**: Browse, invoke, and manage prompts from MCP servers with argument collection, preview, and safe rollback
 - 🌐 **Multi-Server Support**: Connect to multiple MCP servers simultaneously
 - 🚀 **Multiple Transport Types**: Supports STDIO, SSE, and Streamable HTTP server connections
+- 📋 **MCP Prompts Support**: Browse, invoke, and manage prompts from MCP servers with argument collection, preview, and safe rollback
 - ☁️ **Ollama Cloud Support**: Works seamlessly with Ollama Cloud models for tool calling, enabling access to powerful cloud-hosted models while using local MCP tools
 - 🎨 **Rich Terminal Interface**: Interactive console UI with modern styling
 - 🌊 **Streaming Responses**: View model outputs in real-time as they're generated
@@ -74,7 +75,8 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 - 🎨 **Enhanced Tool Display**: Beautiful, structured visualization of tool executions with JSON syntax highlighting
 - 🧠 **Context Management**: Control conversation memory with configurable retention settings
 - 🤔 **Thinking Mode**: Advanced reasoning capabilities with visible thought processes for supported models (e.g., gpt-oss, deepseek-r1, qwen3, etc.)
-- 🗣️ **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
+ - 🗣️ **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
+ - 📜 **History Management**: View full conversation history, export to JSON for backup/analysis, and import previous sessions for continuity
 - 🔍 **Auto-Discovery**: Automatically find and use Claude's existing MCP server configurations
 - 🔁 **Dynamic Model Switching**: Switch between any installed Ollama model without restarting
 - 💾 **Configuration Persistence**: Save and load tool preferences and model settings between sessions
@@ -255,7 +257,10 @@ During chat, use these commands:
 | `cls`            | `clear-screen`   | Clear the terminal screen                           |
 | `context`        | `c`              | Toggle context retention                            |
 | `context-info`   | `ci`             | Display context statistics                          |
+| `export-history` | `eh`             | Export chat history to a JSON file                  |
+| `full-history`   | `fh`             | Display all conversation history                    |
 | `help`           | `h`              | Display help and available commands                 |
+| `import-history` | `ih`             | Import chat history from a JSON file                |
 | `human-in-loop`  | `hil`            | Toggle Human-in-the-Loop confirmations for tool execution |
 | `load-config`    | `lc`             | Load tool and model configuration from a file       |
 | `loop-limit`     | `ll`             | Set maximum iterative tool-loop iterations (Agent Mode). Default: 3 |
@@ -517,6 +522,50 @@ The Performance Metrics feature displays detailed model performance data after e
 
 > [!NOTE]
 > **Data Source**: All metrics come directly from Ollama's response, ensuring accuracy and reliability.
+
+### History Management
+
+The History Management feature allows you to view, export, and import your conversation history. This is useful for:
+
+- 📜 **Full History View**: Review all conversations from your current session
+- 💾 **Export**: Save conversations to JSON files for backup or analysis
+- 📥 **Import**: Load previous conversation history to continue where you left off
+- 🔄 **Portability**: Share or transfer conversations between sessions
+
+#### History Commands
+
+**View Full History:**
+```
+full-history  # or 'fh'
+```
+Displays all conversation history from the current session in a formatted view, showing both queries and responses.
+
+**Export History:**
+```
+export-history  # or 'eh'
+```
+Exports your current chat history to a JSON file. You can specify a custom filename or use the default timestamp-based name (e.g., `ollmcp_chat_history_2026-01-05_143022.json`). Files are saved to `~/.config/ollmcp/history/` directory. The command includes file overwrite protection.
+
+**Import History:**
+```
+import-history  # or 'ih'
+```
+Imports a previously exported chat history from a JSON file. The command validates the JSON structure to ensure compatibility. Imported history is added to your current conversation context.
+
+**History Storage:**
+- Export location: `~/.config/ollmcp/history/`
+- Default filename format: `ollmcp_chat_history_YYYY-MM-DD_HHMMSS.json`
+- JSON format includes both queries and responses with proper structure validation
+
+**Benefits:**
+- **Session Continuity**: Resume conversations across different sessions
+- **Backup**: Keep records of important conversations
+- **Analysis**: Export history for external analysis or review
+- **Sharing**: Share conversation context with team members
+- **Testing**: Import test conversations for development and debugging
+
+> [!TIP]
+> When exporting, if you don't provide a filename, the system automatically generates a timestamped filename to prevent accidental overwrites.
 
 ## Autocomplete and Prompt Features
 

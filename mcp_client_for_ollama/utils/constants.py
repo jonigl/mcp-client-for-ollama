@@ -18,6 +18,9 @@ DEFAULT_MODEL = "qwen2.5:7b"
 # Default ollama lcoal url for API requests
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 
+# Default number of history entries to display when returning from menus
+DEFAULT_HISTORY_DISPLAY_LIMIT = 5
+
 
 # URL for checking package updates on PyPI
 PYPI_PACKAGE_URL = "https://pypi.org/pypi/mcp-client-for-ollama/json"
@@ -33,7 +36,10 @@ INTERACTIVE_COMMANDS = {
     'context-info': 'Show context information',
     'context': 'Toggle context retention',
     'exit': 'Exit the application',
+    'export-history': 'Export chat history to JSON',
+    'full-history': 'View full conversation history',
     'help': 'Show help information',
+    'import-history': 'Import chat history from JSON',
     'human-in-the-loop': 'Toggle HIL confirmations',
     'load-config': 'Load saved configuration',
     'loop-limit': 'Set agent max loop limit',

@@ -8,6 +8,7 @@ from .display import display_prompt_list, display_prompt_preview
 from .content import filter_prompt_messages
 from .injection import convert_prompt_messages_to_history
 from ..utils.hil_manager import AbortQueryException
+from ..utils.input import get_input_no_autocomplete
 
 
 class PromptHandler:
@@ -151,8 +152,10 @@ class PromptHandler:
                     self.console.print(f"[white]{arg_desc}[/white]")
 
                 try:
-                    self.console.print(f"[bold yellow]{arg_name}❯[/bold yellow] ", end="")
-                    value = input()
+                    value = await get_input_no_autocomplete(f"{arg_name}")
+                    if value == "quit":
+                        self.console.print("[yellow]Prompt invocation cancelled.[/yellow]")
+                        return None
                 except (KeyboardInterrupt, EOFError):
                     self.console.print("\n[yellow]Prompt invocation cancelled.[/yellow]")
                     return None
