@@ -25,7 +25,7 @@ import ollama
 from . import __version__
 from .config.manager import ConfigManager
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
@@ -74,7 +74,9 @@ class MCPClient:
         # Command completer for interactive prompts
         self.prompt_session = PromptSession(
             completer=FZFStyleCompleter(),
-            style=Style.from_dict(DEFAULT_COMPLETION_STYLE)
+            style=Style.from_dict(DEFAULT_COMPLETION_STYLE),
+            complete_style='multi-column',
+            reserve_space_for_menu=MAX_COMPLETION_MENU_ROWS
         )
         # Context retention settings
         self.retain_context = True  # By default, retain conversation context

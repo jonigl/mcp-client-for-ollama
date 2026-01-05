@@ -21,6 +21,9 @@ DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 # Default number of history entries to display when returning from menus
 DEFAULT_HISTORY_DISPLAY_LIMIT = 5
 
+# Maximum number of visible completion rows in the completion menu
+# This limits the visible rows while still allowing scrolling through all completions
+MAX_COMPLETION_MENU_ROWS = 7
 
 # URL for checking package updates on PyPI
 PYPI_PACKAGE_URL = "https://pypi.org/pypi/mcp-client-for-ollama/json"
