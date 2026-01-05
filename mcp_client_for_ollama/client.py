@@ -1198,7 +1198,12 @@ class MCPClient:
 
     async def cleanup(self):
         """Clean up resources"""
-        await self.exit_stack.aclose()
+        try:
+            await self.exit_stack.aclose()
+        except Exception:
+            # Suppress cleanup exceptions (BrokenResourceError, etc.)
+            # These can occur during stdio server shutdown race conditions
+            pass
 
     def browse_prompts(self):
         """Display all available prompts grouped by server"""
@@ -1327,8 +1332,19 @@ def main(
     if not (mcp_server or mcp_server_url or servers_json or auto_discovery):
         auto_discovery = True
 
-    # Run the async main function
-    asyncio.run(async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host))
+    # Run the async main function with proper cleanup
+    # Use manual loop management to ensure subprocesses cleanup before loop closes
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host))
+    finally:
+        try:
+            # Ensure executor cleanup completes before closing loop
+            loop.run_until_complete(loop.shutdown_default_executor())
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        finally:
+            loop.close()
 
 async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host):
     """Asynchronous main function to run the MCP Client for Ollama"""
@@ -1389,7 +1405,12 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
 
         await client.chat_loop()
     finally:
-        await client.cleanup()
+        try:
+            await client.cleanup()
+        except Exception:
+            # Suppress any cleanup errors (BrokenResourceError, etc.)
+            # These can occur during stdio server shutdown race conditions
+            pass
 
 if __name__ == "__main__":
     app()
