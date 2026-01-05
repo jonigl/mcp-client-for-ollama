@@ -876,7 +876,7 @@ class MCPClient:
 
 
             "[bold cyan]Basic Commands:[/bold cyan]\n"
-            "• Press [bold]a[/bold] during model generation to abort\n"
+            "• Press [bold]a[/bold] during model generation to abort [bold bright_magenta](New!)[/bold bright_magenta]\n"
             "• Type [bold]help[/bold] or [bold]h[/bold] to show this help message\n"
             "• Type [bold]clear-screen[/bold] or [bold]cls[/bold] to clear the terminal screen\n"
             "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], [bold]bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n",
