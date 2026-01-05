@@ -864,7 +864,7 @@ class MCPClient:
             "• Type [bold]clear[/bold] or [bold]cc[/bold] to clear conversation context\n"
             "• Type [bold]context-info[/bold] or [bold]ci[/bold] to display context info\n\n"
 
-            "[bold cyan]History:[/bold cyan]\n"
+            "[bold cyan]History:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
             "• Type [bold]full-history[/bold] or [bold]fh[/bold] to view full conversation history\n"
             "• Type [bold]export-history[/bold] or [bold]eh[/bold] to export history to JSON\n"
             "• Type [bold]import-history[/bold] or [bold]ih[/bold] to import history from JSON\n\n"
