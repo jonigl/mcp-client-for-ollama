@@ -836,8 +836,7 @@ class MCPClient:
     def print_help(self):
         """Print available commands"""
         self.console.print(Panel(
-            "[bold yellow]Available Commands:[/bold yellow]\n\n"
-
+            "\n"
             "[bold cyan]Model:[/bold cyan]\n"
             "• Type [bold]model[/bold] or [bold]m[/bold] to select a model\n"
             "• Type [bold]model-config[/bold] or [bold]mc[/bold] to configure system prompt and model parameters\n"
@@ -880,7 +879,7 @@ class MCPClient:
             "• Type [bold]help[/bold] or [bold]h[/bold] to show this help message\n"
             "• Type [bold]clear-screen[/bold] or [bold]cls[/bold] to clear the terminal screen\n"
             "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], [bold]bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n",
-            title="[bold]Help[/bold]", border_style="yellow", expand=False))
+            title="[bold]Help - Available Commands[/bold]", border_style="yellow", expand=False))
 
     def toggle_context_retention(self):
         """Toggle whether to retain previous conversation context when sending queries"""
