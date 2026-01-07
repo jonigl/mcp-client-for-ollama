@@ -93,7 +93,7 @@ class ServerConnector:
                 "The client will continue without tool support.",
                 title="Warning", border_style="yellow", expand=False
             ))
-            return self.sessions, self.available_tools, self.enabled_tools
+            return self.sessions, self.available_tools, self.enabled_tools, self.prompts_by_server
 
         # Check all servers url connectivity
         servers_to_connect = []
