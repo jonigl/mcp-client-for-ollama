@@ -196,6 +196,9 @@ class ConfigManager:
         validated = default_config()
 
         # Apply values from the loaded configuration if they exist
+        if "host" in config_data:
+            validated["host"] = config_data["host"]
+
         if "model" in config_data:
             validated["model"] = config_data["model"]
 
