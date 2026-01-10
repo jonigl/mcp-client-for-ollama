@@ -190,10 +190,17 @@ class ConfigManager:
             config_data: Configuration data to validate
 
         Returns:
-            Dict: Validated configuration with defaults applied where needed
+            Dict: Validated configuration with defaults applied where needed.
+                  Note: 'host' is only included if explicitly set in config_data
+                  to allow CLI arguments to take precedence over defaults.
         """
         # Start with default configuration
         validated = default_config()
+
+        # Remove default host - only include if explicitly in config file
+        # This allows CLI arguments to take precedence when config file
+        # doesn't have a host field (e.g., older config files)
+        del validated["host"]
 
         # Apply values from the loaded configuration if they exist
         if "host" in config_data:
