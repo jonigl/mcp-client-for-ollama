@@ -46,6 +46,7 @@ class MCPClient:
     def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST):
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
+        self.host = host
         self.ollama = ollama.AsyncClient(host=host)
         self.console = Console()
         self.config_manager = ConfigManager(self.console)
@@ -1039,6 +1040,7 @@ class MCPClient:
         """
         # Build config data
         config_data = {
+            "host": self.host,
             "model": self.model_manager.get_current_model(),
             "enabledTools": self.tool_manager.get_enabled_tools(),
             "contextSettings": {
@@ -1080,6 +1082,13 @@ class MCPClient:
             return False
 
         # Apply the loaded configuration
+        if "host" in config_data:
+            new_host = config_data["host"]
+            if new_host != self.host:
+                self.host = new_host
+                self.ollama = ollama.AsyncClient(host=new_host)
+                self.model_manager.ollama = self.ollama
+
         if "model" in config_data:
             self.model_manager.set_model(config_data["model"])
 
@@ -1143,6 +1152,14 @@ class MCPClient:
         self.tool_manager.enable_all_tools()
         # Enable all tools in the server connector
         self.server_connector.enable_all_tools()
+
+        # Reset host from the default configuration
+        if "host" in config_data:
+            new_host = config_data["host"]
+            if new_host != self.host:
+                self.host = new_host
+                self.ollama = ollama.AsyncClient(host=new_host)
+                self.model_manager.ollama = self.ollama
 
         # Reset context settings from the default configuration
         if "contextSettings" in config_data:
