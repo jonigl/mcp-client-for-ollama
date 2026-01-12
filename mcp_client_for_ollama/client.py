@@ -21,6 +21,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
 import ollama
+import httpx
 
 from . import __version__
 from .config.manager import ConfigManager
@@ -804,6 +805,24 @@ class MCPClient:
                     # User aborted the query - don't save to history
                     self.console.print("[yellow]Query aborted. Nothing saved to history.[/yellow]")
 
+                except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError):
+                    # Connection errors when Ollama server is not available
+                    self.console.print(Panel(
+                        f"[bold red]Connection Error:[/bold red] Unable to connect to Ollama server.\n\n"
+                        f"Configured host: [yellow]{self.host}[/yellow]\n\n"
+                        "Possible causes:\n"
+                        "• Ollama server is not running\n"
+                        "• Incorrect host/port configuration\n"
+                        "• Network connectivity issues\n\n"
+                        "Solutions:\n"
+                        "• Start Ollama with: [bold cyan]ollama serve[/bold cyan]\n"
+                        "• Check if Ollama is running on the correct port\n"
+                        "• Use [bold cyan]--host[/bold cyan] flag to specify a different host\n"
+                        "• Verify your network connection",
+                        title="Ollama Server Unavailable",
+                        border_style="red", expand=False
+                    ))
+
                 except ollama.ResponseError as e:
                     # Extract error message without the traceback
                     error_msg = str(e)
@@ -1328,7 +1347,7 @@ def main(
         rich_help_panel="Ollama Configuration"
     ),
     host: str = typer.Option(
-        DEFAULT_OLLAMA_HOST, "--host", "-H",
+        None, "--host", "-H",
         help="Ollama host URL",
         rich_help_panel="Ollama Configuration"
     ),
@@ -1370,14 +1389,6 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
 
     # Create a temporary client to check if Ollama is running
     client = MCPClient(model=model, host=host)
-    if not await client.model_manager.check_ollama_running():
-        console.print(Panel(
-            "[bold red]Error: Ollama is not running![/bold red]\n\n"
-            "This client requires Ollama to be running to process queries.\n"
-            "Please start Ollama by running the 'ollama serve' command in a terminal.",
-            title="Ollama Not Running", border_style="red", expand=False
-        ))
-        return
 
     # Handle server configuration options - only use one source to prevent duplicates
     config_path = None
@@ -1415,6 +1426,24 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
     try:
         await client.connect_to_servers(mcp_server, mcp_server_url, config_path, auto_discovery_final)
         client.auto_load_default_config()
+
+        if host != client.host and host is not None:
+            client.host = host
+            client.ollama = ollama.AsyncClient(host=host)
+            client.model_manager.ollama = client.ollama
+
+        if not await client.model_manager.check_ollama_running():
+            console.print(Panel(
+                "[bold red]Error: Ollama is not running![/bold red]\n\n"
+                f"[yellow]Ollama current configured host: {client.host}[/yellow]\n\n"
+                "This client requires Ollama to be running to process queries.\n\n"
+                "Please start Ollama by running the 'ollama serve' command in a terminal.\n\n"
+                "💡 [bold magenta]Tip:[/bold magenta] If you configured a different host in a saved default configuration you can\n\n"
+                "   1. Use --host flag to override the configured host for example: ollmcp --host http://localhost:11434\n"
+                "   2. Once done, you can save a new default configuration to avoid needing to specify it each time.",
+                title="Ollama Not Running", border_style="red", expand=False
+            ))
+            return
 
         # If model was explicitly provided via CLI flag (not default), override any loaded config
         if model != DEFAULT_MODEL:
