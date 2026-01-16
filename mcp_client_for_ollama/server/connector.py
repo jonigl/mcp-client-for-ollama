@@ -198,8 +198,8 @@ class ServerConnector:
                 read_stream, write_stream = stdio_transport
                 session = await self.exit_stack.enter_async_context(ClientSession(read_stream, write_stream))
 
-            # Initialize the session
-            await session.initialize()
+            # Initialize the session and capture capabilities
+            init_result = await session.initialize()
 
             # Store the session
             self.sessions[server_name] = {
@@ -207,40 +207,54 @@ class ServerConnector:
                 "tools": []
             }
 
-            # Get tools from this server
-            response = await session.list_tools()
-
-            # Store and merge tools, prepending server name to avoid conflicts
+            # Get tools from this server if capability is present
             server_tools = []
-            for tool in response.tools:
-                # Create a qualified name for the tool that includes the server
-                qualified_name = f"{server_name}.{tool.name}"
-                # Clone the tool but update the name
-                tool_copy = Tool(
-                    name=qualified_name,
-                    description=f"[{server_name}] {tool.description}" if hasattr(tool, 'description') else f"Tool from {server_name}",
-                    inputSchema=tool.inputSchema,
-                    outputSchema=tool.outputSchema if hasattr(tool, 'outputSchema') else None
-                )
-                server_tools.append(tool_copy)
-                self.enabled_tools[qualified_name] = True
+            capabilities = getattr(init_result, 'capabilities', None)
+            if capabilities and getattr(capabilities, 'tools', None):
+                try:
+                    response = await session.list_tools()
+                    # Store and merge tools, prepending server name to avoid conflicts
+                    for tool in response.tools:
+                        # Create a qualified name for the tool that includes the server
+                        qualified_name = f"{server_name}.{tool.name}"
+                        # Clone the tool but update the name
+                        tool_copy = Tool(
+                            name=qualified_name,
+                            description=f"[{server_name}] {tool.description}" if hasattr(tool, 'description') else f"Tool from {server_name}",
+                            inputSchema=tool.inputSchema,
+                            outputSchema=tool.outputSchema if hasattr(tool, 'outputSchema') else None
+                        )
+                        server_tools.append(tool_copy)
+                        self.enabled_tools[qualified_name] = True
+                except Exception as e:
+                    self.console.print(f"[yellow]Warning: Failed to list tools from {server_name}: {str(e)}[/yellow]")
+            else:
+                self.console.print(f"[dim]Server {server_name} does not support tools capability[/dim]")
 
             self.sessions[server_name]["tools"] = server_tools
             self.available_tools.extend(server_tools)
 
-            # Try to get prompts from this server
+            # Get prompts from this server if capability is present
             server_prompts = []
-            try:
-                # Attempt to list prompts - will fail gracefully if not supported
-                prompts_response = await session.list_prompts()
-                server_prompts = prompts_response.prompts if hasattr(prompts_response, 'prompts') else []
-                if server_prompts:
-                    self.prompts_by_server[server_name] = server_prompts
-            except (AttributeError, NotImplementedError, Exception):
-                # Server doesn't support prompts or feature not available
-                pass
+            if capabilities and getattr(capabilities, 'prompts', None):
+                try:
+                    prompts_response = await session.list_prompts()
+                    server_prompts = prompts_response.prompts if hasattr(prompts_response, 'prompts') else []
+                    if server_prompts:
+                        self.prompts_by_server[server_name] = server_prompts
+                except Exception as e:
+                    self.console.print(f"[yellow]Warning: Failed to list prompts from {server_name}: {str(e)}[/yellow]")
+            else:
+                self.console.print(f"[dim]Server {server_name} does not support prompts capability[/dim]")
 
-            prompt_count_msg = f" and {len(server_prompts)} prompt(s)" if server_prompts else ""
+            # @TODO Resources capability check (not yet implemented)
+            # if capabilities and getattr(capabilities, 'resources', None):
+            #     # Future: Implement resources support
+            #     pass
+            # else:
+            #     self.console.print(f"[dim]Server {server_name} does not support resources capability[/dim]")
+
+            prompt_count_msg = f" and {len(server_prompts)} prompt(s)"
             self.console.print(f"[green]Successfully connected to {server_name} with {len(server_tools)} tool(s){prompt_count_msg}[/green]")
             return True
 

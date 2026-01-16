@@ -1,6 +1,7 @@
 """Constants used throughout the MCP Client for Ollama application."""
 
 import os
+from mcp.types import LATEST_PROTOCOL_VERSION
 
 # Default Claude config file location
 DEFAULT_CLAUDE_CONFIG = os.path.expanduser("~/Library/Application Support/Claude/claude_desktop_config.json")
@@ -28,8 +29,10 @@ MAX_COMPLETION_MENU_ROWS = 7
 # URL for checking package updates on PyPI
 PYPI_PACKAGE_URL = "https://pypi.org/pypi/mcp-client-for-ollama/json"
 
-# MCP Protocol Version
-MCP_PROTOCOL_VERSION = "2025-06-18"
+# MCP Protocol Version - Using SDK's latest supported version (currently "2025-11-25")
+# The SDK handles backward compatibility with servers on older protocol versions:
+# Supported versions: ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"]
+MCP_PROTOCOL_VERSION = LATEST_PROTOCOL_VERSION
 
 # Interactive commands and their descriptions for autocomplete
 INTERACTIVE_COMMANDS = {
