@@ -205,8 +205,32 @@ class MCPClient:
         self._display_chat_history()
 
     def clear_console(self):
-        """Clear the console screen"""
-        os.system('cls' if os.name == 'nt' else 'clear')
+        """Clears the terminal view with OS-specific behavior:
+        - Windows: Uses 'cls' (wipes history).
+        - Unix (Mac/Linux): Uses 'Scroll-Push' strategy (preserves history),
+        with a fallback to 'clear -x' if terminal size is undetectable.
+        """
+        # Check for Windows
+        if os.name == 'nt':
+            os.system('cls')
+            return
+        # For Unix-like systems
+        try:
+            # get the real window height
+            rows = os.get_terminal_size().lines
+
+            # Scroll-Push Strategy, print n-1 newlines to push content up without overflowing
+            padding = '\n' * (rows - 1)
+            move_home = '\033[H'
+
+            # Write instantly to stdout
+            sys.stdout.write(padding + move_home)
+            sys.stdout.flush()
+
+        except OSError:
+            # Fallback, use ANSI clear + cursor home
+            sys.stdout.write('\033[2J\033[H')
+            sys.stdout.flush()
 
     def display_available_tools(self):
         """Display available tools with their enabled/disabled status"""
