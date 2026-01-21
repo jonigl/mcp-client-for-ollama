@@ -210,12 +210,14 @@ def main():
 
     print(f"Version bump complete! {current_version} -> {new_version}")
     print("\nNext steps:")
-    print("1. Commit the changes:")
+    print("1. Commit the changes on the bump branch:")
     print("   git add -A")
     print(f"   git commit -m 'chore(release): bump version to {new_version}'")
-    print(f"2. Create a tag: git tag -a v{new_version} -m \"Version {new_version}\"")
-    print("3. Push changes: git push && git push --tags")
-    print("4. Build and publish the packages will be done automatically by CI/CD pipeline.")
+    print("   Push the branch and create a pull request to main.")
+    print("2. After PR is merged, checkout main branch and pull the latest changes.")
+    print(f"3. Create a tag: git tag -a v{new_version} -m \"Version {new_version}\"")
+    print("4. Push changes: git push && git push --tags")
+    print("5. Build and publish the packages will be done automatically by CI/CD pipeline.")
 
 
 if __name__ == "__main__":
