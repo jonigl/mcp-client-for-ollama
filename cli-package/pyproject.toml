@@ -1,6 +1,6 @@
 [project]
 name = "ollmcp"
-version = "0.25.2"
+version = "0.26.0"
 description = "CLI for MCP Client for Ollama - An easy-to-use command for interacting with Ollama through MCP"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -9,7 +9,7 @@ authors = [
     {name = "Jonathan Löwenstern"}
 ]
 dependencies = [
-    "mcp-client-for-ollama==0.25.2"
+    "mcp-client-for-ollama==0.26.0"
 ]
 
 [project.scripts]
