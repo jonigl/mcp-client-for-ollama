@@ -1,6 +1,7 @@
 """Constants used throughout the MCP Client for Ollama application."""
 
 import os
+from mcp.types import LATEST_PROTOCOL_VERSION
 
 # Default Claude config file location
 DEFAULT_CLAUDE_CONFIG = os.path.expanduser("~/Library/Application Support/Claude/claude_desktop_config.json")
@@ -18,12 +19,20 @@ DEFAULT_MODEL = "qwen2.5:7b"
 # Default ollama lcoal url for API requests
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 
+# Default number of history entries to display when returning from menus
+DEFAULT_HISTORY_DISPLAY_LIMIT = 5
+
+# Maximum number of visible completion rows in the completion menu
+# This limits the visible rows while still allowing scrolling through all completions
+MAX_COMPLETION_MENU_ROWS = 7
 
 # URL for checking package updates on PyPI
 PYPI_PACKAGE_URL = "https://pypi.org/pypi/mcp-client-for-ollama/json"
 
-# MCP Protocol Version
-MCP_PROTOCOL_VERSION = "2025-06-18"
+# MCP Protocol Version - Using SDK's latest supported version (currently "2025-11-25")
+# The SDK handles backward compatibility with servers on older protocol versions:
+# Supported versions: ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"]
+MCP_PROTOCOL_VERSION = LATEST_PROTOCOL_VERSION
 
 # Interactive commands and their descriptions for autocomplete
 INTERACTIVE_COMMANDS = {
@@ -33,12 +42,16 @@ INTERACTIVE_COMMANDS = {
     'context-info': 'Show context information',
     'context': 'Toggle context retention',
     'exit': 'Exit the application',
+    'export-history': 'Export chat history to JSON',
+    'full-history': 'View full conversation history',
     'help': 'Show help information',
+    'import-history': 'Import chat history from JSON',
     'human-in-the-loop': 'Toggle HIL confirmations',
     'load-config': 'Load saved configuration',
     'loop-limit': 'Set agent max loop limit',
     'model-config': 'Configure model parameters',
     'model': 'Select Ollama model',
+    'prompts': 'Browse available MCP prompts',
     'quit': 'Exit the application',
     'reload-servers': 'Reload MCP servers',
     'reset-config': 'Reset to default config',

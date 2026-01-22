@@ -1,7 +1,16 @@
 """MCP Client for Ollama - A TUI client for interacting with Ollama models and MCP servers"""
 import asyncio
 import os
-from contextlib import AsyncExitStack
+import sys
+import select
+# Only import Unix-specific modules on non-Windows systems
+if os.name != 'nt':
+    import tty # pylint: disable=E0401
+    import termios # pylint: disable=E0401
+else:
+    import msvcrt # pylint: disable=E0401
+
+from contextlib import AsyncExitStack, contextmanager
 from typing import List, Optional
 
 import typer
@@ -12,20 +21,25 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
 import ollama
+import httpx
 
 from . import __version__
 from .config.manager import ConfigManager
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
 from .tools.manager import ToolManager
 from .tools.rag import ToolRAG
+from .prompts.manager import PromptManager
+from .prompts.handler import PromptHandler
 from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
-from .utils.hil_manager import HumanInTheLoopManager
+from .utils.hil_manager import HumanInTheLoopManager, AbortQueryException
 from .utils.fzf_style_completion import FZFStyleCompleter
+from .utils.history import display_full_history, export_history, import_history
+from .utils.input import get_input_no_autocomplete
 
 
 class MCPClient:
@@ -35,6 +49,7 @@ class MCPClient:
                  tool_rag_threshold: float = 0.65, tool_rag_min_tools: int = 0, tool_rag_max_tools: int = 20):
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
+        self.host = host
         self.ollama = ollama.AsyncClient(host=host)
         self.console = Console()
         self.config_manager = ConfigManager(self.console)
@@ -46,6 +61,10 @@ class MCPClient:
         self.model_config_manager = ModelConfigManager(console=self.console)
         # Initialize the tool manager with server connector reference
         self.tool_manager = ToolManager(console=self.console, server_connector=self.server_connector)
+        # Initialize the prompt manager
+        self.prompt_manager = PromptManager(console=self.console)
+        # Initialize the prompt handler
+        self.prompt_handler = PromptHandler(console=self.console, prompt_manager=self.prompt_manager)
         # Initialize the streaming manager
         self.streaming_manager = StreamingManager(console=self.console)
         # Initialize the tool display manager
@@ -65,7 +84,9 @@ class MCPClient:
         # Command completer for interactive prompts
         self.prompt_session = PromptSession(
             completer=FZFStyleCompleter(),
-            style=Style.from_dict(DEFAULT_COMPLETION_STYLE)
+            style=Style.from_dict(DEFAULT_COMPLETION_STYLE),
+            complete_style='multi-column',
+            reserve_space_for_menu=MAX_COMPLETION_MENU_ROWS
         )
         # Context retention settings
         self.retain_context = True  # By default, retain conversation context
@@ -80,6 +101,9 @@ class MCPClient:
         # Agent mode settings
         self.loop_limit = 3  # Maximum follow-up tool loops per query
         self.default_configuration_status = False  # Track if default configuration was loaded successfully
+        self.abort_current_query = False  # Flag to abort the current query execution
+        self.monitor_paused = False  # Flag to pause cancellation monitoring
+        self.monitor_paused_ack = asyncio.Event()  # Event to acknowledge pause
 
         # Store server connection parameters for reloading
         self.server_connection_params = {
@@ -87,6 +111,73 @@ class MCPClient:
             'config_path': None,
             'auto_discovery': False
         }
+
+    @contextmanager
+    def _temporary_history_extension(self, entries: List[dict]):
+        """Context manager for temporarily extending chat history with automatic rollback
+
+        Args:
+            entries: List of history entries to append temporarily
+        """
+        backup = self.chat_history.copy()
+        try:
+            self.chat_history.extend(entries)
+            yield
+        except Exception:
+            self.chat_history = backup
+            raise
+
+    async def _process_query_with_monitoring(self, query: str):
+        """Process a query with cancellation monitoring
+
+        Args:
+            query: The query to process
+        """
+        # Reset HIL session state for new query
+        self.hil_manager.reset_session()
+
+        # Reset abort flag and monitor state
+        self.abort_current_query = False
+        self.monitor_paused = False
+        self.monitor_paused_ack.clear()
+
+        # Create tasks for query processing and cancellation monitoring
+        query_task = asyncio.create_task(self.process_query(query))
+        monitor_task = asyncio.create_task(self.monitor_cancellation())
+
+        try:
+            done, pending = await asyncio.wait(
+                [query_task, monitor_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+
+            if monitor_task in done:
+                query_task.cancel()
+                try:
+                    await query_task
+                except (asyncio.CancelledError, AbortQueryException):
+                    pass
+                raise AbortQueryException("User aborted query")
+            else:
+                try:
+                    await query_task
+                except AbortQueryException:
+                    raise
+
+        except KeyboardInterrupt:
+            self.abort_current_query = True
+            query_task.cancel()
+            try:
+                await query_task
+            except (asyncio.CancelledError, AbortQueryException):
+                pass
+            raise
+        finally:
+            monitor_task.cancel()
+            try:
+                await monitor_task
+            except asyncio.CancelledError:
+                pass
 
     def display_current_model(self):
         """Display the currently selected model"""
@@ -122,8 +213,32 @@ class MCPClient:
         self._display_chat_history()
 
     def clear_console(self):
-        """Clear the console screen"""
-        os.system('cls' if os.name == 'nt' else 'clear')
+        """Clears the terminal view with OS-specific behavior:
+        - Windows: Uses 'cls' (wipes history).
+        - Unix (Mac/Linux): Uses 'Scroll-Push' strategy (preserves history),
+        with a fallback to 'clear -x' if terminal size is undetectable.
+        """
+        # Check for Windows
+        if os.name == 'nt':
+            os.system('cls')
+            return
+        # For Unix-like systems
+        try:
+            # get the real window height
+            rows = os.get_terminal_size().lines
+
+            # Scroll-Push Strategy, print n-1 newlines to push content up without overflowing
+            padding = '\n' * (rows - 1)
+            move_home = '\033[H'
+
+            # Write instantly to stdout
+            sys.stdout.write(padding + move_home)
+            sys.stdout.flush()
+
+        except OSError:
+            # Fallback, use ANSI clear + cursor home
+            sys.stdout.write('\033[2J\033[H')
+            sys.stdout.flush()
 
     def display_available_tools(self):
         """Display available tools with their enabled/disabled status"""
@@ -147,7 +262,7 @@ class MCPClient:
         }
 
         # Connect to servers using the server connector
-        sessions, available_tools, enabled_tools = await self.server_connector.connect_to_servers(
+        sessions, available_tools, enabled_tools, prompts_by_server = await self.server_connector.connect_to_servers(
             server_paths=server_paths,
             server_urls=server_urls,
             config_path=config_path,
@@ -166,6 +281,14 @@ class MCPClient:
             self.console.print("[dim]Embedding tools for intelligent filtering...[/dim]")
             self.tool_rag.embed_tools(available_tools)
             self.console.print(f"[green]✓ Tool RAG enabled with {len(available_tools)} tools[/green]")
+
+        # Set up the prompt manager with available prompts
+        self.prompt_manager.set_prompts(prompts_by_server)
+
+        # Update the FZF completer with available prompts
+        if self.prompt_session and self.prompt_session.completer:
+            prompt_list = self.prompt_manager.list_all()
+            self.prompt_session.completer.set_prompts(prompt_list)
 
     def select_tools(self):
         """Let the user select which tools to enable using interactive prompts with server-based grouping"""
@@ -192,7 +315,7 @@ class MCPClient:
             self.console.print(Panel("[bold]Chat History[/bold]", border_style="blue", expand=False))
 
             # Display the last few conversations (limit to keep the interface clean)
-            max_history = 3
+            max_history = DEFAULT_HISTORY_DISPLAY_LIMIT
             history_to_show = self.chat_history[-max_history:]
 
             for i, entry in enumerate(history_to_show):
@@ -305,8 +428,12 @@ class MCPClient:
             stream,
             thinking_mode=self.thinking_mode,
             show_thinking=self.show_thinking,
-            show_metrics=self.show_metrics
+            show_metrics=self.show_metrics,
+            cancellation_check=lambda: self.abort_current_query
         )
+
+        if self.abort_current_query:
+            return ""
 
         # response_text will be either empty or contain a response
         # Append the assistant's response to messages helps maintain context and fix ollama cloud tool call issues
@@ -327,6 +454,9 @@ class MCPClient:
 
         # Keep looping while the model requests tools and we have capacity
         while pending_tool_calls and enabled_tools:
+            if self.abort_current_query:
+                break
+
             if loop_count >= self.loop_limit:
                 self.console.print(Panel(
                     f"[yellow]Your current loop limit is set to [bold]{self.loop_limit}[/bold] and has been reached. Skipping additional tool calls.[/yellow]\n"
@@ -353,9 +483,25 @@ class MCPClient:
                 self.tool_display_manager.display_tool_execution(tool_name, tool_args, show=self.show_tool_execution)
 
                 # Request HIL confirmation if enabled
-                should_execute = await self.hil_manager.request_tool_confirmation(
-                    tool_name, tool_args
-                )
+                self.monitor_paused = True
+                # Wait for monitor to acknowledge pause if we are on a system that uses it
+                if os.name != 'nt':
+                    try:
+                        # Wait up to 1 second for the monitor to pause
+                        await asyncio.wait_for(self.monitor_paused_ack.wait(), timeout=1.0)
+                    except asyncio.TimeoutError:
+                        pass
+
+                try:
+                    should_execute = await self.hil_manager.request_tool_confirmation(
+                        tool_name, tool_args
+                    )
+                except AbortQueryException:
+                    # User aborted - set abort flag so monitor exits cleanly
+                    self.abort_current_query = True
+                    raise
+                finally:
+                    self.monitor_paused = False
 
                 if not should_execute:
                     tool_response = "Tool call was skipped by user"
@@ -403,8 +549,12 @@ class MCPClient:
                 stream,
                 thinking_mode=self.thinking_mode,
                 show_thinking=self.show_thinking,
-                show_metrics=self.show_metrics
+                show_metrics=self.show_metrics,
+                cancellation_check=lambda: self.abort_current_query
             )
+
+            if self.abort_current_query:
+                break
 
             messages.append({
                 "role": "assistant",
@@ -421,12 +571,13 @@ class MCPClient:
 
             enabled_tools = self.tool_manager.get_enabled_tool_objects()
 
-        if not response_text:
+        if not response_text and not self.abort_current_query:
             self.console.print("[red]No content response received.[/red]")
             response_text = ""
 
         # Append query and response to chat history
-        self.chat_history.append({"query": query, "response": response_text})
+        if not self.abort_current_query:
+            self.chat_history.append({"query": query, "response": response_text})
 
         return response_text
 
@@ -456,6 +607,89 @@ class MCPClient:
             return "quit"
         except EOFError:
             return "quit"
+
+    async def monitor_cancellation(self):
+        """Monitor for 'a' key press to cancel execution"""
+        if os.name == 'nt':
+            # Windows implementation
+            while not self.abort_current_query:
+                # Check if monitoring should be suspended (e.g. during HIL prompts)
+                if self.monitor_paused:
+                    await asyncio.sleep(0.1)
+                    continue
+
+                if msvcrt.kbhit(): # pylint: disable=E0606
+                    ch = msvcrt.getch()
+                    # msvcrt.getch() returns bytes, decode to string
+                    try:
+                        char = ch.decode('utf-8').lower()
+                    except UnicodeDecodeError:
+                        char = ''
+
+                    if char == 'a':
+                        self.console.print("[bold red]🛑 Aborting query...[/bold red]")
+                        self.abort_current_query = True
+                        break
+                # Yield control to allow other tasks to run
+                await asyncio.sleep(0.1)
+        else:
+            # Unix (macOS/Linux) implementation
+            fd = sys.stdin.fileno()
+            old_settings = None
+            try:
+                old_settings = termios.tcgetattr(fd) # pylint: disable=E0606
+                # Use cbreak mode to read characters without waiting for newline
+                # but keep signals like Ctrl+C working
+                tty.setcbreak(fd)  # pylint: disable=E0606
+
+                while not self.abort_current_query:
+                    # Check if monitoring should be suspended (e.g. during HIL prompts)
+                    if self.monitor_paused:
+                        # Restore terminal settings to allow other input methods to work
+                        if old_settings:
+                            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+                        # Signal that we have paused
+                        self.monitor_paused_ack.set()
+
+                        # Wait until suspension is lifted
+                        while self.monitor_paused and not self.abort_current_query:
+                            await asyncio.sleep(0.1)
+
+                        # Reset ack
+                        self.monitor_paused_ack.clear()
+
+                        # Re-enable cbreak mode if we're still running
+                        if not self.abort_current_query:
+                            tty.setcbreak(fd)
+                        else:
+                            # If aborting, just exit the loop
+                            break
+
+                    # Check if there is input ready with a short timeout
+                    # We check monitor_paused again to be safe
+                    if not self.monitor_paused and not self.abort_current_query:
+                        if select.select([sys.stdin], [], [], 0.1)[0]:
+                            ch = sys.stdin.read(1)
+                            if ch.lower() == 'a':
+                                self.console.print("[bold red]🛑 Aborting query...[/bold red]")
+                                self.abort_current_query = True
+                                break
+                    # Yield control to allow other tasks to run
+                    await asyncio.sleep(0.1)
+            except asyncio.CancelledError:
+                # Task was cancelled, just restore terminal settings and exit
+                pass
+            except Exception:
+                # Silently ignore other exceptions in monitoring
+                pass
+            finally:
+                # Always restore terminal settings on exit, if old settings exist
+                if old_settings:
+                    try:
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)  # type: ignore
+                    except Exception:
+                        pass
 
     async def display_check_for_updates(self):
         # Check for updates
@@ -548,7 +782,7 @@ class MCPClient:
 
                 if query.lower() in ['save-config', 'sc']:
                     # Ask for config name, defaulting to "default"
-                    config_name = await self.get_user_input("Config name (or press Enter for default)")
+                    config_name = await get_input_no_autocomplete("Config name (or press Enter for default)")
                     if not config_name or config_name.strip() == "":
                         config_name = "default"
                     self.save_configuration(config_name)
@@ -556,7 +790,7 @@ class MCPClient:
 
                 if query.lower() in ['load-config', 'lc']:
                     # Ask for config name, defaulting to "default"
-                    config_name = await self.get_user_input("Config name to load (or press Enter for default)")
+                    config_name = await get_input_no_autocomplete("Config name to load (or press Enter for default)")
                     if not config_name or config_name.strip() == "":
                         config_name = "default"
                     self.load_configuration(config_name)
@@ -580,13 +814,69 @@ class MCPClient:
                     self.hil_manager.toggle()
                     continue
 
+                if query.lower() in ['prompts', 'pr']:
+                    self.browse_prompts()
+                    continue
+
+                if query.lower() in ['full-history', 'fh']:
+                    display_full_history(self.chat_history, self.console)
+                    continue
+
+                if query.lower() in ['export-history', 'eh']:
+                    filename = await get_input_no_autocomplete("Export filename (or press Enter for default)")
+                    if not filename or filename.strip() == "":
+                        export_history(self.chat_history, self.console)
+                    else:
+                        export_history(self.chat_history, self.console, filename.strip())
+                    continue
+
+                if query.lower() in ['import-history', 'ih']:
+                    filepath = await get_input_no_autocomplete("Path to history file to import")
+                    if filepath and filepath.strip():
+                        imported = import_history(filepath.strip(), self.console)
+                        if imported is not None:
+                            self.chat_history = imported
+                            self.console.print("[green]Current chat history replaced with imported history.[/green]")
+                    else:
+                        self.console.print("[yellow]Import cancelled: No filepath provided.[/yellow]")
+                    continue
+
+                # Check if query starts with / (prompt invocation)
+                if query.startswith('/'):
+                    await self.handle_prompt_invocation(query)
+                    continue
+
                 # Check if query is too short and not a special command
                 if len(query.strip()) < 5:
                     self.console.print("[yellow]Query must be at least 5 characters long.[/yellow]")
                     continue
 
                 try:
-                    await self.process_query(query)
+                    # Process query with monitoring
+                    await self._process_query_with_monitoring(query)
+
+                except AbortQueryException:
+                    # User aborted the query - don't save to history
+                    self.console.print("[yellow]Query aborted. Nothing saved to history.[/yellow]")
+
+                except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError):
+                    # Connection errors when Ollama server is not available
+                    self.console.print(Panel(
+                        f"[bold red]Connection Error:[/bold red] Unable to connect to Ollama server.\n\n"
+                        f"Configured host: [yellow]{self.host}[/yellow]\n\n"
+                        "Possible causes:\n"
+                        "• Ollama server is not running\n"
+                        "• Incorrect host/port configuration\n"
+                        "• Network connectivity issues\n\n"
+                        "Solutions:\n"
+                        "• Start Ollama with: [bold cyan]ollama serve[/bold cyan]\n"
+                        "• Check if Ollama is running on the correct port\n"
+                        "• Use [bold cyan]--host[/bold cyan] flag to specify a different host\n"
+                        "• Verify your network connection",
+                        title="Ollama Server Unavailable",
+                        border_style="red", expand=False
+                    ))
+
                 except ollama.ResponseError as e:
                     # Extract error message without the traceback
                     error_msg = str(e)
@@ -622,16 +912,15 @@ class MCPClient:
     def print_help(self):
         """Print available commands"""
         self.console.print(Panel(
-            "[bold yellow]Available Commands:[/bold yellow]\n\n"
-
+            "\n"
             "[bold cyan]Model:[/bold cyan]\n"
             "• Type [bold]model[/bold] or [bold]m[/bold] to select a model\n"
             "• Type [bold]model-config[/bold] or [bold]mc[/bold] to configure system prompt and model parameters\n"
-            f"• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode\n"
+            "• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode\n"
             "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n"
             "• Type [bold]show-metrics[/bold] or [bold]sm[/bold] to toggle performance metrics display\n\n"
 
-            "[bold cyan]Agent Mode:[/bold cyan] [bold magenta](New!)[/bold magenta]\n"
+            "[bold cyan]Agent Mode:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
             "• Type [bold]loop-limit[/bold] or [bold]ll[/bold] to set the maximum tool loop iterations\n\n"
 
             "[bold cyan]MCP Servers and Tools:[/bold cyan]\n"
@@ -640,10 +929,20 @@ class MCPClient:
             "• Type [bold]human-in-the-loop[/bold] or [bold]hil[/bold] to toggle Human-in-the-Loop confirmations\n"
             "• Type [bold]reload-servers[/bold] or [bold]rs[/bold] to reload MCP servers\n\n"
 
+            "[bold cyan]MCP Prompts:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
+            "• Type [bold]prompts[/bold] or [bold]pr[/bold] to browse available prompts\n"
+            "• Type [bold]/prompt_name[/bold] to invoke a prompt\n"
+            "• Type [bold]/[/bold] to see prompt autocomplete suggestions\n\n"
+
             "[bold cyan]Context:[/bold cyan]\n"
             "• Type [bold]context[/bold] or [bold]c[/bold] to toggle context retention\n"
             "• Type [bold]clear[/bold] or [bold]cc[/bold] to clear conversation context\n"
             "• Type [bold]context-info[/bold] or [bold]ci[/bold] to display context info\n\n"
+
+            "[bold cyan]History:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
+            "• Type [bold]full-history[/bold] or [bold]fh[/bold] to view full conversation history\n"
+            "• Type [bold]export-history[/bold] or [bold]eh[/bold] to export history to JSON\n"
+            "• Type [bold]import-history[/bold] or [bold]ih[/bold] to import history from JSON\n\n"
 
             "[bold cyan]Configuration:[/bold cyan]\n"
             "• Type [bold]save-config[/bold] or [bold]sc[/bold] to save the current configuration\n"
@@ -652,10 +951,11 @@ class MCPClient:
 
 
             "[bold cyan]Basic Commands:[/bold cyan]\n"
+            "• Press [bold]a[/bold] during model generation to abort [bold bright_magenta](New!)[/bold bright_magenta]\n"
             "• Type [bold]help[/bold] or [bold]h[/bold] to show this help message\n"
             "• Type [bold]clear-screen[/bold] or [bold]cls[/bold] to clear the terminal screen\n"
-            "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], [bold]bye[/bold], or [bold]Ctrl+D[/bold] to exit the client\n",
-            title="[bold]Help[/bold]", border_style="yellow", expand=False))
+            "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], [bold]bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n",
+            title="[bold]Help - Available Commands[/bold]", border_style="yellow", expand=False))
 
     def toggle_context_retention(self):
         """Toggle whether to retain previous conversation context when sending queries"""
@@ -742,7 +1042,7 @@ class MCPClient:
 
     async def set_loop_limit(self):
         """Configure the maximum number of follow-up tool loops per query."""
-        user_input = await self.get_user_input(f"Loop limit (current: {self.loop_limit})")
+        user_input = await get_input_no_autocomplete(f"Set agent loop limit (current: {self.loop_limit})")
 
         if user_input is None:
             return
@@ -813,6 +1113,7 @@ class MCPClient:
         """
         # Build config data
         config_data = {
+            "host": self.host,
             "model": self.model_manager.get_current_model(),
             "enabledTools": self.tool_manager.get_enabled_tools(),
             "contextSettings": {
@@ -854,6 +1155,13 @@ class MCPClient:
             return False
 
         # Apply the loaded configuration
+        if "host" in config_data:
+            new_host = config_data["host"]
+            if new_host != self.host:
+                self.host = new_host
+                self.ollama = ollama.AsyncClient(host=new_host)
+                self.model_manager.ollama = self.ollama
+
         if "model" in config_data:
             self.model_manager.set_model(config_data["model"])
 
@@ -918,6 +1226,14 @@ class MCPClient:
         # Enable all tools in the server connector
         self.server_connector.enable_all_tools()
 
+        # Reset host from the default configuration
+        if "host" in config_data:
+            new_host = config_data["host"]
+            if new_host != self.host:
+                self.host = new_host
+                self.ollama = ollama.AsyncClient(host=new_host)
+                self.model_manager.ollama = self.ollama
+
         # Reset context settings from the default configuration
         if "contextSettings" in config_data:
             if "retainContext" in config_data["contextSettings"]:
@@ -972,7 +1288,40 @@ class MCPClient:
 
     async def cleanup(self):
         """Clean up resources"""
-        await self.exit_stack.aclose()
+        try:
+            await self.exit_stack.aclose()
+        except Exception:
+            # Suppress cleanup exceptions (BrokenResourceError, etc.)
+            # These can occur during stdio server shutdown race conditions
+            pass
+
+    def browse_prompts(self):
+        """Display all available prompts grouped by server"""
+        self.clear_console()
+        self.prompt_handler.browse_prompts()
+
+        # Redisplay context
+        self.clear_console()
+        self.display_available_tools()
+        self.display_current_model()
+        self._display_chat_history()
+
+    async def handle_prompt_invocation(self, user_input: str):
+        """Handle prompt invocation via /prompt_name syntax
+
+        Args:
+            user_input: User input starting with / (e.g., "/summarize")
+        """
+        # Extract prompt name (remove leading /)
+        prompt_name = user_input[1:].strip()
+
+        # Delegate to prompt handler
+        await self.prompt_handler.invoke_prompt(
+            prompt_name,
+            self.sessions,
+            self._process_query_with_monitoring,
+            self._temporary_history_extension
+        )
 
     async def reload_servers(self):
         """Reload all MCP servers with the same connection parameters"""
@@ -1052,7 +1401,7 @@ def main(
         rich_help_panel="Ollama Configuration"
     ),
     host: str = typer.Option(
-        DEFAULT_OLLAMA_HOST, "--host", "-H",
+        None, "--host", "-H",
         help="Ollama host URL",
         rich_help_panel="Ollama Configuration"
     ),
@@ -1095,9 +1444,20 @@ def main(
     if not (mcp_server or mcp_server_url or servers_json or auto_discovery):
         auto_discovery = True
 
-    # Run the async main function
-    asyncio.run(async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host, 
-                          enable_tool_rag, tool_rag_threshold, tool_rag_min_tools, tool_rag_max_tools))
+    # Run the async main function with proper cleanup
+    # Use manual loop management to ensure subprocesses cleanup before loop closes
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host,
+                                          enable_tool_rag, tool_rag_threshold, tool_rag_min_tools, tool_rag_max_tools))
+    finally:
+        try:
+            # Ensure executor cleanup completes before closing loop
+            loop.run_until_complete(loop.shutdown_default_executor())
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        finally:
+            loop.close()
 
 async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host, 
                     enable_tool_rag, tool_rag_threshold, tool_rag_min_tools, tool_rag_max_tools):
@@ -1109,14 +1469,6 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
     client = MCPClient(model=model, host=host, enable_tool_rag=enable_tool_rag, 
                       tool_rag_threshold=tool_rag_threshold, tool_rag_min_tools=tool_rag_min_tools, 
                       tool_rag_max_tools=tool_rag_max_tools)
-    if not await client.model_manager.check_ollama_running():
-        console.print(Panel(
-            "[bold red]Error: Ollama is not running![/bold red]\n\n"
-            "This client requires Ollama to be running to process queries.\n"
-            "Please start Ollama by running the 'ollama serve' command in a terminal.",
-            title="Ollama Not Running", border_style="red", expand=False
-        ))
-        return
 
     # Handle server configuration options - only use one source to prevent duplicates
     config_path = None
@@ -1155,13 +1507,36 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
         await client.connect_to_servers(mcp_server, mcp_server_url, config_path, auto_discovery_final)
         client.auto_load_default_config()
 
+        if host != client.host and host is not None:
+            client.host = host
+            client.ollama = ollama.AsyncClient(host=host)
+            client.model_manager.ollama = client.ollama
+
+        if not await client.model_manager.check_ollama_running():
+            console.print(Panel(
+                "[bold red]Error: Ollama is not running![/bold red]\n\n"
+                f"[yellow]Ollama current configured host: {client.host}[/yellow]\n\n"
+                "This client requires Ollama to be running to process queries.\n\n"
+                "Please start Ollama by running the 'ollama serve' command in a terminal.\n\n"
+                "💡 [bold magenta]Tip:[/bold magenta] If you configured a different host in a saved default configuration you can\n\n"
+                "   1. Use --host flag to override the configured host for example: ollmcp --host http://localhost:11434\n"
+                "   2. Once done, you can save a new default configuration to avoid needing to specify it each time.",
+                title="Ollama Not Running", border_style="red", expand=False
+            ))
+            return
+
         # If model was explicitly provided via CLI flag (not default), override any loaded config
         if model != DEFAULT_MODEL:
             client.model_manager.set_model(model)
 
         await client.chat_loop()
     finally:
-        await client.cleanup()
+        try:
+            await client.cleanup()
+        except Exception:
+            # Suppress any cleanup errors (BrokenResourceError, etc.)
+            # These can occur during stdio server shutdown race conditions
+            pass
 
 if __name__ == "__main__":
     app()

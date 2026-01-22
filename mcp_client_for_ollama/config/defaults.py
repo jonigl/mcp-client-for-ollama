@@ -4,7 +4,7 @@ This module provides default settings and paths used throughout the application.
 """
 
 import os
-from ..utils.constants import DEFAULT_MODEL, DEFAULT_CONFIG_FILE, DEFAULT_CONFIG_DIR
+from ..utils.constants import DEFAULT_MODEL, DEFAULT_CONFIG_FILE, DEFAULT_CONFIG_DIR, DEFAULT_OLLAMA_HOST
 
 def default_config() -> dict:
     """Get default configuration settings.
@@ -14,6 +14,7 @@ def default_config() -> dict:
     """
 
     return {
+        "host": DEFAULT_OLLAMA_HOST,
         "model": DEFAULT_MODEL,
         "enabledTools": {},  # Will be populated with available tools
         "contextSettings": {

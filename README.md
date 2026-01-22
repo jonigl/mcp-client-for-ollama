@@ -40,7 +40,9 @@
   - [Advanced Model Configuration](#advanced-model-configuration)
   - [Server Reloading for Development](#server-reloading-for-development)
   - [Human-in-the-Loop (HIL) Tool Execution](#human-in-the-loop-hil-tool-execution)
+  - ✨**NEW** [MCP Prompts](#mcp-prompts)
   - [Performance Metrics](#performance-metrics)
+  - ✨**NEW** [History Management](#history-management)
 - [Autocomplete and Prompt Features](#autocomplete-and-prompt-features)
 - [Configuration Management](#configuration-management)
 - [Server Configuration Format](#server-configuration-format)
@@ -61,6 +63,7 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 - 🤖 **Agent Mode**: Iterative tool execution when models request multiple tool calls, with a configurable loop limit to prevent infinite loops
 - 🌐 **Multi-Server Support**: Connect to multiple MCP servers simultaneously
 - 🚀 **Multiple Transport Types**: Supports STDIO, SSE, and Streamable HTTP server connections
+- 📋 **MCP Prompts Support**: Browse, invoke, and manage prompts from MCP servers with argument collection, preview, and safe rollback
 - ☁️ **Ollama Cloud Support**: Works seamlessly with Ollama Cloud models for tool calling, enabling access to powerful cloud-hosted models while using local MCP tools
 - 🎨 **Rich Terminal Interface**: Interactive console UI with modern styling
 - 🌊 **Streaming Responses**: View model outputs in real-time as they're generated
@@ -72,7 +75,8 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 - 🎨 **Enhanced Tool Display**: Beautiful, structured visualization of tool executions with JSON syntax highlighting
 - 🧠 **Context Management**: Control conversation memory with configurable retention settings
 - 🤔 **Thinking Mode**: Advanced reasoning capabilities with visible thought processes for supported models (e.g., gpt-oss, deepseek-r1, qwen3, etc.)
-- 🗣️ **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
+ - 🗣️ **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
+ - 📜 **History Management**: View full conversation history, export to JSON for backup/analysis, and import previous sessions for continuity
 - 🔍 **Auto-Discovery**: Automatically find and use Claude's existing MCP server configurations
 - 🔁 **Dynamic Model Switching**: Switch between any installed Ollama model without restarting
 - 💾 **Configuration Persistence**: Save and load tool preferences and model settings between sessions
@@ -83,6 +87,7 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 - 🔌 **Plug-and-Play**: Works immediately with standard MCP-compliant tool servers
 - 🔔 **Update Notifications**: Automatically detects when a new version is available
 - 🖥️ **Modern CLI with Typer**: Grouped options, shell autocompletion, and improved help output
+- ⏹️ **Abort Generation**: You can abort model generation at any time by pressing 'a' during response streaming
 
 ## Requirements
 
@@ -247,16 +252,22 @@ During chat, use these commands:
 
 | Command          | Shortcut         | Description                                         |
 |------------------|------------------|-----------------------------------------------------|
+| `abort`          | `a`              | While model is generating, abort the current response generation |
 | `clear`          | `cc`             | Clear conversation history and context              |
 | `cls`            | `clear-screen`   | Clear the terminal screen                           |
 | `context`        | `c`              | Toggle context retention                            |
 | `context-info`   | `ci`             | Display context statistics                          |
+| `export-history` | `eh`             | Export chat history to a JSON file                  |
+| `full-history`   | `fh`             | Display all conversation history                    |
 | `help`           | `h`              | Display help and available commands                 |
+| `import-history` | `ih`             | Import chat history from a JSON file                |
 | `human-in-loop`  | `hil`            | Toggle Human-in-the-Loop confirmations for tool execution |
 | `load-config`    | `lc`             | Load tool and model configuration from a file       |
 | `loop-limit`     | `ll`             | Set maximum iterative tool-loop iterations (Agent Mode). Default: 3 |
 | `model`          | `m`              | List and select a different Ollama model            |
 | `model-config`   | `mc`             | Configure advanced model parameters and system prompt|
+| `prompts`        | `pr`             | Browse and view all available MCP prompts           |
+| `/prompt_name`   | -                | Invoke a specific prompt by name (e.g., `/summarize`) |
 | `quit`, `exit`, `bye`   | `q` or `Ctrl+D`  | Exit the client                                     |
 | `reload-servers` | `rs`             | Reload all MCP servers with current configuration   |
 | `reset-config`   | `rc`             | Reset configuration to defaults (all tools enabled) |
@@ -373,6 +384,8 @@ The Human-in-the-Loop feature provides an additional safety layer by allowing yo
 - 🔍 **Learning**: Understand what tools the model wants to use and why
 - 🎯 **Control**: Selective execution of only the tools you approve
 - 🚫 **Prevention**: Stop unwanted tool calls from executing
+- 🔄 **Session Mode**: Auto-approve all tools for the current query session
+- 🛑 **Query Abort**: Abort entire query without saving to history
 
 #### HIL Confirmation Display
 
@@ -382,6 +395,18 @@ When HIL is enabled, you'll see a confirmation prompt before each tool execution
 
 ![ollmcp HIL confirmation screenshot](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-hil-feature.png?raw=true)
 
+#### HIL Confirmation Options
+
+When prompted, you can choose from the following options:
+
+- **y/yes**: Execute this specific tool call
+- **n/no**: Skip this tool call and continue with the query
+- **s/session**: Execute this and all subsequent tool calls for the current query without further prompts
+- **d/disable**: Permanently disable HIL confirmations (can be re-enabled with `hil` command)
+- **a/abort**: Abort the entire query immediately without saving to history
+
+> [!TIP]
+> The **session** option is particularly useful when the model needs to execute multiple tools in sequence. Instead of confirming each one individually, you can approve all tools for the current query session, then HIL will reset automatically for the next query.
 
 ### Human-in-the-Loop (HIL) Configuration
 
@@ -389,13 +414,83 @@ When HIL is enabled, you'll see a confirmation prompt before each tool execution
 - **Toggle Command**: Use `human-in-loop` or `hil` to toggle on/off
 - **Persistent Settings**: HIL preference is saved with your configuration
 - **Quick Disable**: Choose "disable" during any confirmation to turn off permanently
+- **Session Auto-Approve**: Use "session" during confirmation to approve all tools for current query
+- **Query Abort**: Use "abort" during confirmation to immediately stop the query without saving
 - **Re-enable**: Use the `hil` command anytime to turn confirmations back on
 
 **Benefits:**
 - **Enhanced Safety**: Prevent accidental or unwanted tool executions
 - **Awareness**: Understand what actions the model is attempting to perform
 - **Selective Control**: Choose which operations to allow on a case-by-case basis
+- **Flexible Workflow**: Session mode for efficient multi-tool queries, individual approval for sensitive operations
+- **Clean Abort**: Stop problematic queries immediately without polluting conversation history
 - **Peace of Mind**: Full visibility and control over automated actions
+
+### MCP Prompts
+
+MCP Prompts provide reusable, server-defined conversation starters and context templates. Servers can expose prompts with descriptions, required arguments, and pre-formatted messages that help you quickly start specific types of conversations or inject structured context into your chat.
+
+#### Features
+
+- 📋 **Browse Prompts**: View all available prompts from connected servers with descriptions and argument requirements
+- ⚡️ **Quick Invocation**: Use `/prompt_name` syntax to instantly invoke any prompt
+- 🔤 **Autocomplete**: Type `/` to see prompt suggestions with fuzzy matching
+- 📝 **Argument Collection**: Interactive prompts guide you through required parameters
+- 👁️ **Preview**: Review prompt content before injection to ensure it fits your needs
+- 🎯 **Flexible Injection**: Choose to execute immediately or inject-only (add to history without triggering model)
+- 🧠 **Context-Aware**: Automatically adapts behavior based on whether prompt ends with user or assistant message
+- 🔄 **Safe Rollback**: Automatic history cleanup if you abort or encounter errors
+- 💬 **Text Content**: Supports text-based prompt messages (image/audio/resource support coming soon)
+
+#### How to Use MCP Prompts
+
+**Browse Available Prompts:**
+```
+prompts  # or 'pr'
+```
+This displays all prompts grouped by server, showing their names, required arguments, and descriptions.
+
+**Invoke a Prompt:**
+```
+/prompt_name
+```
+For example, if a server provides a "summarize" prompt:
+```
+/summarize
+```
+
+**Autocomplete:**
+- Type `/` to see all available prompts with descriptions
+- Continue typing to filter prompts with fuzzy matching
+- Use arrow keys to navigate and press Enter to select
+
+> [!TIP]
+> Prompts are discovered automatically when you connect to MCP servers. If a server supports prompts, they'll be available immediately in the `prompts` list and autocomplete.
+
+**Workflow:**
+1. Type `/prompt_name` or select from autocomplete
+2. If the prompt requires arguments, you'll be prompted to provide them
+3. Review the prompt preview showing what will be injected
+4. Choose how to use the prompt:
+   - **y/yes** (default): Send the prompt to the model and get a response
+     - For prompts ending with a **user message**: Uses that message as the query
+     - For prompts ending with an **assistant message**: Adds "Please respond based on the above context." as the query
+   - **i/inject**: Just add the prompt to conversation history without triggering the model (lets you type your own query afterward)
+   - **n/no**: Cancel and return to chat
+5. The prompt is injected based on your choice
+6. If you abort during model generation (press 'a'), changes are automatically rolled back
+
+**Example:**
+![ollmcp prompt feature screenshot](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-prompt-feature.png?raw=true)
+
+> [!WARNING]
+> **Content Type Limitations**: MCP Prompts currently support **text content only**. The following content types are not yet supported and will be automatically skipped:
+> - 🖼️ **Images** - Image content in prompts
+> - 🎵 **Audio** - Audio content in prompts
+> - 📦 **Resources** - Embedded resource content
+>
+> If a prompt contains these unsupported types, you'll see a warning during the preview, and only the text portions will be injected. Make sure your prompt still makes sense without the multimedia content before proceeding. Full multimedia support is planned for a future release.
+
 
 ### Performance Metrics
 
@@ -428,6 +523,50 @@ The Performance Metrics feature displays detailed model performance data after e
 > [!NOTE]
 > **Data Source**: All metrics come directly from Ollama's response, ensuring accuracy and reliability.
 
+### History Management
+
+The History Management feature allows you to view, export, and import your conversation history. This is useful for:
+
+- 📜 **Full History View**: Review all conversations from your current session
+- 💾 **Export**: Save conversations to JSON files for backup or analysis
+- 📥 **Import**: Load previous conversation history to continue where you left off
+- 🔄 **Portability**: Share or transfer conversations between sessions
+
+#### History Commands
+
+**View Full History:**
+```
+full-history  # or 'fh'
+```
+Displays all conversation history from the current session in a formatted view, showing both queries and responses.
+
+**Export History:**
+```
+export-history  # or 'eh'
+```
+Exports your current chat history to a JSON file. You can specify a custom filename or use the default timestamp-based name (e.g., `ollmcp_chat_history_2026-01-05_143022.json`). Files are saved to `~/.config/ollmcp/history/` directory. The command includes file overwrite protection.
+
+**Import History:**
+```
+import-history  # or 'ih'
+```
+Imports a previously exported chat history from a JSON file. The command validates the JSON structure to ensure compatibility. Imported history is added to your current conversation context.
+
+**History Storage:**
+- Export location: `~/.config/ollmcp/history/`
+- Default filename format: `ollmcp_chat_history_YYYY-MM-DD_HHMMSS.json`
+- JSON format includes both queries and responses with proper structure validation
+
+**Benefits:**
+- **Session Continuity**: Resume conversations across different sessions
+- **Backup**: Keep records of important conversations
+- **Analysis**: Export history for external analysis or review
+- **Sharing**: Share conversation context with team members
+- **Testing**: Import test conversations for development and debugging
+
+> [!TIP]
+> When exporting, if you don't provide a filename, the system automatically generates a timestamped filename to prevent accidental overwrites.
+
 ## Autocomplete and Prompt Features
 
 ### Typer Shell Autocompletion
@@ -443,6 +582,14 @@ The Performance Metrics feature displays detailed model performance data after e
 - Command descriptions shown in the menu
 - Case-insensitive matching for convenience
 - Centralized command list for consistency
+
+### MCP Prompts Autocomplete
+
+- Type `/` to trigger prompt autocomplete
+- Fuzzy matching on prompt names and descriptions
+- Shows prompt arguments and descriptions in the menu
+- Terminal-width-aware description truncation
+- Arrow (`▶`) highlights the best match
 
 ### Contextual Prompt
 
@@ -462,6 +609,9 @@ qwen3/show-thinking/12-tools❯
 - `❯` Prompt symbol
 
 This makes it easy to see your current context before entering a query.
+
+> [!TIP]
+> Type `/` after the prompt symbol to see autocomplete suggestions for available MCP prompts.
 
 ## Configuration Management
 
