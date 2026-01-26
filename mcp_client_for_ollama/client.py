@@ -26,7 +26,7 @@ import httpx
 from . import __version__
 from .config.manager import ConfigManager
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, DEFAULT_TOOL_RAG_THRESHOLD, DEFAULT_TOOL_RAG_MIN_TOOLS, DEFAULT_TOOL_RAG_MAX_TOOLS
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
@@ -46,7 +46,7 @@ class MCPClient:
     """Main client class for interacting with Ollama and MCP servers"""
 
     def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST, enable_tool_rag: bool = False, 
-                 tool_rag_threshold: float = 0.65, tool_rag_min_tools: int = 0, tool_rag_max_tools: int = 20):
+                 tool_rag_threshold: float = DEFAULT_TOOL_RAG_THRESHOLD, tool_rag_min_tools: int = DEFAULT_TOOL_RAG_MIN_TOOLS, tool_rag_max_tools: int = DEFAULT_TOOL_RAG_MAX_TOOLS):
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
         self.host = host
@@ -1413,7 +1413,7 @@ def main(
         rich_help_panel="Tool RAG Configuration"
     ),
     tool_rag_threshold: float = typer.Option(
-        0.65, "--tool-rag-threshold",
+        DEFAULT_TOOL_RAG_THRESHOLD, "--tool-rag-threshold",
         help="Minimum similarity score (0-1) for a tool to be considered relevant",
         rich_help_panel="Tool RAG Configuration"
     ),

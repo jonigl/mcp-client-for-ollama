@@ -14,6 +14,8 @@ import torch
 from mcp import Tool
 from sentence_transformers import SentenceTransformer, util
 
+from ..utils.constants import DEFAULT_TOOL_RAG_THRESHOLD, DEFAULT_TOOL_RAG_MIN_TOOLS, DEFAULT_TOOL_RAG_MAX_TOOLS
+
 
 class ToolRAG:
     """Manages semantic search over tool schemas for intelligent tool filtering.
@@ -149,9 +151,9 @@ class ToolRAG:
     def retrieve_relevant_tools(
         self,
         query: str,
-        threshold: float = 0.65,
-        min_tools: int = 0,
-        max_tools: int = 20
+        threshold: float = DEFAULT_TOOL_RAG_THRESHOLD,
+        min_tools: int = DEFAULT_TOOL_RAG_MIN_TOOLS,
+        max_tools: int = DEFAULT_TOOL_RAG_MAX_TOOLS
     ) -> List[Tool]:
         """Retrieve relevant tools for a given query using similarity threshold.
 

@@ -19,6 +19,13 @@ DEFAULT_MODEL = "qwen2.5:7b"
 # Default ollama lcoal url for API requests
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 
+# Tool RAG default parameters
+# Threshold of 0.3 provides good balance: 88.6% recall with 87.6% token savings
+# See tests/test_tool_rag_evaluation.py for parameter tuning analysis
+DEFAULT_TOOL_RAG_THRESHOLD = 0.3
+DEFAULT_TOOL_RAG_MIN_TOOLS = 0
+DEFAULT_TOOL_RAG_MAX_TOOLS = 20
+
 # Default number of history entries to display when returning from menus
 DEFAULT_HISTORY_DISPLAY_LIMIT = 5
 
