@@ -4,7 +4,7 @@ permissions:
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, devel ]
     paths-ignore:
       - '**/*.md'
       - '**/*.jpg'
@@ -16,7 +16,7 @@ on:
       - '.gitignore'
       - '.python-version'
   pull_request:
-    branches: [ main ]
+    branches: [ main, devel ]
     paths-ignore:
       - '**/*.md'
       - '**/*.jpg'
@@ -32,10 +32,12 @@ on:
 jobs:
   test:
     name: Test with Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        # TODO: run MacOS and Windows based on commit hints (e.g., non-trivial)
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10"]
 
     steps:
