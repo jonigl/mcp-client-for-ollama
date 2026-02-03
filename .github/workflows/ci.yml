@@ -31,7 +31,7 @@ on:
 
 jobs:
   test:
-    name: Test with Python ${{ matrix.python-version }}
+    name: Test with Python ${{ matrix.python-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
