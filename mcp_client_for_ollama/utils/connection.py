@@ -16,10 +16,10 @@ def check_url_connectivity(url):
 
         return True
 
-    except urllib.error.HTTPError:
+    except urllib.error.HTTPError as e:
         # Server responded with an HTTP error code (like 406, 404, 500, etc.)
         # This means the server is reachable, so return True
         return True
-    except (urllib.error.URLError, OSError):
+    except (urllib.error.URLError, OSError) as e:
         # Skip URLs that are unreachable or timeout
         return False
