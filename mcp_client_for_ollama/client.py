@@ -105,19 +105,21 @@ class MCPClient:
         # Create key bindings for TAB and Shift+TAB to cycle system prompts
         self.key_bindings = KeyBindings()
 
-        @self.key_bindings.add("tab")
+        @self.key_bindings.add("tab", eager=True)
         def _(event: KeyPressEvent):
             """Cycle to next system prompt on TAB"""
             new_prompt = self.system_prompt_manager.next_prompt()
             if new_prompt:
-                self.console.print(f"[cyan]Active system prompt: {new_prompt}[/cyan]")
+                # Exit current prompt and signal to refresh
+                event.app.exit(result="__REFRESH_PROMPT__")
 
-        @self.key_bindings.add("s-tab")
+        @self.key_bindings.add("s-tab", eager=True)
         def _(event: KeyPressEvent):
             """Cycle to previous system prompt on Shift+TAB"""
             new_prompt = self.system_prompt_manager.previous_prompt()
             if new_prompt:
-                self.console.print(f"[cyan]Active system prompt: {new_prompt}[/cyan]")
+                # Exit current prompt and signal to refresh
+                event.app.exit(result="__REFRESH_PROMPT__")
 
         # Command completer for interactive prompts
         self.prompt_session = PromptSession(
@@ -811,6 +813,15 @@ class MCPClient:
             try:
                 # Use await to call the async method
                 query = await self.get_user_input()
+
+                # Handle prompt refresh signal from TAB/Shift+TAB
+                if query == "__REFRESH_PROMPT__":
+                    active_prompt = self.system_prompt_manager.get_active_prompt_name()
+                    if active_prompt:
+                        self.console.print(
+                            f"[cyan]Active system prompt: {active_prompt}[/cyan]"
+                        )
+                    continue
 
                 if query.lower() in ["quit", "q", "exit", "bye"]:
                     self.console.print("[yellow]Exiting...[/yellow]")
