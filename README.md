@@ -10,7 +10,7 @@
 
 # MCP Client for Ollama (ollmcp)
 
-![PyPI - Downloads](https://img.shields.io/pypi/dm/mcp-client-for-ollama)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/mcp-client-for-ollama?cacheSeconds=1)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI - Python Version](https://img.shields.io/pypi/v/ollmcp?label=ollmcp-pypi)](https://pypi.org/project/ollmcp/)
 [![PyPI - Python Version](https://img.shields.io/pypi/v/mcp-client-for-ollama?label=mcp-client-for-ollama-pypi)](https://pypi.org/project/mcp-client-for-ollama/)
