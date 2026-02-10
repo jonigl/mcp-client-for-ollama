@@ -1,14 +1,16 @@
 """MCP Client for Ollama - A TUI client for interacting with Ollama models and MCP servers"""
+
 import asyncio
 import os
 import sys
 import select
+
 # Only import Unix-specific modules on non-Windows systems
-if os.name != 'nt':
-    import tty # pylint: disable=E0401
-    import termios # pylint: disable=E0401
+if os.name != "nt":
+    import tty  # pylint: disable=E0401
+    import termios  # pylint: disable=E0401
 else:
-    import msvcrt # pylint: disable=E0401
+    import msvcrt  # pylint: disable=E0401
 
 from contextlib import AsyncExitStack, contextmanager
 from typing import List, Optional
@@ -16,6 +18,8 @@ from typing import List, Optional
 import typer
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -26,13 +30,21 @@ import httpx
 from . import __version__
 from .config.manager import ConfigManager
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS
+from .utils.constants import (
+    DEFAULT_CLAUDE_CONFIG,
+    DEFAULT_MODEL,
+    DEFAULT_OLLAMA_HOST,
+    DEFAULT_COMPLETION_STYLE,
+    DEFAULT_HISTORY_DISPLAY_LIMIT,
+    MAX_COMPLETION_MENU_ROWS,
+)
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
 from .tools.manager import ToolManager
 from .prompts.manager import PromptManager
 from .prompts.handler import PromptHandler
+from .prompts.system_prompt_manager import SystemPromptManager
 from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
 from .utils.hil_manager import HumanInTheLoopManager, AbortQueryException
@@ -54,15 +66,21 @@ class MCPClient:
         # Initialize the server connector
         self.server_connector = ServerConnector(self.exit_stack, self.console)
         # Initialize the model manager
-        self.model_manager = ModelManager(console=self.console, default_model=model, ollama=self.ollama)
+        self.model_manager = ModelManager(
+            console=self.console, default_model=model, ollama=self.ollama
+        )
         # Initialize the model config manager
         self.model_config_manager = ModelConfigManager(console=self.console)
         # Initialize the tool manager with server connector reference
-        self.tool_manager = ToolManager(console=self.console, server_connector=self.server_connector)
+        self.tool_manager = ToolManager(
+            console=self.console, server_connector=self.server_connector
+        )
         # Initialize the prompt manager
         self.prompt_manager = PromptManager(console=self.console)
         # Initialize the prompt handler
-        self.prompt_handler = PromptHandler(console=self.console, prompt_manager=self.prompt_manager)
+        self.prompt_handler = PromptHandler(
+            console=self.console, prompt_manager=self.prompt_manager
+        )
         # Initialize the streaming manager
         self.streaming_manager = StreamingManager(console=self.console)
         # Initialize the tool display manager
@@ -73,35 +91,72 @@ class MCPClient:
         self.sessions = {}  # Dict to store multiple sessions
         # UI components
         self.chat_history = []  # Add chat history list to store interactions
+        # Initialize the system prompt manager
+        self.system_prompt_manager = SystemPromptManager(console=self.console)
+        self.system_prompt_manager.load_prompts_from_directory()
+        # Create default.md with current system prompt if it doesn't exist
+        current_system_prompt = self.model_config_manager.get_system_prompt()
+        self.system_prompt_manager.create_default_prompt(current_system_prompt)
+        # Reload prompts to include the newly created default
+        self.system_prompt_manager.load_prompts_from_directory()
+        # Set "default" as the active prompt if available
+        if "default" in self.system_prompt_manager.list_prompts():
+            self.system_prompt_manager.set_active_prompt("default")
+        # Create key bindings for TAB and Shift+TAB to cycle system prompts
+        self.key_bindings = KeyBindings()
+
+        @self.key_bindings.add("tab", eager=True)
+        def _(event: KeyPressEvent):
+            """Cycle to next system prompt on TAB"""
+            new_prompt = self.system_prompt_manager.next_prompt()
+            if new_prompt:
+                # Exit current prompt and signal to refresh
+                event.app.exit(result="__REFRESH_PROMPT__")
+
+        @self.key_bindings.add("s-tab", eager=True)
+        def _(event: KeyPressEvent):
+            """Cycle to previous system prompt on Shift+TAB"""
+            new_prompt = self.system_prompt_manager.previous_prompt()
+            if new_prompt:
+                # Exit current prompt and signal to refresh
+                event.app.exit(result="__REFRESH_PROMPT__")
+
         # Command completer for interactive prompts
         self.prompt_session = PromptSession(
             completer=FZFStyleCompleter(),
             style=Style.from_dict(DEFAULT_COMPLETION_STYLE),
-            complete_style='multi-column',
-            reserve_space_for_menu=MAX_COMPLETION_MENU_ROWS
+            complete_style="multi-column",
+            reserve_space_for_menu=MAX_COMPLETION_MENU_ROWS,
+            key_bindings=self.key_bindings,
         )
         # Context retention settings
         self.retain_context = True  # By default, retain conversation context
         self.actual_token_count = 0  # Actual token count from Ollama metrics
         # Thinking mode settings
-        self.thinking_mode = True  # By default, thinking mode is enabled for models that support it
-        self.show_thinking = False   # By default, thinking text is hidden after completion
+        self.thinking_mode = (
+            True  # By default, thinking mode is enabled for models that support it
+        )
+        self.show_thinking = (
+            False  # By default, thinking text is hidden after completion
+        )
         # Tool display settings
         self.show_tool_execution = True  # By default, show tool execution displays
         # Metrics display settings
         self.show_metrics = False  # By default, don't show metrics after each query
         # Agent mode settings
         self.loop_limit = 3  # Maximum follow-up tool loops per query
-        self.default_configuration_status = False  # Track if default configuration was loaded successfully
+        self.default_configuration_status = (
+            False  # Track if default configuration was loaded successfully
+        )
         self.abort_current_query = False  # Flag to abort the current query execution
         self.monitor_paused = False  # Flag to pause cancellation monitoring
         self.monitor_paused_ack = asyncio.Event()  # Event to acknowledge pause
 
         # Store server connection parameters for reloading
         self.server_connection_params = {
-            'server_paths': None,
-            'config_path': None,
-            'auto_discovery': False
+            "server_paths": None,
+            "config_path": None,
+            "auto_discovery": False,
         }
 
     @contextmanager
@@ -139,8 +194,7 @@ class MCPClient:
 
         try:
             done, pending = await asyncio.wait(
-                [query_task, monitor_task],
-                return_when=asyncio.FIRST_COMPLETED
+                [query_task, monitor_task], return_when=asyncio.FIRST_COMPLETED
             )
 
             if monitor_task in done:
@@ -187,8 +241,8 @@ class MCPClient:
             model_info = await self.ollama.show(current_model)
 
             # Check if the model has 'thinking' capability
-            if 'capabilities' in model_info and model_info['capabilities']:
-                return 'thinking' in model_info['capabilities']
+            if "capabilities" in model_info and model_info["capabilities"]:
+                return "thinking" in model_info["capabilities"]
 
             return False
         except Exception:
@@ -197,7 +251,9 @@ class MCPClient:
 
     async def select_model(self):
         """Let the user select an Ollama model from the available ones"""
-        await self.model_manager.select_model_interactive(clear_console_func=self.clear_console)
+        await self.model_manager.select_model_interactive(
+            clear_console_func=self.clear_console
+        )
 
         # After model selection, redisplay context
         self.display_available_tools()
@@ -211,8 +267,8 @@ class MCPClient:
         with a fallback to 'clear -x' if terminal size is undetectable.
         """
         # Check for Windows
-        if os.name == 'nt':
-            os.system('cls')
+        if os.name == "nt":
+            os.system("cls")
             return
         # For Unix-like systems
         try:
@@ -220,8 +276,8 @@ class MCPClient:
             rows = os.get_terminal_size().lines
 
             # Scroll-Push Strategy, print n-1 newlines to push content up without overflowing
-            padding = '\n' * (rows - 1)
-            move_home = '\033[H'
+            padding = "\n" * (rows - 1)
+            move_home = "\033[H"
 
             # Write instantly to stdout
             sys.stdout.write(padding + move_home)
@@ -229,14 +285,20 @@ class MCPClient:
 
         except OSError:
             # Fallback, use ANSI clear + cursor home
-            sys.stdout.write('\033[2J\033[H')
+            sys.stdout.write("\033[2J\033[H")
             sys.stdout.flush()
 
     def display_available_tools(self):
         """Display available tools with their enabled/disabled status"""
         self.tool_manager.display_available_tools()
 
-    async def connect_to_servers(self, server_paths=None, server_urls=None, config_path=None, auto_discovery=False):
+    async def connect_to_servers(
+        self,
+        server_paths=None,
+        server_urls=None,
+        config_path=None,
+        auto_discovery=False,
+    ):
         """Connect to one or more MCP servers using the ServerConnector
 
         Args:
@@ -247,18 +309,23 @@ class MCPClient:
         """
         # Store connection parameters for potential reload
         self.server_connection_params = {
-            'server_paths': server_paths,
-            'server_urls': server_urls,
-            'config_path': config_path,
-            'auto_discovery': auto_discovery
+            "server_paths": server_paths,
+            "server_urls": server_urls,
+            "config_path": config_path,
+            "auto_discovery": auto_discovery,
         }
 
         # Connect to servers using the server connector
-        sessions, available_tools, enabled_tools, prompts_by_server = await self.server_connector.connect_to_servers(
+        (
+            sessions,
+            available_tools,
+            enabled_tools,
+            prompts_by_server,
+        ) = await self.server_connector.connect_to_servers(
             server_paths=server_paths,
             server_urls=server_urls,
             config_path=config_path,
-            auto_discovery=auto_discovery
+            auto_discovery=auto_discovery,
         )
 
         # Store the results
@@ -288,7 +355,9 @@ class MCPClient:
 
     def configure_model_options(self):
         """Let the user configure model parameters like system prompt, temperature, etc."""
-        self.model_config_manager.configure_model_interactive(clear_console_func=self.clear_console)
+        self.model_config_manager.configure_model_interactive(
+            clear_console_func=self.clear_console
+        )
 
         # Display the chat history and current state after selection
         self.display_available_tools()
@@ -298,7 +367,9 @@ class MCPClient:
     def _display_chat_history(self):
         """Display chat history when returning to the main chat interface"""
         if self.chat_history:
-            self.console.print(Panel("[bold]Chat History[/bold]", border_style="blue", expand=False))
+            self.console.print(
+                Panel("[bold]Chat History[/bold]", border_style="blue", expand=False)
+            )
 
             # Display the last few conversations (limit to keep the interface clean)
             max_history = DEFAULT_HISTORY_DISPLAY_LIMIT
@@ -314,15 +385,14 @@ class MCPClient:
                 self.console.print()
 
             if len(self.chat_history) > max_history:
-                self.console.print(f"[dim](Showing last {max_history} of {len(self.chat_history)} conversations)[/dim]")
+                self.console.print(
+                    f"[dim](Showing last {max_history} of {len(self.chat_history)} conversations)[/dim]"
+                )
 
     async def process_query(self, query: str) -> str:
         """Process a query using Ollama and available tools"""
         # Create base message with current query
-        current_message = {
-            "role": "user",
-            "content": query
-        }
+        current_message = {"role": "user", "content": query}
 
         # Build messages array based on context retention setting
         if self.retain_context and self.chat_history:
@@ -330,43 +400,42 @@ class MCPClient:
             messages = []
             for entry in self.chat_history:
                 # Add user message
-                messages.append({
-                    "role": "user",
-                    "content": entry["query"]
-                })
+                messages.append({"role": "user", "content": entry["query"]})
                 # Add assistant response
-                messages.append({
-                    "role": "assistant",
-                    "content": entry["response"]
-                })
+                messages.append({"role": "assistant", "content": entry["response"]})
             # Add the current query
             messages.append(current_message)
         else:
             # No context retention - just use current query
             messages = [current_message]
 
-        # Add system prompt if one is configured
-        system_prompt = self.model_config_manager.get_system_prompt()
+        # Add system prompt - external file overrides manual system prompt
+        system_prompt = self.system_prompt_manager.get_active_prompt_content()
+        if not system_prompt:
+            # Fall back to manual system prompt if no external prompt is active
+            system_prompt = self.model_config_manager.get_system_prompt()
         if system_prompt:
-            messages.insert(0, {
-                "role": "system",
-                "content": system_prompt
-            })
+            messages.insert(0, {"role": "system", "content": system_prompt})
 
         # Get enabled tools from the tool manager
         enabled_tool_objects = self.tool_manager.get_enabled_tool_objects()
 
         if not enabled_tool_objects:
-            self.console.print("[yellow]Warning: No tools are enabled. Model will respond without tool access.[/yellow]")
+            self.console.print(
+                "[yellow]Warning: No tools are enabled. Model will respond without tool access.[/yellow]"
+            )
 
-        available_tools = [{
-            "type": "function",
-            "function": {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.inputSchema
+        available_tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema,
+                },
             }
-        } for tool in enabled_tool_objects]
+            for tool in enabled_tool_objects
+        ]
 
         # Get current model from the model manager
         model = self.model_manager.get_current_model()
@@ -380,7 +449,7 @@ class MCPClient:
             "messages": messages,
             "stream": True,
             "tools": available_tools,
-            "options": model_options
+            "options": model_options,
         }
 
         # Add thinking parameter if thinking mode is enabled and model supports it
@@ -394,12 +463,16 @@ class MCPClient:
         # Process the streaming response with thinking mode support
         response_text = ""
         tool_calls = []
-        response_text, tool_calls, metrics = await self.streaming_manager.process_streaming_response(
+        (
+            response_text,
+            tool_calls,
+            metrics,
+        ) = await self.streaming_manager.process_streaming_response(
             stream,
             thinking_mode=self.thinking_mode,
             show_thinking=self.show_thinking,
             show_metrics=self.show_metrics,
-            cancellation_check=lambda: self.abort_current_query
+            cancellation_check=lambda: self.abort_current_query,
         )
 
         if self.abort_current_query:
@@ -407,15 +480,13 @@ class MCPClient:
 
         # response_text will be either empty or contain a response
         # Append the assistant's response to messages helps maintain context and fix ollama cloud tool call issues
-        messages.append({
-            "role": "assistant",
-            "content": response_text,
-            "tool_calls": tool_calls
-        })
+        messages.append(
+            {"role": "assistant", "content": response_text, "tool_calls": tool_calls}
+        )
 
         # Update actual token count from metrics if available
-        if metrics and metrics.get('eval_count'):
-            self.actual_token_count += metrics['eval_count']
+        if metrics and metrics.get("eval_count"):
+            self.actual_token_count += metrics["eval_count"]
 
         enabled_tools = self.tool_manager.get_enabled_tool_objects()
 
@@ -428,12 +499,16 @@ class MCPClient:
                 break
 
             if loop_count >= self.loop_limit:
-                self.console.print(Panel(
-                    f"[yellow]Your current loop limit is set to [bold]{self.loop_limit}[/bold] and has been reached. Skipping additional tool calls.[/yellow]\n"
-                    f"You will probably want to increase this limit if your model requires more tool interactions to complete tasks.\n"
-                    f"You can change the loop limit with the [bold cyan]loop-limit[/bold cyan] command.",
-                    title="[bold]Loop Limit Reached[/bold]", border_style="yellow", expand=False
-                ))
+                self.console.print(
+                    Panel(
+                        f"[yellow]Your current loop limit is set to [bold]{self.loop_limit}[/bold] and has been reached. Skipping additional tool calls.[/yellow]\n"
+                        f"You will probably want to increase this limit if your model requires more tool interactions to complete tasks.\n"
+                        f"You can change the loop limit with the [bold cyan]loop-limit[/bold cyan] command.",
+                        title="[bold]Loop Limit Reached[/bold]",
+                        border_style="yellow",
+                        expand=False,
+                    )
+                )
                 break
 
             loop_count += 1
@@ -443,22 +518,30 @@ class MCPClient:
                 tool_args = tool.function.arguments
 
                 # Parse server name and actual tool name from the qualified name
-                server_name, actual_tool_name = tool_name.split('.', 1) if '.' in tool_name else (None, tool_name)
+                server_name, actual_tool_name = (
+                    tool_name.split(".", 1) if "." in tool_name else (None, tool_name)
+                )
 
                 if not server_name or server_name not in self.sessions:
-                    self.console.print(f"[red]Error: Unknown server for tool {tool_name}[/red]")
+                    self.console.print(
+                        f"[red]Error: Unknown server for tool {tool_name}[/red]"
+                    )
                     continue
 
                 # Execute tool call
-                self.tool_display_manager.display_tool_execution(tool_name, tool_args, show=self.show_tool_execution)
+                self.tool_display_manager.display_tool_execution(
+                    tool_name, tool_args, show=self.show_tool_execution
+                )
 
                 # Request HIL confirmation if enabled
                 self.monitor_paused = True
                 # Wait for monitor to acknowledge pause if we are on a system that uses it
-                if os.name != 'nt':
+                if os.name != "nt":
                     try:
                         # Wait up to 1 second for the monitor to pause
-                        await asyncio.wait_for(self.monitor_paused_ack.wait(), timeout=1.0)
+                        await asyncio.wait_for(
+                            self.monitor_paused_ack.wait(), timeout=1.0
+                        )
                     except asyncio.TimeoutError:
                         pass
 
@@ -475,29 +558,38 @@ class MCPClient:
 
                 if not should_execute:
                     tool_response = "Tool call was skipped by user"
-                    self.tool_display_manager.display_tool_response(tool_name, tool_args, tool_response, show=self.show_tool_execution)
-                    messages.append({
-                        "role": "tool",
-                        "content": tool_response,
-                        "tool_name": tool_name
-                    })
+                    self.tool_display_manager.display_tool_response(
+                        tool_name,
+                        tool_args,
+                        tool_response,
+                        show=self.show_tool_execution,
+                    )
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "content": tool_response,
+                            "tool_name": tool_name,
+                        }
+                    )
                     continue
 
                 # Call the tool on the specified server
                 result = None
                 with self.console.status(f"[cyan]⏳ Running {tool_name}...[/cyan]"):
-                    result = await self.sessions[server_name]["session"].call_tool(actual_tool_name, tool_args)
+                    result = await self.sessions[server_name]["session"].call_tool(
+                        actual_tool_name, tool_args
+                    )
 
                 tool_response = f"{result.content[0].text}"
 
                 # Display the tool response
-                self.tool_display_manager.display_tool_response(tool_name, tool_args, tool_response, show=self.show_tool_execution)
+                self.tool_display_manager.display_tool_response(
+                    tool_name, tool_args, tool_response, show=self.show_tool_execution
+                )
 
-                messages.append({
-                    "role": "tool",
-                    "content": tool_response,
-                    "tool_name": tool_name
-                })
+                messages.append(
+                    {"role": "tool", "content": tool_response, "tool_name": tool_name}
+                )
 
             # Get stream response from Ollama with the tool results
             chat_params_followup = {
@@ -505,7 +597,7 @@ class MCPClient:
                 "messages": messages,
                 "stream": True,
                 "tools": available_tools,
-                "options": model_options
+                "options": model_options,
             }
 
             # Add thinking parameter if thinking mode is enabled and model supports it
@@ -515,26 +607,32 @@ class MCPClient:
             stream = await self.ollama.chat(**chat_params_followup)
 
             # Process the streaming response with thinking mode support
-            followup_response, pending_tool_calls, followup_metrics = await self.streaming_manager.process_streaming_response(
+            (
+                followup_response,
+                pending_tool_calls,
+                followup_metrics,
+            ) = await self.streaming_manager.process_streaming_response(
                 stream,
                 thinking_mode=self.thinking_mode,
                 show_thinking=self.show_thinking,
                 show_metrics=self.show_metrics,
-                cancellation_check=lambda: self.abort_current_query
+                cancellation_check=lambda: self.abort_current_query,
             )
 
             if self.abort_current_query:
                 break
 
-            messages.append({
-                "role": "assistant",
-                "content": followup_response,
-                "tool_calls": pending_tool_calls
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": followup_response,
+                    "tool_calls": pending_tool_calls,
+                }
+            )
 
             # Update actual token count from followup metrics if available
-            if followup_metrics and followup_metrics.get('eval_count'):
-                self.actual_token_count += followup_metrics['eval_count']
+            if followup_metrics and followup_metrics.get("eval_count"):
+                self.actual_token_count += followup_metrics["eval_count"]
 
             if followup_response:
                 response_text = followup_response
@@ -555,7 +653,7 @@ class MCPClient:
         """Get user input with full keyboard navigation support"""
         try:
             if prompt_text is None:
-                model_name = self.model_manager.get_current_model().split(':')[0]
+                model_name = self.model_manager.get_current_model().split(":")[0]
                 tool_count = len(self.tool_manager.get_enabled_tool_objects())
 
                 # Simple and readable
@@ -563,15 +661,24 @@ class MCPClient:
 
                 # Add thinking indicator
                 if self.thinking_mode and await self.supports_thinking_mode():
-                    prompt_text += "/show-thinking" if self.show_thinking else "/thinking"
+                    prompt_text += (
+                        "/show-thinking" if self.show_thinking else "/thinking"
+                    )
 
                 # Add tool count
                 if tool_count > 0:
-                    prompt_text += f"/{tool_count}-tool" if tool_count == 1 else f"/{tool_count}-tools"
+                    prompt_text += (
+                        f"/{tool_count}-tool"
+                        if tool_count == 1
+                        else f"/{tool_count}-tools"
+                    )
 
-            user_input = await self.prompt_session.prompt_async(
-                f"{prompt_text}❯ "
-            )
+                # Add active system prompt name
+                active_prompt = self.system_prompt_manager.get_active_prompt_name()
+                if active_prompt:
+                    prompt_text += f"/{active_prompt}"
+
+            user_input = await self.prompt_session.prompt_async(f"{prompt_text}❯ ")
             return user_input
         except KeyboardInterrupt:
             return "quit"
@@ -580,7 +687,7 @@ class MCPClient:
 
     async def monitor_cancellation(self):
         """Monitor for 'a' key press to cancel execution"""
-        if os.name == 'nt':
+        if os.name == "nt":
             # Windows implementation
             while not self.abort_current_query:
                 # Check if monitoring should be suspended (e.g. during HIL prompts)
@@ -588,15 +695,15 @@ class MCPClient:
                     await asyncio.sleep(0.1)
                     continue
 
-                if msvcrt.kbhit(): # pylint: disable=E0606
+                if msvcrt.kbhit():  # pylint: disable=E0606
                     ch = msvcrt.getch()
                     # msvcrt.getch() returns bytes, decode to string
                     try:
-                        char = ch.decode('utf-8').lower()
+                        char = ch.decode("utf-8").lower()
                     except UnicodeDecodeError:
-                        char = ''
+                        char = ""
 
-                    if char == 'a':
+                    if char == "a":
                         self.console.print("[bold red]🛑 Aborting query...[/bold red]")
                         self.abort_current_query = True
                         break
@@ -607,7 +714,7 @@ class MCPClient:
             fd = sys.stdin.fileno()
             old_settings = None
             try:
-                old_settings = termios.tcgetattr(fd) # pylint: disable=E0606
+                old_settings = termios.tcgetattr(fd)  # pylint: disable=E0606
                 # Use cbreak mode to read characters without waiting for newline
                 # but keep signals like Ctrl+C working
                 tty.setcbreak(fd)  # pylint: disable=E0606
@@ -641,8 +748,10 @@ class MCPClient:
                     if not self.monitor_paused and not self.abort_current_query:
                         if select.select([sys.stdin], [], [], 0.1)[0]:
                             ch = sys.stdin.read(1)
-                            if ch.lower() == 'a':
-                                self.console.print("[bold red]🛑 Aborting query...[/bold red]")
+                            if ch.lower() == "a":
+                                self.console.print(
+                                    "[bold red]🛑 Aborting query...[/bold red]"
+                                )
                                 self.abort_current_query = True
                                 break
                     # Yield control to allow other tasks to run
@@ -666,13 +775,17 @@ class MCPClient:
         try:
             update_available, current_version, latest_version = check_for_updates()
             if update_available:
-                self.console.print(Panel(
-                    f"[bold yellow]New version available![/bold yellow]\n\n"
-                    f"Current version: [cyan]{current_version}[/cyan]\n"
-                    f"Latest version: [green]{latest_version}[/green]\n\n"
-                    f"Upgrade with: [bold white]pip install --upgrade mcp-client-for-ollama[/bold white]",
-                    title="Update Available", border_style="yellow", expand=False
-                ))
+                self.console.print(
+                    Panel(
+                        f"[bold yellow]New version available![/bold yellow]\n\n"
+                        f"Current version: [cyan]{current_version}[/cyan]\n"
+                        f"Latest version: [green]{latest_version}[/green]\n\n"
+                        f"Upgrade with: [bold white]pip install --upgrade mcp-client-for-ollama[/bold white]",
+                        title="Update Available",
+                        border_style="yellow",
+                        expand=False,
+                    )
+                )
         except Exception:
             # Silently fail - version check should not block program usage
             pass
@@ -680,7 +793,16 @@ class MCPClient:
     async def chat_loop(self):
         """Run an interactive chat loop"""
         self.clear_console()
-        self.console.print(Panel(Text.from_markup("[bold green]Welcome to the MCP Client for Ollama 🦙[/bold green]", justify="center"), expand=True, border_style="green"))
+        self.console.print(
+            Panel(
+                Text.from_markup(
+                    "[bold green]Welcome to the MCP Client for Ollama 🦙[/bold green]",
+                    justify="center",
+                ),
+                expand=True,
+                border_style="green",
+            )
+        )
         self.display_available_tools()
         self.display_current_model()
         self.print_help()
@@ -692,75 +814,88 @@ class MCPClient:
                 # Use await to call the async method
                 query = await self.get_user_input()
 
-                if query.lower() in ['quit', 'q', 'exit', 'bye']:
+                # Handle prompt refresh signal from TAB/Shift+TAB
+                if query == "__REFRESH_PROMPT__":
+                    active_prompt = self.system_prompt_manager.get_active_prompt_name()
+                    if active_prompt:
+                        self.console.print(
+                            f"[cyan]Active system prompt: {active_prompt}[/cyan]"
+                        )
+                    continue
+
+                if query.lower() in ["quit", "q", "exit", "bye"]:
                     self.console.print("[yellow]Exiting...[/yellow]")
                     break
 
-                if query.lower() in ['tools', 't']:
+                if query.lower() in ["tools", "t"]:
                     self.select_tools()
                     continue
 
-                if query.lower() in ['help', 'h']:
+                if query.lower() in ["help", "h"]:
                     self.print_help()
                     continue
 
-                if query.lower() in ['model', 'm']:
+                if query.lower() in ["model", "m"]:
                     await self.select_model()
                     continue
 
-                if query.lower() in ['model-config', 'mc']:
+                if query.lower() in ["model-config", "mc"]:
                     self.configure_model_options()
                     continue
 
-                if query.lower() in ['context', 'c']:
+                if query.lower() in ["context", "c"]:
                     self.toggle_context_retention()
                     continue
 
-                if query.lower() in ['thinking-mode', 'tm']:
+                if query.lower() in ["thinking-mode", "tm"]:
                     await self.toggle_thinking_mode()
                     continue
 
-                if query.lower() in ['show-thinking', 'st']:
+                if query.lower() in ["show-thinking", "st"]:
                     await self.toggle_show_thinking()
                     continue
 
-                if query.lower() in ['loop-limit', 'll']:
+                if query.lower() in ["loop-limit", "ll"]:
                     await self.set_loop_limit()
                     continue
 
-                if query.lower() in ['show-tool-execution', 'ste']:
+                if query.lower() in ["show-tool-execution", "ste"]:
                     self.toggle_show_tool_execution()
                     continue
 
-                if query.lower() in ['show-metrics', 'sm']:
+                if query.lower() in ["show-metrics", "sm"]:
                     self.toggle_show_metrics()
                     continue
 
-                if query.lower() in ['clear', 'cc']:
+                if query.lower() in ["clear", "cc"]:
                     self.clear_context()
                     continue
 
-                if query.lower() in ['context-info', 'ci']:
+                if query.lower() in ["context-info", "ci"]:
                     self.display_context_stats()
                     continue
 
-                if query.lower() in ['cls', 'clear-screen']:
+                if query.lower() in ["cls", "clear-screen"]:
                     self.clear_console()
                     self.display_available_tools()
                     self.display_current_model()
                     continue
 
-                if query.lower() in ['save-config', 'sc']:
+                if query.lower() in ["save-config", "sc"]:
                     # Ask for config name, defaulting to "default"
-                    config_name = await get_input_no_autocomplete("Config name (or press Enter for default)")
+                    config_name = await get_input_no_autocomplete(
+                        "Config name (or press Enter for default)"
+                    )
                     if not config_name or config_name.strip() == "":
                         config_name = "default"
                     self.save_configuration(config_name)
                     continue
 
-                if query.lower() in ['load-config', 'lc']:
+                if query.lower() in ["load-config", "lc"]:
                     # Ask for config name, defaulting to "default"
-                    config_name = await get_input_no_autocomplete("Config name to load (or press Enter for default)")
+                    config_name = await get_input_no_autocomplete(
+                        "Config name to load (or press Enter for default)"
+                    )
                     if not config_name or config_name.strip() == "":
                         config_name = "default"
                     self.load_configuration(config_name)
@@ -769,56 +904,76 @@ class MCPClient:
                     self.display_current_model()
                     continue
 
-                if query.lower() in ['reset-config', 'rc']:
+                if query.lower() in ["reset-config", "rc"]:
                     self.reset_configuration()
                     # Update display after resetting
                     self.display_available_tools()
                     self.display_current_model()
                     continue
 
-                if query.lower() in ['reload-servers', 'rs']:
+                if query.lower() in ["reload-servers", "rs"]:
                     await self.reload_servers()
                     continue
 
-                if query.lower() in ['human-in-the-loop', 'hil']:
+                if query.lower() in ["human-in-the-loop", "hil"]:
                     self.hil_manager.toggle()
                     continue
 
-                if query.lower() in ['prompts', 'pr']:
+                if query.lower() in ["prompts", "pr"]:
                     self.browse_prompts()
                     continue
 
-                if query.lower() in ['full-history', 'fh']:
+                if query.lower() in ["full-history", "fh"]:
                     display_full_history(self.chat_history, self.console)
                     continue
 
-                if query.lower() in ['export-history', 'eh']:
-                    filename = await get_input_no_autocomplete("Export filename (or press Enter for default)")
+                if query.lower() in ["export-history", "eh"]:
+                    filename = await get_input_no_autocomplete(
+                        "Export filename (or press Enter for default)"
+                    )
                     if not filename or filename.strip() == "":
                         export_history(self.chat_history, self.console)
                     else:
-                        export_history(self.chat_history, self.console, filename.strip())
+                        export_history(
+                            self.chat_history, self.console, filename.strip()
+                        )
                     continue
 
-                if query.lower() in ['import-history', 'ih']:
-                    filepath = await get_input_no_autocomplete("Path to history file to import")
+                if query.lower() in ["import-history", "ih"]:
+                    filepath = await get_input_no_autocomplete(
+                        "Path to history file to import"
+                    )
                     if filepath and filepath.strip():
                         imported = import_history(filepath.strip(), self.console)
                         if imported is not None:
                             self.chat_history = imported
-                            self.console.print("[green]Current chat history replaced with imported history.[/green]")
+                            self.console.print(
+                                "[green]Current chat history replaced with imported history.[/green]"
+                            )
                     else:
-                        self.console.print("[yellow]Import cancelled: No filepath provided.[/yellow]")
+                        self.console.print(
+                            "[yellow]Import cancelled: No filepath provided.[/yellow]"
+                        )
+                    continue
+
+                if query.lower() in ["system-prompts", "sp"]:
+                    await self.select_system_prompt()
+                    continue
+
+                if query.lower() in ["list-prompts", "lp"]:
+                    self.list_system_prompts()
                     continue
 
                 # Check if query starts with / (prompt invocation)
-                if query.startswith('/'):
+                if query.startswith("/"):
                     await self.handle_prompt_invocation(query)
                     continue
 
                 # Check if query is too short and not a special command
                 if len(query.strip()) < 5:
-                    self.console.print("[yellow]Query must be at least 5 characters long.[/yellow]")
+                    self.console.print(
+                        "[yellow]Query must be at least 5 characters long.[/yellow]"
+                    )
                     continue
 
                 try:
@@ -827,105 +982,192 @@ class MCPClient:
 
                 except AbortQueryException:
                     # User aborted the query - don't save to history
-                    self.console.print("[yellow]Query aborted. Nothing saved to history.[/yellow]")
+                    self.console.print(
+                        "[yellow]Query aborted. Nothing saved to history.[/yellow]"
+                    )
 
                 except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError):
                     # Connection errors when Ollama server is not available
-                    self.console.print(Panel(
-                        f"[bold red]Connection Error:[/bold red] Unable to connect to Ollama server.\n\n"
-                        f"Configured host: [yellow]{self.host}[/yellow]\n\n"
-                        "Possible causes:\n"
-                        "• Ollama server is not running\n"
-                        "• Incorrect host/port configuration\n"
-                        "• Network connectivity issues\n\n"
-                        "Solutions:\n"
-                        "• Start Ollama with: [bold cyan]ollama serve[/bold cyan]\n"
-                        "• Check if Ollama is running on the correct port\n"
-                        "• Use [bold cyan]--host[/bold cyan] flag to specify a different host\n"
-                        "• Verify your network connection",
-                        title="Ollama Server Unavailable",
-                        border_style="red", expand=False
-                    ))
+                    self.console.print(
+                        Panel(
+                            f"[bold red]Connection Error:[/bold red] Unable to connect to Ollama server.\n\n"
+                            f"Configured host: [yellow]{self.host}[/yellow]\n\n"
+                            "Possible causes:\n"
+                            "• Ollama server is not running\n"
+                            "• Incorrect host/port configuration\n"
+                            "• Network connectivity issues\n\n"
+                            "Solutions:\n"
+                            "• Start Ollama with: [bold cyan]ollama serve[/bold cyan]\n"
+                            "• Check if Ollama is running on the correct port\n"
+                            "• Use [bold cyan]--host[/bold cyan] flag to specify a different host\n"
+                            "• Verify your network connection",
+                            title="Ollama Server Unavailable",
+                            border_style="red",
+                            expand=False,
+                        )
+                    )
 
                 except ollama.ResponseError as e:
                     # Extract error message without the traceback
                     error_msg = str(e)
                     if "does not support tools" in error_msg.lower():
                         model_name = self.model_manager.get_current_model()
-                        self.console.print(Panel(
-                            f"[bold red]Model Error:[/bold red] The model [bold blue]{model_name}[/bold blue] does not support tools.\n\n"
-                            "To use tools, switch to a model that supports them by typing [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan]\n\n"
-                            "You can still use this model without tools by [bold]disabling all tools[/bold] with [bold cyan]tools[/bold cyan] or [bold cyan]t[/bold cyan]",
-                            title="Tools Not Supported",
-                            border_style="red", expand=False
-                        ))
+                        self.console.print(
+                            Panel(
+                                f"[bold red]Model Error:[/bold red] The model [bold blue]{model_name}[/bold blue] does not support tools.\n\n"
+                                "To use tools, switch to a model that supports them by typing [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan]\n\n"
+                                "You can still use this model without tools by [bold]disabling all tools[/bold] with [bold cyan]tools[/bold cyan] or [bold cyan]t[/bold cyan]",
+                                title="Tools Not Supported",
+                                border_style="red",
+                                expand=False,
+                            )
+                        )
                     else:
-                        self.console.print(Panel(f"[bold red]Ollama Error:[/bold red] {error_msg}",
-                                                 border_style="red", expand=False))
+                        self.console.print(
+                            Panel(
+                                f"[bold red]Ollama Error:[/bold red] {error_msg}",
+                                border_style="red",
+                                expand=False,
+                            )
+                        )
 
                     # If it's a "model not found" error, suggest how to fix it
-                    if "not found" in error_msg.lower() and "try pulling it first" in error_msg.lower():
+                    if (
+                        "not found" in error_msg.lower()
+                        and "try pulling it first" in error_msg.lower()
+                    ):
                         model_name = self.model_manager.get_current_model()
-                        self.console.print(Panel(
-                            "[bold yellow]Model Not Found[/bold yellow]\n\n"
-                            "To download this model, run the following command in a new terminal window:\n"
-                            f"[bold cyan]ollama pull {model_name}[/bold cyan]\n\n"
-                            "Or, you can use a different model by typing [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan] to select from available models",
-                            title="Model Not Available",
-                            border_style="yellow", expand=False
-                        ))
+                        self.console.print(
+                            Panel(
+                                "[bold yellow]Model Not Found[/bold yellow]\n\n"
+                                "To download this model, run the following command in a new terminal window:\n"
+                                f"[bold cyan]ollama pull {model_name}[/bold cyan]\n\n"
+                                "Or, you can use a different model by typing [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan] to select from available models",
+                                title="Model Not Available",
+                                border_style="yellow",
+                                expand=False,
+                            )
+                        )
 
             except Exception as e:
-                self.console.print(Panel(f"[bold red]Error:[/bold red] {str(e)}", title="Exception", border_style="red", expand=False))
+                self.console.print(
+                    Panel(
+                        f"[bold red]Error:[/bold red] {str(e)}",
+                        title="Exception",
+                        border_style="red",
+                        expand=False,
+                    )
+                )
                 self.console.print_exception()
 
     def print_help(self):
         """Print available commands"""
-        self.console.print(Panel(
-            "\n"
-            "[bold cyan]Model:[/bold cyan]\n"
-            "• Type [bold]model[/bold] or [bold]m[/bold] to select a model\n"
-            "• Type [bold]model-config[/bold] or [bold]mc[/bold] to configure system prompt and model parameters\n"
-            "• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode\n"
-            "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n"
-            "• Type [bold]show-metrics[/bold] or [bold]sm[/bold] to toggle performance metrics display\n\n"
+        self.console.print(
+            Panel(
+                "\n"
+                "[bold cyan]Model:[/bold cyan]\n"
+                "• Type [bold]model[/bold] or [bold]m[/bold] to select a model\n"
+                "• Type [bold]model-config[/bold] or [bold]mc[/bold] to configure system prompt and model parameters\n"
+                "• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode\n"
+                "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n"
+                "• Type [bold]show-metrics[/bold] or [bold]sm[/bold] to toggle performance metrics display\n\n"
+                "[bold cyan]Agent Mode:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
+                "• Type [bold]loop-limit[/bold] or [bold]ll[/bold] to set the maximum tool loop iterations\n\n"
+                "[bold cyan]MCP Servers and Tools:[/bold cyan]\n"
+                "• Type [bold]tools[/bold] or [bold]t[/bold] to configure tools\n"
+                "• Type [bold]show-tool-execution[/bold] or [bold]ste[/bold] to toggle tool execution display\n"
+                "• Type [bold]human-in-the-loop[/bold] or [bold]hil[/bold] to toggle Human-in-the-Loop confirmations\n"
+                "• Type [bold]reload-servers[/bold] or [bold]rs[/bold] to reload MCP servers\n\n"
+                "[bold cyan]MCP Prompts:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
+                "• Type [bold]prompts[/bold] or [bold]pr[/bold] to browse available prompts\n"
+                "• Type [bold]/prompt_name[/bold] to invoke a prompt\n"
+                "• Type [bold]/[/bold] to see prompt autocomplete suggestions\n\n"
+                "[bold cyan]Context:[/bold cyan]\n"
+                "• Type [bold]context[/bold] or [bold]c[/bold] to toggle context retention\n"
+                "• Type [bold]clear[/bold] or [bold]cc[/bold] to clear conversation context\n"
+                "• Type [bold]context-info[/bold] or [bold]ci[/bold] to display context info\n\n"
+                "[bold cyan]History:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
+                "• Type [bold]full-history[/bold] or [bold]fh[/bold] to view full conversation history\n"
+                "• Type [bold]export-history[/bold] or [bold]eh[/bold] to export history to JSON\n"
+                "• Type [bold]import-history[/bold] or [bold]ih[/bold] to import history from JSON\n\n"
+                "[bold cyan]Configuration:[/bold cyan]\n"
+                "• Type [bold]save-config[/bold] or [bold]sc[/bold] to save the current configuration\n"
+                "• Type [bold]load-config[/bold] or [bold]lc[/bold] to load a configuration\n"
+                "• Type [bold]reset-config[/bold] or [bold]rc[/bold] to reset configuration to defaults\n\n"
+                "[bold cyan]System Prompts:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
+                "• Press [bold]TAB[/bold] to cycle to next system prompt\n"
+                "• Press [bold]Shift+TAB[/bold] to cycle to previous system prompt\n"
+                "• Type [bold]system-prompts[/bold] or [bold]sp[/bold] to select a system prompt\n"
+                "• Type [bold]list-prompts[/bold] or [bold]lp[/bold] to list available system prompts\n"
+                "• Place .md files in ~/.config/ollmcp/system_prompts/ to add custom prompts\n\n"
+                "[bold cyan]Basic Commands:[/bold cyan]\n"
+                "• Press [bold]a[/bold] during model generation to abort [bold bright_magenta](New!)[/bold bright_magenta]\n"
+                "• Type [bold]help[/bold] or [bold]h[/bold] to show this help message\n"
+                "• Type [bold]clear-screen[/bold] or [bold]cls[/bold] to clear the terminal screen\n"
+                "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], [bold]bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n",
+                title="[bold]Help - Available Commands[/bold]",
+                border_style="yellow",
+                expand=False,
+            )
+        )
 
-            "[bold cyan]Agent Mode:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
-            "• Type [bold]loop-limit[/bold] or [bold]ll[/bold] to set the maximum tool loop iterations\n\n"
+    def list_system_prompts(self):
+        """Display available system prompts"""
+        prompts = self.system_prompt_manager.list_prompts()
+        active = self.system_prompt_manager.get_active_prompt_name()
 
-            "[bold cyan]MCP Servers and Tools:[/bold cyan]\n"
-            "• Type [bold]tools[/bold] or [bold]t[/bold] to configure tools\n"
-            "• Type [bold]show-tool-execution[/bold] or [bold]ste[/bold] to toggle tool execution display\n"
-            "• Type [bold]human-in-the-loop[/bold] or [bold]hil[/bold] to toggle Human-in-the-Loop confirmations\n"
-            "• Type [bold]reload-servers[/bold] or [bold]rs[/bold] to reload MCP servers\n\n"
+        if not prompts:
+            self.console.print("[yellow]No system prompt files found.[/yellow]")
+            self.console.print(
+                f"[dim]Place .md files in: {self.system_prompt_manager.get_prompts_dir()}[/dim]"
+            )
+            return
 
-            "[bold cyan]MCP Prompts:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
-            "• Type [bold]prompts[/bold] or [bold]pr[/bold] to browse available prompts\n"
-            "• Type [bold]/prompt_name[/bold] to invoke a prompt\n"
-            "• Type [bold]/[/bold] to see prompt autocomplete suggestions\n\n"
+        self.console.print(
+            Panel(
+                "\n".join(
+                    [
+                        f"{'[green]▶[/green]' if name == active else '  '} {name}.md"
+                        for name in sorted(prompts)
+                    ]
+                )
+                + "\n\n[dim]Active prompt shown with ▶[/dim]",
+                title="System Prompts",
+                border_style="cyan",
+                expand=False,
+            )
+        )
 
-            "[bold cyan]Context:[/bold cyan]\n"
-            "• Type [bold]context[/bold] or [bold]c[/bold] to toggle context retention\n"
-            "• Type [bold]clear[/bold] or [bold]cc[/bold] to clear conversation context\n"
-            "• Type [bold]context-info[/bold] or [bold]ci[/bold] to display context info\n\n"
+    async def select_system_prompt(self):
+        """Interactive system prompt selection"""
+        prompts = self.system_prompt_manager.list_prompts()
 
-            "[bold cyan]History:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
-            "• Type [bold]full-history[/bold] or [bold]fh[/bold] to view full conversation history\n"
-            "• Type [bold]export-history[/bold] or [bold]eh[/bold] to export history to JSON\n"
-            "• Type [bold]import-history[/bold] or [bold]ih[/bold] to import history from JSON\n\n"
+        if not prompts:
+            self.console.print("[yellow]No system prompt files found.[/yellow]")
+            self.console.print(
+                f"[dim]Place .md files in: {self.system_prompt_manager.get_prompts_dir()}[/dim]"
+            )
+            return
 
-            "[bold cyan]Configuration:[/bold cyan]\n"
-            "• Type [bold]save-config[/bold] or [bold]sc[/bold] to save the current configuration\n"
-            "• Type [bold]load-config[/bold] or [bold]lc[/bold] to load a configuration\n"
-            "• Type [bold]reset-config[/bold] or [bold]rc[/bold] to reset configuration to defaults\n\n"
+        # Display available prompts
+        self.list_system_prompts()
 
+        # Get user selection
+        choice = await get_input_no_autocomplete(
+            "Enter prompt name (or 'none' to disable)"
+        )
 
-            "[bold cyan]Basic Commands:[/bold cyan]\n"
-            "• Press [bold]a[/bold] during model generation to abort [bold bright_magenta](New!)[/bold bright_magenta]\n"
-            "• Type [bold]help[/bold] or [bold]h[/bold] to show this help message\n"
-            "• Type [bold]clear-screen[/bold] or [bold]cls[/bold] to clear the terminal screen\n"
-            "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], [bold]bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n",
-            title="[bold]Help - Available Commands[/bold]", border_style="yellow", expand=False))
+        if choice == "quit":
+            return
+
+        if choice.lower() in ["none", ""]:
+            self.system_prompt_manager.set_active_prompt(None)
+            self.console.print("[green]External system prompt disabled.[/green]")
+        elif choice in prompts:
+            self.system_prompt_manager.set_active_prompt(choice)
+            self.console.print(f"[green]Active system prompt set to: {choice}[/green]")
+        else:
+            self.console.print(f"[red]Unknown prompt: {choice}[/red]")
 
     def toggle_context_retention(self):
         """Toggle whether to retain previous conversation context when sending queries"""
@@ -940,13 +1182,17 @@ class MCPClient:
         if not await self.supports_thinking_mode():
             current_model = self.model_manager.get_current_model()
             model_base_name = current_model.split(":")[0]
-            self.console.print(Panel(
-                f"[bold red]Thinking mode is not supported for model '{model_base_name}'[/bold red]\n\n"
-                f"Thinking mode is only available for models that have the 'thinking' capability.\n"
-                f"\nCurrent model: [yellow]{current_model}[/yellow]\n"
-                f"Use [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan] to switch to a supported model.",
-                title="Thinking Mode Not Available", border_style="red", expand=False
-            ))
+            self.console.print(
+                Panel(
+                    f"[bold red]Thinking mode is not supported for model '{model_base_name}'[/bold red]\n\n"
+                    f"Thinking mode is only available for models that have the 'thinking' capability.\n"
+                    f"\nCurrent model: [yellow]{current_model}[/yellow]\n"
+                    f"Use [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan] to switch to a supported model.",
+                    title="Thinking Mode Not Available",
+                    border_style="red",
+                    expand=False,
+                )
+            )
             return
 
         self.thinking_mode = not self.thinking_mode
@@ -954,39 +1200,57 @@ class MCPClient:
         self.console.print(f"[green]Thinking mode {status}![/green]")
 
         if self.thinking_mode:
-            self.console.print("[cyan]🤔 The model will now show its reasoning process.[/cyan]")
+            self.console.print(
+                "[cyan]🤔 The model will now show its reasoning process.[/cyan]"
+            )
         else:
-            self.console.print("[cyan]The model will now provide direct responses.[/cyan]")
+            self.console.print(
+                "[cyan]The model will now provide direct responses.[/cyan]"
+            )
 
     async def toggle_show_thinking(self):
         """Toggle whether thinking text remains visible after completion"""
         if not self.thinking_mode:
-            self.console.print(Panel(
-                f"[bold yellow]Thinking mode is currently disabled[/bold yellow]\n\n"
-                f"Enable thinking mode first using [bold cyan]thinking-mode[/bold cyan] or [bold cyan]tm[/bold cyan] command.\n"
-                f"This setting only applies when thinking mode is active.",
-                title="Show Thinking Setting", border_style="yellow", expand=False
-            ))
+            self.console.print(
+                Panel(
+                    f"[bold yellow]Thinking mode is currently disabled[/bold yellow]\n\n"
+                    f"Enable thinking mode first using [bold cyan]thinking-mode[/bold cyan] or [bold cyan]tm[/bold cyan] command.\n"
+                    f"This setting only applies when thinking mode is active.",
+                    title="Show Thinking Setting",
+                    border_style="yellow",
+                    expand=False,
+                )
+            )
             return
 
         if not await self.supports_thinking_mode():
             current_model = self.model_manager.get_current_model()
             model_base_name = current_model.split(":")[0]
-            self.console.print(Panel(
-                f"[bold red]Thinking mode is not supported for model '{model_base_name}'[/bold red]\n\n"
-                f"This setting only applies to models that have the 'thinking' capability.",
-                title="Show Thinking Not Available", border_style="red", expand=False
-            ))
+            self.console.print(
+                Panel(
+                    f"[bold red]Thinking mode is not supported for model '{model_base_name}'[/bold red]\n\n"
+                    f"This setting only applies to models that have the 'thinking' capability.",
+                    title="Show Thinking Not Available",
+                    border_style="red",
+                    expand=False,
+                )
+            )
             return
 
         self.show_thinking = not self.show_thinking
         status = "visible" if self.show_thinking else "hidden"
-        self.console.print(f"[green]Thinking text will be {status} after completion![/green]")
+        self.console.print(
+            f"[green]Thinking text will be {status} after completion![/green]"
+        )
 
         if self.show_thinking:
-            self.console.print("[cyan]💭 The reasoning process will remain visible in the final response.[/cyan]")
+            self.console.print(
+                "[cyan]💭 The reasoning process will remain visible in the final response.[/cyan]"
+            )
         else:
-            self.console.print("[cyan]🧹 The reasoning process will be hidden, showing only the final answer.[/cyan]")
+            self.console.print(
+                "[cyan]🧹 The reasoning process will be hidden, showing only the final answer.[/cyan]"
+            )
 
     def toggle_show_tool_execution(self):
         """Toggle whether tool execution displays are shown"""
@@ -995,9 +1259,13 @@ class MCPClient:
         self.console.print(f"[green]Tool execution displays will be {status}![/green]")
 
         if self.show_tool_execution:
-            self.console.print("[cyan]🔧 Tool execution details will be displayed when tools are called.[/cyan]")
+            self.console.print(
+                "[cyan]🔧 Tool execution details will be displayed when tools are called.[/cyan]"
+            )
         else:
-            self.console.print("[cyan]🔇 Tool execution details will be hidden for a cleaner output.[/cyan]")
+            self.console.print(
+                "[cyan]🔇 Tool execution details will be hidden for a cleaner output.[/cyan]"
+            )
 
     def toggle_show_metrics(self):
         """Toggle whether performance metrics are shown after each query"""
@@ -1006,13 +1274,19 @@ class MCPClient:
         self.console.print(f"[green]Performance metrics display {status}![/green]")
 
         if self.show_metrics:
-            self.console.print("[cyan]📊 Performance metrics will be displayed after each query.[/cyan]")
+            self.console.print(
+                "[cyan]📊 Performance metrics will be displayed after each query.[/cyan]"
+            )
         else:
-            self.console.print("[cyan]🔇 Performance metrics will be hidden for a cleaner output.[/cyan]")
+            self.console.print(
+                "[cyan]🔇 Performance metrics will be hidden for a cleaner output.[/cyan]"
+            )
 
     async def set_loop_limit(self):
         """Configure the maximum number of follow-up tool loops per query."""
-        user_input = await get_input_no_autocomplete(f"Set agent loop limit (current: {self.loop_limit})")
+        user_input = await get_input_no_autocomplete(
+            f"Set agent loop limit (current: {self.loop_limit})"
+        )
 
         if user_input is None:
             return
@@ -1028,16 +1302,22 @@ class MCPClient:
             if new_limit < 1:
                 raise ValueError
             self.loop_limit = new_limit
-            self.console.print(f"[green]🤖 Agent loop limit set to {self.loop_limit}![/green]")
+            self.console.print(
+                f"[green]🤖 Agent loop limit set to {self.loop_limit}![/green]"
+            )
         except ValueError:
-            self.console.print("[red]Invalid loop limit. Please enter a positive integer.[/red]")
+            self.console.print(
+                "[red]Invalid loop limit. Please enter a positive integer.[/red]"
+            )
 
     def clear_context(self):
         """Clear conversation history and token count"""
         original_history_length = len(self.chat_history)
         self.chat_history = []
         self.actual_token_count = 0
-        self.console.print(f"[green]Context cleared! Removed {original_history_length} conversation entries.[/green]")
+        self.console.print(
+            f"[green]Context cleared! Removed {original_history_length} conversation entries.[/green]"
+        )
 
     def display_context_stats(self):
         """Display information about the current context window usage"""
@@ -1051,17 +1331,21 @@ class MCPClient:
         else:
             thinking_status = f"Thinking mode: [red]Disabled[/red]\n"
 
-        self.console.print(Panel(
-            f"Context retention: [{'green' if self.retain_context else 'red'}]{'Enabled' if self.retain_context else 'Disabled'}[/{'green' if self.retain_context else 'red'}]\n"
-            f"{thinking_status}"
-            f"Tool execution display: [{'green' if self.show_tool_execution else 'red'}]{'Enabled' if self.show_tool_execution else 'Disabled'}[/{'green' if self.show_tool_execution else 'red'}]\n"
-            f"Performance metrics: [{'green' if self.show_metrics else 'red'}]{'Enabled' if self.show_metrics else 'Disabled'}[/{'green' if self.show_metrics else 'red'}]\n"
-            f"Agent loop limit: [cyan]{self.loop_limit}[/cyan]\n"
-            f"Human-in-the-Loop confirmations: [{'green' if self.hil_manager.is_enabled() else 'red'}]{'Enabled' if self.hil_manager.is_enabled() else 'Disabled'}[/{'green' if self.hil_manager.is_enabled() else 'red'}]\n"
-            f"Conversation entries: {history_count}\n"
-            f"Total tokens generated: {self.actual_token_count:,}",
-            title="Context Info", border_style="cyan", expand=False
-        ))
+        self.console.print(
+            Panel(
+                f"Context retention: [{'green' if self.retain_context else 'red'}]{'Enabled' if self.retain_context else 'Disabled'}[/{'green' if self.retain_context else 'red'}]\n"
+                f"{thinking_status}"
+                f"Tool execution display: [{'green' if self.show_tool_execution else 'red'}]{'Enabled' if self.show_tool_execution else 'Disabled'}[/{'green' if self.show_tool_execution else 'red'}]\n"
+                f"Performance metrics: [{'green' if self.show_metrics else 'red'}]{'Enabled' if self.show_metrics else 'Disabled'}[/{'green' if self.show_metrics else 'red'}]\n"
+                f"Agent loop limit: [cyan]{self.loop_limit}[/cyan]\n"
+                f"Human-in-the-Loop confirmations: [{'green' if self.hil_manager.is_enabled() else 'red'}]{'Enabled' if self.hil_manager.is_enabled() else 'Disabled'}[/{'green' if self.hil_manager.is_enabled() else 'red'}]\n"
+                f"Conversation entries: {history_count}\n"
+                f"Total tokens generated: {self.actual_token_count:,}",
+                title="Context Info",
+                border_style="cyan",
+                expand=False,
+            )
+        )
 
     def auto_load_default_config(self):
         """Automatically load the default configuration if it exists."""
@@ -1072,7 +1356,9 @@ class MCPClient:
     def print_auto_load_default_config_status(self):
         """Print the status of the auto-load default configuration."""
         if self.default_configuration_status:
-            self.console.print("[green] ✓ Default configuration loaded successfully![/green]")
+            self.console.print(
+                "[green] ✓ Default configuration loaded successfully![/green]"
+            )
             self.console.print()
 
     def save_configuration(self, config_name=None):
@@ -1086,24 +1372,21 @@ class MCPClient:
             "host": self.host,
             "model": self.model_manager.get_current_model(),
             "enabledTools": self.tool_manager.get_enabled_tools(),
-            "contextSettings": {
-                "retainContext": self.retain_context
-            },
+            "contextSettings": {"retainContext": self.retain_context},
             "modelSettings": {
                 "thinkingMode": self.thinking_mode,
-                "showThinking": self.show_thinking
+                "showThinking": self.show_thinking,
             },
-            "agentSettings": {
-                "loopLimit": self.loop_limit
-            },
+            "agentSettings": {"loopLimit": self.loop_limit},
             "modelConfig": self.model_config_manager.get_config(),
             "displaySettings": {
                 "showToolExecution": self.show_tool_execution,
-                "showMetrics": self.show_metrics
+                "showMetrics": self.show_metrics,
             },
-            "hilSettings": {
-                "enabled": self.hil_manager.is_enabled()
-            }
+            "hilSettings": {"enabled": self.hil_manager.is_enabled()},
+            "systemPromptSettings": {
+                "activePrompt": self.system_prompt_manager.get_active_prompt_name()
+            },
         }
 
         # Use the ConfigManager to save the configuration
@@ -1140,7 +1423,9 @@ class MCPClient:
             loaded_tools = config_data["enabledTools"]
 
             # Only apply tools that actually exist in our available tools
-            available_tool_names = {tool.name for tool in self.tool_manager.get_available_tools()}
+            available_tool_names = {
+                tool.name for tool in self.tool_manager.get_available_tools()
+            }
             for tool_name, enabled in loaded_tools.items():
                 if tool_name in available_tool_names:
                     # Update in the tool manager
@@ -1175,7 +1460,9 @@ class MCPClient:
         # Load display settings if specified
         if "displaySettings" in config_data:
             if "showToolExecution" in config_data["displaySettings"]:
-                self.show_tool_execution = config_data["displaySettings"]["showToolExecution"]
+                self.show_tool_execution = config_data["displaySettings"][
+                    "showToolExecution"
+                ]
             if "showMetrics" in config_data["displaySettings"]:
                 self.show_metrics = config_data["displaySettings"]["showMetrics"]
 
@@ -1183,6 +1470,16 @@ class MCPClient:
         if "hilSettings" in config_data:
             if "enabled" in config_data["hilSettings"]:
                 self.hil_manager.set_enabled(config_data["hilSettings"]["enabled"])
+
+        # Load system prompt settings if specified
+        if "systemPromptSettings" in config_data:
+            if "activePrompt" in config_data["systemPromptSettings"]:
+                active_prompt = config_data["systemPromptSettings"]["activePrompt"]
+                if (
+                    active_prompt
+                    and active_prompt in self.system_prompt_manager.list_prompts()
+                ):
+                    self.system_prompt_manager.set_active_prompt(active_prompt)
 
         return True
 
@@ -1225,7 +1522,9 @@ class MCPClient:
         if "agentSettings" in config_data:
             if "loopLimit" in config_data["agentSettings"]:
                 try:
-                    self.loop_limit = max(1, int(config_data["agentSettings"]["loopLimit"]))
+                    self.loop_limit = max(
+                        1, int(config_data["agentSettings"]["loopLimit"])
+                    )
                 except (TypeError, ValueError):
                     self.loop_limit = 3
             else:
@@ -1236,7 +1535,9 @@ class MCPClient:
         # Reset display settings from the default configuration
         if "displaySettings" in config_data:
             if "showToolExecution" in config_data["displaySettings"]:
-                self.show_tool_execution = config_data["displaySettings"]["showToolExecution"]
+                self.show_tool_execution = config_data["displaySettings"][
+                    "showToolExecution"
+                ]
             else:
                 # Default show tool execution to True if not specified
                 self.show_tool_execution = True
@@ -1290,13 +1591,15 @@ class MCPClient:
             prompt_name,
             self.sessions,
             self._process_query_with_monitoring,
-            self._temporary_history_extension
+            self._temporary_history_extension,
         )
 
     async def reload_servers(self):
         """Reload all MCP servers with the same connection parameters"""
         if not any(self.server_connection_params.values()):
-            self.console.print("[yellow]No server connection parameters stored. Cannot reload.[/yellow]")
+            self.console.print(
+                "[yellow]No server connection parameters stored. Cannot reload.[/yellow]"
+            )
             return
 
         self.console.print("[cyan]🔄 Reloading MCP servers...[/cyan]")
@@ -1313,14 +1616,16 @@ class MCPClient:
 
             # Reconnect using stored parameters
             await self.connect_to_servers(
-                server_paths=self.server_connection_params['server_paths'],
-                server_urls=self.server_connection_params['server_urls'],
-                config_path=self.server_connection_params['config_path'],
-                auto_discovery=self.server_connection_params['auto_discovery']
+                server_paths=self.server_connection_params["server_paths"],
+                server_urls=self.server_connection_params["server_urls"],
+                config_path=self.server_connection_params["config_path"],
+                auto_discovery=self.server_connection_params["auto_discovery"],
             )
 
             # Restore enabled tool states for tools that still exist
-            available_tool_names = {tool.name for tool in self.tool_manager.get_available_tools()}
+            available_tool_names = {
+                tool.name for tool in self.tool_manager.get_available_tools()
+            }
             for tool_name, enabled in current_enabled_tools.items():
                 if tool_name in available_tool_names:
                     self.tool_manager.set_tool_status(tool_name, enabled)
@@ -1332,55 +1637,76 @@ class MCPClient:
             self.display_available_tools()
 
         except Exception as e:
-            self.console.print(Panel(
-                f"[bold red]Error reloading servers:[/bold red] {str(e)}\n\n"
-                "You may need to restart the application if servers are not working properly.",
-                title="Reload Failed", border_style="red", expand=False
-            ))
+            self.console.print(
+                Panel(
+                    f"[bold red]Error reloading servers:[/bold red] {str(e)}\n\n"
+                    "You may need to restart the application if servers are not working properly.",
+                    title="Reload Failed",
+                    border_style="red",
+                    expand=False,
+                )
+            )
 
-app = typer.Typer(help="MCP Client for Ollama", context_settings={"help_option_names": ["-h", "--help"]})
+
+app = typer.Typer(
+    help="MCP Client for Ollama",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+
 
 @app.command()
 def main(
     # MCP Server Configuration
     mcp_server: Optional[List[str]] = typer.Option(
-        None, "--mcp-server", "-s",
+        None,
+        "--mcp-server",
+        "-s",
         help="Path to a server script (.py or .js)",
-        rich_help_panel="MCP Server Configuration"
+        rich_help_panel="MCP Server Configuration",
     ),
     mcp_server_url: Optional[List[str]] = typer.Option(
-        None, "--mcp-server-url", "-u",
+        None,
+        "--mcp-server-url",
+        "-u",
         help="URL for SSE or Streamable HTTP MCP server (e.g., http://localhost:8000/sse, https://domain-name.com/mcp, etc)",
-        rich_help_panel="MCP Server Configuration"
+        rich_help_panel="MCP Server Configuration",
     ),
     servers_json: Optional[str] = typer.Option(
-        None, "--servers-json", "-j",
+        None,
+        "--servers-json",
+        "-j",
         help="Path to a JSON file with server configurations",
-        rich_help_panel="MCP Server Configuration"
+        rich_help_panel="MCP Server Configuration",
     ),
     auto_discovery: bool = typer.Option(
-        False, "--auto-discovery", "-a",
+        False,
+        "--auto-discovery",
+        "-a",
         help=f"Auto-discover servers from Claude's config at {DEFAULT_CLAUDE_CONFIG} - If no other options are provided, this will be enabled by default",
-        rich_help_panel="MCP Server Configuration"
+        rich_help_panel="MCP Server Configuration",
     ),
-
     # Ollama Configuration
     model: str = typer.Option(
-        DEFAULT_MODEL, "--model", "-m",
+        DEFAULT_MODEL,
+        "--model",
+        "-m",
         help="Ollama model to use",
-        rich_help_panel="Ollama Configuration"
+        rich_help_panel="Ollama Configuration",
     ),
     host: str = typer.Option(
-        None, "--host", "-H",
+        None,
+        "--host",
+        "-H",
         help="Ollama host URL",
-        rich_help_panel="Ollama Configuration"
+        rich_help_panel="Ollama Configuration",
     ),
-
     # General Options
     version: Optional[bool] = typer.Option(
-        None, "--version", "-v",
+        None,
+        "--version",
+        "-v",
         help="Show version and exit",
-    )
+    ),
 ):
     """Run the MCP Client for Ollama with specified options."""
 
@@ -1397,7 +1723,11 @@ def main(
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host))
+        loop.run_until_complete(
+            async_main(
+                mcp_server, mcp_server_url, servers_json, auto_discovery, model, host
+            )
+        )
     finally:
         try:
             # Ensure executor cleanup completes before closing loop
@@ -1406,7 +1736,10 @@ def main(
         finally:
             loop.close()
 
-async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host):
+
+async def async_main(
+    mcp_server, mcp_server_url, servers_json, auto_discovery, model, host
+):
     """Asynchronous main function to run the MCP Client for Ollama"""
 
     console = Console()
@@ -1423,32 +1756,46 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
         if os.path.exists(servers_json):
             config_path = servers_json
         else:
-            console.print(f"[bold red]Error: Specified JSON config file not found: {servers_json}[/bold red]")
+            console.print(
+                f"[bold red]Error: Specified JSON config file not found: {servers_json}[/bold red]"
+            )
             return
     elif auto_discovery:
         # If --auto-discovery is provided, use that and set config_path to None
         auto_discovery_final = True
         if os.path.exists(DEFAULT_CLAUDE_CONFIG):
-            console.print(f"[cyan]Auto-discovering servers from Claude's config at {DEFAULT_CLAUDE_CONFIG}[/cyan]")
+            console.print(
+                f"[cyan]Auto-discovering servers from Claude's config at {DEFAULT_CLAUDE_CONFIG}[/cyan]"
+            )
         else:
-            console.print(f"[yellow]Warning: Claude config not found at {DEFAULT_CLAUDE_CONFIG}[/yellow]")
+            console.print(
+                f"[yellow]Warning: Claude config not found at {DEFAULT_CLAUDE_CONFIG}[/yellow]"
+            )
     else:
         # If neither is provided, check if DEFAULT_CLAUDE_CONFIG exists and use auto_discovery
         if not mcp_server and not mcp_server_url:
             if os.path.exists(DEFAULT_CLAUDE_CONFIG):
-                console.print(f"[cyan]Auto-discovering servers from Claude's config at {DEFAULT_CLAUDE_CONFIG}[/cyan]")
+                console.print(
+                    f"[cyan]Auto-discovering servers from Claude's config at {DEFAULT_CLAUDE_CONFIG}[/cyan]"
+                )
                 auto_discovery_final = True
             else:
-                console.print("[yellow]Warning: No servers specified and Claude config not found.[/yellow]")
+                console.print(
+                    "[yellow]Warning: No servers specified and Claude config not found.[/yellow]"
+                )
 
     # Validate mcp-server paths exist
     if mcp_server:
         for server_path in mcp_server:
             if not os.path.exists(server_path):
-                console.print(f"[bold red]Error: Server script not found: {server_path}[/bold red]")
+                console.print(
+                    f"[bold red]Error: Server script not found: {server_path}[/bold red]"
+                )
                 return
     try:
-        await client.connect_to_servers(mcp_server, mcp_server_url, config_path, auto_discovery_final)
+        await client.connect_to_servers(
+            mcp_server, mcp_server_url, config_path, auto_discovery_final
+        )
         client.auto_load_default_config()
 
         if host != client.host and host is not None:
@@ -1457,16 +1804,20 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
             client.model_manager.ollama = client.ollama
 
         if not await client.model_manager.check_ollama_running():
-            console.print(Panel(
-                "[bold red]Error: Ollama is not running![/bold red]\n\n"
-                f"[yellow]Ollama current configured host: {client.host}[/yellow]\n\n"
-                "This client requires Ollama to be running to process queries.\n\n"
-                "Please start Ollama by running the 'ollama serve' command in a terminal.\n\n"
-                "💡 [bold magenta]Tip:[/bold magenta] If you configured a different host in a saved default configuration you can\n\n"
-                "   1. Use --host flag to override the configured host for example: ollmcp --host http://localhost:11434\n"
-                "   2. Once done, you can save a new default configuration to avoid needing to specify it each time.",
-                title="Ollama Not Running", border_style="red", expand=False
-            ))
+            console.print(
+                Panel(
+                    "[bold red]Error: Ollama is not running![/bold red]\n\n"
+                    f"[yellow]Ollama current configured host: {client.host}[/yellow]\n\n"
+                    "This client requires Ollama to be running to process queries.\n\n"
+                    "Please start Ollama by running the 'ollama serve' command in a terminal.\n\n"
+                    "💡 [bold magenta]Tip:[/bold magenta] If you configured a different host in a saved default configuration you can\n\n"
+                    "   1. Use --host flag to override the configured host for example: ollmcp --host http://localhost:11434\n"
+                    "   2. Once done, you can save a new default configuration to avoid needing to specify it each time.",
+                    title="Ollama Not Running",
+                    border_style="red",
+                    expand=False,
+                )
+            )
             return
 
         # If model was explicitly provided via CLI flag (not default), override any loaded config
@@ -1481,6 +1832,7 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
             # Suppress any cleanup errors (BrokenResourceError, etc.)
             # These can occur during stdio server shutdown race conditions
             pass
+
 
 if __name__ == "__main__":
     app()
