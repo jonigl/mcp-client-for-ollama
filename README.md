@@ -265,15 +265,16 @@ During chat, use these commands:
 | `load-config`    | `lc`             | Load tool and model configuration from a file       |
 | `loop-limit`     | `ll`             | Set maximum iterative tool-loop iterations (Agent Mode). Default: 3 |
 | `model`          | `m`              | List and select a different Ollama model            |
-| `model-config`   | `mc`             | Configure advanced model parameters and system prompt|
-| `prompts`        | `pr`             | Browse and view all available MCP prompts           |
+| `model-config`   | `mc`             | Configure advanced model parameters and system prompt |
+| `prompts`        | `pr`             | Browse and view all available MCP prompts             |
 | `/prompt_name`   | -                | Invoke a specific prompt by name (e.g., `/summarize`) |
-| `quit`, `exit`, `bye`   | `q` or `Ctrl+D`  | Exit the client                                     |
+| `quit`, `exit`, `bye`   | `q` or `Ctrl+D`  | Exit the client                              |
 | `reload-servers` | `rs`             | Reload all MCP servers with current configuration   |
 | `reset-config`   | `rc`             | Reset configuration to defaults (all tools enabled) |
 | `save-config`    | `sc`             | Save current tool and model configuration to a file |
 | `show-metrics`   | `sm`             | Toggle performance metrics display                  |
 | `show-thinking`  | `st`             | Toggle thinking text visibility                     |
+| `thinking-mode`  | `tm`             | Toggle thinking mode on supported models            |
 | `show-tool-execution` | `ste`       | Toggle tool execution display visibility            |
 | `tools`          | `t`              | Open the tool selection interface                   |
 
