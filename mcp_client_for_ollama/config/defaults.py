@@ -4,7 +4,13 @@ This module provides default settings and paths used throughout the application.
 """
 
 import os
-from ..utils.constants import DEFAULT_MODEL, DEFAULT_CONFIG_FILE, DEFAULT_CONFIG_DIR, DEFAULT_OLLAMA_HOST
+from ..utils.constants import (
+    DEFAULT_MODEL,
+    DEFAULT_CONFIG_FILE,
+    DEFAULT_CONFIG_DIR,
+    DEFAULT_OLLAMA_HOST,
+)
+
 
 def default_config() -> dict:
     """Get default configuration settings.
@@ -17,16 +23,9 @@ def default_config() -> dict:
         "host": DEFAULT_OLLAMA_HOST,
         "model": DEFAULT_MODEL,
         "enabledTools": {},  # Will be populated with available tools
-        "contextSettings": {
-            "retainContext": True
-        },
-        "modelSettings": {
-            "thinkingMode": True,
-            "showThinking": False
-        },
-        "agentSettings": {
-            "loopLimit": 3
-        },
+        "contextSettings": {"retainContext": True},
+        "modelSettings": {"thinkingMode": True, "showThinking": False},
+        "agentSettings": {"loopLimit": 3},
         "modelConfig": {
             "system_prompt": "",
             "num_keep": None,
@@ -43,16 +42,13 @@ def default_config() -> dict:
             "frequency_penalty": None,
             "stop": None,
             "num_ctx": None,
-            "num_batch" : None
+            "num_batch": None,
         },
-        "displaySettings": {
-            "showToolExecution": True,
-            "showMetrics": False
-        },
-        "hilSettings": {
-            "enabled": True
-        }
+        "displaySettings": {"showToolExecution": True, "showMetrics": False},
+        "hilSettings": {"enabled": True},
+        "systemPromptSettings": {"activePrompt": "default"},
     }
+
 
 def get_config_path(config_name: str = "default") -> str:
     """Get the path to a specific configuration file.
@@ -67,7 +63,10 @@ def get_config_path(config_name: str = "default") -> str:
     os.makedirs(DEFAULT_CONFIG_DIR, exist_ok=True)
 
     # Sanitize the config name
-    config_name = ''.join(c for c in config_name if c.isalnum() or c in ['-', '_']).lower() or "default"
+    config_name = (
+        "".join(c for c in config_name if c.isalnum() or c in ["-", "_"]).lower()
+        or "default"
+    )
 
     if config_name == "default":
         return os.path.join(DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE)
