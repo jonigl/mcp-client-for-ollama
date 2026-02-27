@@ -486,7 +486,19 @@ class MCPClient:
                 # Call the tool on the specified server
                 result = None
                 with self.console.status(f"[cyan]⏳ Running {tool_name}...[/cyan]"):
-                    result = await self.sessions[server_name]["session"].call_tool(actual_tool_name, tool_args)
+                    try:
+                        result = await self.sessions[server_name]["session"].call_tool(actual_tool_name, tool_args)
+                    except Exception as e:
+                        error_msg = f"Error calling tool {tool_name}: {str(e)}"
+                        self.console.print(f"[red]{error_msg}[/red]")
+                        # Send error message to LLM
+                        messages.append({
+                            "role": "tool",
+                            "content": error_msg,
+                            "tool_name": tool_name
+                        })
+                        # Continue with next tool call if any
+                        continue
 
                 tool_response = f"{result.content[0].text}"
 
