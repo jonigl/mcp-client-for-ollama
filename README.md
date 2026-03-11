@@ -401,13 +401,17 @@ When HIL is enabled, you'll see a confirmation prompt before each tool execution
 When prompted, you can choose from the following options:
 
 - **y/yes**: Execute this specific tool call
-- **n/no**: Skip this tool call and continue with the query
 - **s/session**: Execute this and all subsequent tool calls for the current query without further prompts
+- **n/no**: Skip this tool call and continue with the query
+- **y{n}/yes approval count**: Execute this tool call and approve the next {n} executions of this specific tool automatically (where {n} is any positive integer, e.g., `y10`)
 - **d/disable**: Permanently disable HIL confirmations (can be re-enabled with `hil` command)
 - **a/abort**: Abort the entire query immediately without saving to history
 
 > [!TIP]
-> The **session** option is particularly useful when the model needs to execute multiple tools in sequence. Instead of confirming each one individually, you can approve all tools for the current query session, then HIL will reset automatically for the next query.
+> For batch processing of tool calls, you can use approval counts:
+> - **y{N}**: Approve this specific tool call and the next {N} executions of the same tool (e.g., `y10` approves 10 instances of this tool)
+>
+> Simply type `y10`, `y20`, or any positive number after y to auto-approve that many future executions. This is especially helpful when the model needs to make multiple similar tool calls.
 
 ### Human-in-the-Loop (HIL) Configuration
 

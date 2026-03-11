@@ -36,6 +36,7 @@ from .prompts.handler import PromptHandler
 from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
 from .utils.hil_manager import HumanInTheLoopManager, AbortQueryException
+from .utils.tool_approval import ToolApprovalManager
 from .utils.fzf_style_completion import FZFStyleCompleter
 from .utils.history import display_full_history, export_history, import_history
 from .utils.input import get_input_no_autocomplete
@@ -69,6 +70,9 @@ class MCPClient:
         self.tool_display_manager = ToolDisplayManager(console=self.console)
         # Initialize the HIL manager
         self.hil_manager = HumanInTheLoopManager(console=self.console)
+        # Initialize and set up the tool approval manager for the HIL manager
+        self.tool_approval_manager = ToolApprovalManager()
+        self.hil_manager.set_tool_approval_manager(self.tool_approval_manager)
         # Store server and tool data
         self.sessions = {}  # Dict to store multiple sessions
         # UI components
