@@ -6,6 +6,8 @@ approve, or skip tool executions before they are performed.
 
 from rich.prompt import Prompt
 from rich.console import Console
+from typing import Optional
+import re
 
 
 class AbortQueryException(Exception):
@@ -32,6 +34,8 @@ class HumanInTheLoopManager:
         # the remainder of the current model/query process. This is not
         # persisted and resets between queries.
         self._session_auto_execute = False
+        # Tool approval manager for temporary approvals with counters
+        self._tool_approval_manager = None
 
     def is_enabled(self) -> bool:
         """Check if HIL confirmations are enabled"""
@@ -65,6 +69,14 @@ class HumanInTheLoopManager:
         options don't leak into subsequent queries.
         """
         self._session_auto_execute = False
+    
+    def set_tool_approval_manager(self, manager: 'ToolApprovalManager') -> None:
+        """Set the tool approval manager.
+        
+        Args:
+            manager: ToolApprovalManager instance
+        """
+        self._tool_approval_manager = manager
 
     async def request_tool_confirmation(self, tool_name: str, tool_args: dict) -> bool:
         """
@@ -86,6 +98,13 @@ class HumanInTheLoopManager:
         if self._session_auto_execute:
             return True
 
+        # Check if tool is approved via individual tool approval
+        if self._tool_approval_manager is not None:
+            if self._tool_approval_manager.is_approved(tool_name):
+                self._tool_approval_manager.decrement_approval(tool_name)
+                self.console.print(f"[green]✅ Tool approved via tool approval counter - {self._tool_approval_manager.get_remaining_approvals(tool_name)} remaining[/green]")
+                return True
+
         self.console.print("\n[bold yellow]🧑‍💻 Human-in-the-Loop Confirmation[/bold yellow]")
 
         # Show tool information
@@ -105,38 +124,67 @@ class HumanInTheLoopManager:
 
         self.console.print()
 
-        # Display options
+        # Display options with approval count formats
         self._display_confirmation_options()
 
+        # Get raw input without validation - we'll validate manually to accept formats like y3.
         choice = Prompt.ask(
             "[bold]What would you like to do?[/bold]",
-            choices=["y", "yes", "n", "no", "s", "session", "d", "disable", "a", "abort"],
             default="y",
             show_choices=False
-        ).lower()
+        ).lower().strip()
+        
+        # If user entered just a number, treat it as "y" + number (since y is the default)
+        if choice.isdigit():
+            choice = "y" + choice
+        
+        # Validate input format - must be one of the accepted patterns
+        valid_patterns = r'^(y\d+|y|yes|s|n|no|d|disable|a|abort)$'
+        if not re.match(valid_patterns, choice):
+            self.console.print("[red]Please select one of the available options[/red]")
+            return await self.request_tool_confirmation(tool_name, tool_args)
 
-        return self._handle_user_choice(choice)
+        return self._handle_user_choice(choice, tool_name)
 
     def _display_confirmation_options(self) -> None:
         """Display available confirmation options"""
         self.console.print("[bold cyan]Options:[/bold cyan]")
-        self.console.print("  [green]y/yes[/green] - Execute the tool call")
+        self.console.print("  [green]y{N}/yes[/green] - Execute tool and approve for N executions (N>0)")
         self.console.print("  [red]n/no[/red] - Skip this tool call")
         self.console.print("  [magenta]s/session[/magenta] - Execute without asking for this session")
         self.console.print("  [yellow]d/disable[/yellow] - Disable HIL confirmations permanently")
         self.console.print("  [bold red]a/abort[/bold red] - Abort this query (won't save to history)")
         self.console.print()
 
-    def _handle_user_choice(self, choice: str) -> bool:
+    def _handle_user_choice(self, choice: str, tool_name: str = None) -> bool:
         """
         Handle user's confirmation choice
 
         Args:
             choice: User's choice string
+            tool_name: Name of the tool being confirmed (for tool approval)
 
         Returns:
             bool: should_execute
         """
+        # Check if user entered y{n} format
+        import re
+        y_pattern = re.match(r'^y(\d+)$', choice, re.IGNORECASE)
+        
+        if y_pattern:
+            # Handle y{count} format - approve this specific tool for n times
+            count = int(y_pattern.group(1))
+            if count > 0:
+                if self._tool_approval_manager is not None:
+                    self._tool_approval_manager.add_approval(tool_name, count)
+                    self.console.print(f"[green]✅ Tool '{tool_name}' approved for {count} more execution(s)[/green]")
+                else:
+                    self.console.print(f"[green]✅ Tool '{tool_name}' will execute (approval counter not active - use 'hil' to enable)[/green]")
+                return True
+            else:
+                self.console.print("[yellow]⚠️  Invalid y{n} format - n must be > 0[/yellow]")
+                return self._handle_user_choice("y", tool_name)
+        
         if choice in ["d", "disable"]:
             # Notify user that it can be re-enabled
             self.console.print("\n[yellow]Tool calls will proceed automatically without confirmation.[/yellow]")
@@ -169,6 +217,10 @@ class HumanInTheLoopManager:
             self.console.print("[dim]Tip: Use 'human-in-loop' or 'hil' to disable these confirmations permanently[/dim]")
             return False
 
-        else:  # y/yes
+        else:
+            # Direct execution, no additional approval input needed
+            if tool_name and self._tool_approval_manager is not None:
+                self.console.print("[green]✅ Tool approved for execution[/green]")
+            
             self.console.print("[dim]Tip: Use 'human-in-loop' or 'hil' to disable these confirmations[/dim]")
             return True
