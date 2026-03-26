@@ -48,13 +48,39 @@ class PromptHandler:
             self.console.print("[yellow]No prompts are available from your connected MCP servers.[/yellow]")
             return False
 
-        # Find the prompt
-        result = self.prompt_manager.find_prompt(prompt_name)
-        if not result:
-            self.console.print(f"[yellow]Prompt '{prompt_name}' not found. Use 'prompts' to see available prompts.[/yellow]")
+        resolution = self.prompt_manager.resolve_prompt_reference(prompt_name)
+        status = resolution.get("status")
+
+        if status == "invalid":
+            self.console.print("[yellow]Invalid prompt reference. Use /prompt_name or /server:prompt_name.[/yellow]")
             return False
 
-        server_name, prompt = result
+        if status == "ambiguous":
+            self.console.print(f"[yellow]Prompt '{prompt_name}' exists on multiple servers.[/yellow]")
+            self.console.print("[yellow]Use a qualified prompt reference:[/yellow]")
+            for candidate in resolution.get("candidates", [])[:8]:
+                self.console.print(f"  [cyan]/{candidate}[/cyan]")
+            return False
+
+        if status == "not-found":
+            if resolution.get("qualified"):
+                server_name = resolution.get("server_name")
+                prompt_simple_name = resolution.get("prompt_name")
+                if resolution.get("server_exists"):
+                    self.console.print(f"[yellow]Prompt '{prompt_simple_name}' not found on server '{server_name}'.[/yellow]")
+                    available = self.prompt_manager.get_prompt_names_for_server(server_name)
+                    if available:
+                        self.console.print("[yellow]Available prompts on that server:[/yellow]")
+                        for available_prompt in available[:8]:
+                            self.console.print(f"  [cyan]/{server_name}:{available_prompt}[/cyan]")
+                else:
+                    self.console.print(f"[yellow]Server '{server_name}' was not found.[/yellow]")
+            else:
+                self.console.print(f"[yellow]Prompt '{prompt_name}' not found. Use '/prompts' to see available prompts.[/yellow]")
+            return False
+
+        server_name = resolution["server_name"]
+        prompt = resolution["prompt"]
 
         # Collect arguments if needed
         arg_values = await self._collect_prompt_arguments(prompt)

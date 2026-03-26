@@ -1,16 +1,17 @@
 """ FZF-style command completer for interactive mode using prompt_toolkit """
 import shutil
 from prompt_toolkit.completion import Completer, Completion, FuzzyCompleter, WordCompleter
+from prompt_toolkit.document import Document
+from prompt_toolkit.formatted_text import FormattedText
 from .constants import INTERACTIVE_COMMANDS
-from ..prompts.display import format_args_indicator
 
 
 class FZFStyleCompleter(Completer):
     """Simple FZF-style completer with fuzzy matching."""
 
     def __init__(self):
-        # Just wrap a WordCompleter with FuzzyCompleter for commands
-        self.completer = FuzzyCompleter(WordCompleter(
+        # Wrap command names with FuzzyCompleter for slash command completion.
+        self.command_completer = FuzzyCompleter(WordCompleter(
             list(INTERACTIVE_COMMANDS.keys()),
             ignore_case=True
         ))
@@ -24,47 +25,49 @@ class FZFStyleCompleter(Completer):
         """
         self.prompts = prompts
 
+    def _build_action_meta(self, action_type: str, description: str) -> FormattedText:
+        """Build action badge metadata for completion rows."""
+        return FormattedText([
+            ("bg:#ff8c00 #111111 bold", action_type.upper()),
+            ("bg:#1e1e1e #d6d6d6", f" {description}" if description else "")
+        ])
+
     def _get_prompt_completions(self, prompt_query):
-        """Generate completions for prompt invocations (starting with /)
+        """Generate qualified prompt completions for slash namespace.
 
         Args:
-            prompt_query: The prompt name being typed (without the /)
+            prompt_query: The token being typed after /
 
         Yields:
             Completion objects for matching prompts
         """
         # If no prompts available, show a helpful message
         if not self.prompts:
-            # Use a non-selectable completion that just shows info
-            yield Completion(
-                "[no-prompts]",
-                start_position=-len(prompt_query),
-                display=" No prompts available",
-                display_meta="No prompts found from connected MCP servers"
-            )
             return
 
         # Filter and rank prompts by matching
         matches = []
         for prompt in self.prompts:
             name = prompt['name']
+            server_name = prompt.get('server', '')
+            qualified_name = prompt.get('qualified_name') or f"{server_name}:{name}"
             description = prompt.get('description', '')
 
             # Simple fuzzy matching
-            if prompt_query in name.lower() or (description and prompt_query in description.lower()):
+            if (
+                prompt_query in qualified_name.lower()
+                or prompt_query in name.lower()
+                or prompt_query in server_name.lower()
+                or (description and prompt_query in description.lower())
+            ):
                 matches.append(prompt)
 
         # Return prompt completions
-        for i, prompt in enumerate(matches):
+        for prompt in matches:
             name = prompt['name']
-            description = prompt.get('description', '') or ''
-            arguments = prompt.get('arguments', [])
-
-            # Format args indicator (arguments are PromptArgument objects)
-            args_str = format_args_indicator(arguments)
-
-            # Combine description with args
-            display_meta = f"{description} {args_str}".strip() if args_str else description
+            server_name = prompt.get('server', '')
+            qualified_name = prompt.get('qualified_name') or f"{server_name}:{name}"
+            display_meta = prompt.get('description', '') or ''
 
             # Get terminal width and calculate max description length
             # Use 60% of terminal width for description, with min 60 and max 200 chars
@@ -81,52 +84,53 @@ class FZFStyleCompleter(Completer):
             if len(display_meta) > max_desc_length:
                 display_meta = display_meta[:max_desc_length - 3] + "..."
 
-            # Add arrow to first match
-            display = f"▶ /{name}" if i == 0 else f"  /{name}"
+            display = f"/{qualified_name}"
 
             # Start position should replace the / and what comes after
             yield Completion(
-                name,
+                qualified_name,
                 start_position=-len(prompt_query),
                 display=display,
-                display_meta=display_meta
+                display_meta=self._build_action_meta("prompt", display_meta)
             )
 
-    def _get_command_completions(self, document, complete_event):
-        """Generate completions for interactive commands
+    def _get_slash_command_completions(self, prompt_query, complete_event):
+        """Generate slash command completions for /command syntax.
 
         Args:
-            document: The prompt_toolkit document
+            prompt_query: The token being typed after /
             complete_event: The completion event
 
         Yields:
             Completion objects for matching commands
         """
-        for i, completion in enumerate(self.completer.get_completions(document, complete_event)):
+        query_document = Document(text=prompt_query, cursor_position=len(prompt_query))
+        for completion in self.command_completer.get_completions(query_document, complete_event):
             cmd = completion.text
             description = INTERACTIVE_COMMANDS.get(cmd, "")
-
-            # Add arrow to first match
-            display = f"▶ {cmd}" if i == 0 else f"  {cmd}"
 
             yield Completion(
                 cmd,
                 start_position=completion.start_position,
-                display=display,
-                display_meta=description
+                display=f"/{cmd}",
+                display_meta=self._build_action_meta("command", description)
             )
 
     def get_completions(self, document, complete_event):
         text_before_cursor = document.text_before_cursor
 
-        # Check if we're triggering prompt completion (starts with /)
+        # Slash namespace combines built-in commands and prompts.
         if text_before_cursor.startswith('/'):
             prompt_query = text_before_cursor[1:].lower()
+            yielded_any = False
+
+            for completion in self._get_slash_command_completions(prompt_query, complete_event):
+                yielded_any = True
+                yield completion
+
             yield from self._get_prompt_completions(prompt_query)
-            return
+            if not yielded_any and prompt_query == "":
+                return
 
-        # Regular command completion (only if cursor is in first word)
-        if " " in text_before_cursor:
-            return
-
-        yield from self._get_command_completions(document, complete_event)
+        # Keep plain query typing free from action autocomplete noise.
+        return

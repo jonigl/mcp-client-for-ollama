@@ -33,11 +33,12 @@ from .models.config_manager import ModelConfigManager
 from .tools.manager import ToolManager
 from .prompts.manager import PromptManager
 from .prompts.handler import PromptHandler
+from .prompts.commands import run_slash_command
+from .prompts.routing import parse_user_input
 from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
 from .utils.hil_manager import HumanInTheLoopManager, AbortQueryException
 from .utils.fzf_style_completion import FZFStyleCompleter
-from .utils.history import display_full_history, export_history, import_history
 from .utils.input import get_input_no_autocomplete
 
 
@@ -431,7 +432,7 @@ class MCPClient:
                 self.console.print(Panel(
                     f"[yellow]Your current loop limit is set to [bold]{self.loop_limit}[/bold] and has been reached. Skipping additional tool calls.[/yellow]\n"
                     f"You will probably want to increase this limit if your model requires more tool interactions to complete tasks.\n"
-                    f"You can change the loop limit with the [bold cyan]loop-limit[/bold cyan] command.",
+                    f"You can change the loop limit with the [bold cyan]/loop-limit[/bold cyan] command.",
                     title="[bold]Loop Limit Reached[/bold]", border_style="yellow", expand=False
                 ))
                 break
@@ -586,9 +587,9 @@ class MCPClient:
             )
             return user_input
         except KeyboardInterrupt:
-            return "quit"
+            return "/quit"
         except EOFError:
-            return "quit"
+            return "/quit"
 
     async def monitor_cancellation(self):
         """Monitor for 'a' key press to cancel execution"""
@@ -704,138 +705,32 @@ class MCPClient:
                 # Use await to call the async method
                 query = await self.get_user_input()
 
-                if query.lower() in ['quit', 'q', 'exit', 'bye']:
-                    self.console.print("[yellow]Exiting...[/yellow]")
-                    break
+                intent, value = parse_user_input(query)
 
-                if query.lower() in ['tools', 't']:
-                    self.select_tools()
+                if intent == "empty":
                     continue
 
-                if query.lower() in ['help', 'h']:
-                    self.print_help()
+                if intent == "slash-empty":
+                    self.console.print("[yellow]Use /help for commands or /server:prompt_name for prompt invocation.[/yellow]")
                     continue
 
-                if query.lower() in ['model', 'm']:
-                    await self.select_model()
+                if intent == "slash-command" and value:
+                    # parse_user_input() resolves aliases to canonical command names.
+                    should_continue = await run_slash_command(self, value)
+                    if not should_continue:
+                        break
                     continue
 
-                if query.lower() in ['model-config', 'mc']:
-                    self.configure_model_options()
+                if intent == "slash-prompt" and value:
+                    await self.handle_prompt_invocation(value)
                     continue
 
-                if query.lower() in ['context', 'c']:
-                    self.toggle_context_retention()
-                    continue
-
-                if query.lower() in ['thinking-mode', 'tm']:
-                    await self.toggle_thinking_mode()
-                    continue
-
-                if query.lower() in ['show-thinking', 'st']:
-                    await self.toggle_show_thinking()
-                    continue
-
-                if query.lower() in ['loop-limit', 'll']:
-                    await self.set_loop_limit()
-                    continue
-
-                if query.lower() in ['show-tool-execution', 'ste']:
-                    self.toggle_show_tool_execution()
-                    continue
-
-                if query.lower() in ['show-metrics', 'sm']:
-                    self.toggle_show_metrics()
-                    continue
-
-                if query.lower() in ['clear', 'cc']:
-                    self.clear_context()
-                    continue
-
-                if query.lower() in ['context-info', 'ci']:
-                    self.display_context_stats()
-                    continue
-
-                if query.lower() in ['cls', 'clear-screen']:
-                    self.clear_console()
-                    self.display_available_tools()
-                    self.display_current_model()
-                    continue
-
-                if query.lower() in ['save-config', 'sc']:
-                    # Ask for config name, defaulting to "default"
-                    config_name = await get_input_no_autocomplete("Config name (or press Enter for default)")
-                    if not config_name or config_name.strip() == "":
-                        config_name = "default"
-                    self.save_configuration(config_name)
-                    continue
-
-                if query.lower() in ['load-config', 'lc']:
-                    # Ask for config name, defaulting to "default"
-                    config_name = await get_input_no_autocomplete("Config name to load (or press Enter for default)")
-                    if not config_name or config_name.strip() == "":
-                        config_name = "default"
-                    self.load_configuration(config_name)
-                    # Update display after loading
-                    self.display_available_tools()
-                    self.display_current_model()
-                    continue
-
-                if query.lower() in ['reset-config', 'rc']:
-                    self.reset_configuration()
-                    # Update display after resetting
-                    self.display_available_tools()
-                    self.display_current_model()
-                    continue
-
-                if query.lower() in ['reload-servers', 'rs']:
-                    await self.reload_servers()
-                    continue
-
-                if query.lower() in ['human-in-the-loop', 'hil']:
-                    self.hil_manager.toggle()
-                    continue
-
-                if query.lower() in ['prompts', 'pr']:
-                    self.browse_prompts()
-                    continue
-
-                if query.lower() in ['full-history', 'fh']:
-                    display_full_history(self.chat_history, self.console)
-                    continue
-
-                if query.lower() in ['export-history', 'eh']:
-                    filename = await get_input_no_autocomplete("Export filename (or press Enter for default)")
-                    if not filename or filename.strip() == "":
-                        export_history(self.chat_history, self.console)
-                    else:
-                        export_history(self.chat_history, self.console, filename.strip())
-                    continue
-
-                if query.lower() in ['import-history', 'ih']:
-                    filepath = await get_input_no_autocomplete("Path to history file to import")
-                    if filepath and filepath.strip():
-                        imported = import_history(filepath.strip(), self.console)
-                        if imported is not None:
-                            self.chat_history = imported
-                            self.console.print("[green]Current chat history replaced with imported history.[/green]")
-                    else:
-                        self.console.print("[yellow]Import cancelled: No filepath provided.[/yellow]")
-                    continue
-
-                # Check if query starts with / (prompt invocation)
-                if query.startswith('/'):
-                    await self.handle_prompt_invocation(query)
-                    continue
-
-                # Check if query is too short and not a special command
-                if len(query.strip()) < 5:
-                    self.console.print("[yellow]Query must be at least 5 characters long.[/yellow]")
-                    continue
+                # Reserved for future @ resource shortcuts. For now, send as normal query.
+                query_to_process = value
 
                 try:
                     # Process query with monitoring
-                    await self._process_query_with_monitoring(query)
+                    await self._process_query_with_monitoring(query_to_process)
 
                 except AbortQueryException:
                     # User aborted the query - don't save to history
@@ -866,8 +761,8 @@ class MCPClient:
                         model_name = self.model_manager.get_current_model()
                         self.console.print(Panel(
                             f"[bold red]Model Error:[/bold red] The model [bold blue]{model_name}[/bold blue] does not support tools.\n\n"
-                            "To use tools, switch to a model that supports them by typing [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan]\n\n"
-                            "You can still use this model without tools by [bold]disabling all tools[/bold] with [bold cyan]tools[/bold cyan] or [bold cyan]t[/bold cyan]",
+                            "To use tools, switch to a model that supports them by typing [bold cyan]/model[/bold cyan] or [bold cyan]/m[/bold cyan]\n\n"
+                            "You can still use this model without tools by [bold]disabling all tools[/bold] with [bold cyan]/tools[/bold cyan] or [bold cyan]/t[/bold cyan]",
                             title="Tools Not Supported",
                             border_style="red", expand=False
                         ))
@@ -882,7 +777,7 @@ class MCPClient:
                             "[bold yellow]Model Not Found[/bold yellow]\n\n"
                             "To download this model, run the following command in a new terminal window:\n"
                             f"[bold cyan]ollama pull {model_name}[/bold cyan]\n\n"
-                            "Or, you can use a different model by typing [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan] to select from available models",
+                            "Or, you can use a different model by typing [bold cyan]/model[/bold cyan] or [bold cyan]/m[/bold cyan] to select from available models",
                             title="Model Not Available",
                             border_style="yellow", expand=False
                         ))
@@ -895,48 +790,54 @@ class MCPClient:
         """Print available commands"""
         self.console.print(Panel(
             "\n"
-            "[bold cyan]Model:[/bold cyan]\n"
-            "• Type [bold]model[/bold] or [bold]m[/bold] to select a model\n"
-            "• Type [bold]model-config[/bold] or [bold]mc[/bold] to configure system prompt and model parameters\n"
-            "• Type [bold]thinking-mode[/bold] or [bold]tm[/bold] to toggle thinking mode\n"
-            "• Type [bold]show-thinking[/bold] or [bold]st[/bold] to toggle thinking text visibility\n"
-            "• Type [bold]show-metrics[/bold] or [bold]sm[/bold] to toggle performance metrics display\n\n"
 
-            "[bold cyan]Agent Mode:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
-            "• Type [bold]loop-limit[/bold] or [bold]ll[/bold] to set the maximum tool loop iterations\n\n"
+            "[bold cyan]Model:[/bold cyan]\n"
+            "• Type [bold]/model[/bold] or [bold]/m[/bold] to select a model\n"
+            "• Type [bold]/model-config[/bold] or [bold]/mc[/bold] to configure system prompt and model parameters\n"
+            "• Type [bold]/thinking-mode[/bold] or [bold]/tm[/bold] to toggle thinking mode\n"
+            "• Type [bold]/show-thinking[/bold] or [bold]/st[/bold] to toggle thinking text visibility\n"
+            "• Type [bold]/show-metrics[/bold] or [bold]/sm[/bold] to toggle performance metrics display\n\n"
+
+            "[bold cyan]Agent Mode:[/bold cyan] \n"
+            "• Type [bold]/loop-limit[/bold] or [bold]/ll[/bold] to set the maximum tool loop iterations\n\n"
 
             "[bold cyan]MCP Servers and Tools:[/bold cyan]\n"
-            "• Type [bold]tools[/bold] or [bold]t[/bold] to configure tools\n"
-            "• Type [bold]show-tool-execution[/bold] or [bold]ste[/bold] to toggle tool execution display\n"
-            "• Type [bold]human-in-the-loop[/bold] or [bold]hil[/bold] to toggle Human-in-the-Loop confirmations\n"
-            "• Type [bold]reload-servers[/bold] or [bold]rs[/bold] to reload MCP servers\n\n"
+            "• Type [bold]/tools[/bold] or [bold]/t[/bold] to configure tools\n"
+            "• Type [bold]/show-tool-execution[/bold] or [bold]/ste[/bold] to toggle tool execution display\n"
+            "• Type [bold]/human-in-the-loop[/bold] or [bold]/hil[/bold] to toggle Human-in-the-Loop confirmations\n"
+            "• Type [bold]/reload-servers[/bold] or [bold]/rs[/bold] to reload MCP servers\n\n"
 
-            "[bold cyan]MCP Prompts:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
-            "• Type [bold]prompts[/bold] or [bold]pr[/bold] to browse available prompts\n"
-            "• Type [bold]/prompt_name[/bold] to invoke a prompt\n"
+            "[bold cyan]MCP Prompts:[/bold cyan] \n"
+            "• Type [bold]/prompts[/bold] or [bold]/pr[/bold] to browse available prompts\n"
+            "• Type [bold]/server:prompt_name[/bold] to invoke a prompt (recommended)\n"
+            "• Type [bold]/prompt_name[/bold] when the prompt name is unique\n"
             "• Type [bold]/[/bold] to see prompt autocomplete suggestions\n\n"
 
             "[bold cyan]Context:[/bold cyan]\n"
-            "• Type [bold]context[/bold] or [bold]c[/bold] to toggle context retention\n"
-            "• Type [bold]clear[/bold] or [bold]cc[/bold] to clear conversation context\n"
-            "• Type [bold]context-info[/bold] or [bold]ci[/bold] to display context info\n\n"
+            "• Type [bold]/context[/bold] or [bold]/c[/bold] to toggle context retention\n"
+            "• Type [bold]/clear[/bold] or [bold]/cc[/bold] to clear conversation context\n"
+            "• Type [bold]/context-info[/bold] or [bold]/ci[/bold] to display context info\n\n"
 
-            "[bold cyan]History:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
-            "• Type [bold]full-history[/bold] or [bold]fh[/bold] to view full conversation history\n"
-            "• Type [bold]export-history[/bold] or [bold]eh[/bold] to export history to JSON\n"
-            "• Type [bold]import-history[/bold] or [bold]ih[/bold] to import history from JSON\n\n"
+            "[bold cyan]History:[/bold cyan] \n"
+            "• Type [bold]/full-history[/bold] or [bold]/fh[/bold] to view full conversation history\n"
+            "• Type [bold]/export-history[/bold] or [bold]/eh[/bold] to export history to JSON\n"
+            "• Type [bold]/import-history[/bold] or [bold]/ih[/bold] to import history from JSON\n\n"
 
             "[bold cyan]Configuration:[/bold cyan]\n"
-            "• Type [bold]save-config[/bold] or [bold]sc[/bold] to save the current configuration\n"
-            "• Type [bold]load-config[/bold] or [bold]lc[/bold] to load a configuration\n"
-            "• Type [bold]reset-config[/bold] or [bold]rc[/bold] to reset configuration to defaults\n\n"
-
+            "• Type [bold]/save-config[/bold] or [bold]/sc[/bold] to save the current configuration\n"
+            "• Type [bold]/load-config[/bold] or [bold]/lc[/bold] to load a configuration\n"
+            "• Type [bold]/reset-config[/bold] or [bold]/rc[/bold] to reset configuration to defaults\n\n"
 
             "[bold cyan]Basic Commands:[/bold cyan]\n"
-            "• Press [bold]a[/bold] during model generation to abort [bold bright_magenta](New!)[/bold bright_magenta]\n"
-            "• Type [bold]help[/bold] or [bold]h[/bold] to show this help message\n"
-            "• Type [bold]clear-screen[/bold] or [bold]cls[/bold] to clear the terminal screen\n"
-            "• Type [bold]quit[/bold], [bold]q[/bold], [bold]exit[/bold], [bold]bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n",
+            "• Press [bold]a[/bold] during model generation to abort \n"
+            "• Type [bold]/help[/bold] or [bold]/h[/bold] to show this help message\n"
+            "• Type [bold]/clear-screen[/bold] or [bold]/cls[/bold] to clear the terminal screen\n"
+            "• Type [bold]/quit[/bold], [bold]/q[/bold], [bold]/exit[/bold], [bold]/bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n\n"
+
+            "[bold bright_magenta]IMPORTANT NEW BEHAVIOR:[/bold bright_magenta]\n"
+            "Built-in commands now require [bold]/[/bold]\n"
+            "Examples: [bold]/help[/bold], [bold]/model[/bold], [bold]/tools[/bold], [bold]/prompts[/bold]\n"
+            "Prompt invocations also use slash: [bold]/server:prompt_name[/bold] (or [bold]/prompt_name[/bold] when unique)\n",
             title="[bold]Help - Available Commands[/bold]", border_style="yellow", expand=False))
 
     def toggle_context_retention(self):
@@ -956,7 +857,7 @@ class MCPClient:
                 f"[bold red]Thinking mode is not supported for model '{model_base_name}'[/bold red]\n\n"
                 f"Thinking mode is only available for models that have the 'thinking' capability.\n"
                 f"\nCurrent model: [yellow]{current_model}[/yellow]\n"
-                f"Use [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan] to switch to a supported model.",
+                f"Use [bold cyan]/model[/bold cyan] or [bold cyan]/m[/bold cyan] to switch to a supported model.",
                 title="Thinking Mode Not Available", border_style="red", expand=False
             ))
             return
@@ -975,7 +876,7 @@ class MCPClient:
         if not self.thinking_mode:
             self.console.print(Panel(
                 f"[bold yellow]Thinking mode is currently disabled[/bold yellow]\n\n"
-                f"Enable thinking mode first using [bold cyan]thinking-mode[/bold cyan] or [bold cyan]tm[/bold cyan] command.\n"
+                f"Enable thinking mode first using [bold cyan]/thinking-mode[/bold cyan] or [bold cyan]/tm[/bold cyan] command.\n"
                 f"This setting only applies when thinking mode is active.",
                 title="Show Thinking Setting", border_style="yellow", expand=False
             ))
@@ -1289,13 +1190,13 @@ class MCPClient:
         self._display_chat_history()
 
     async def handle_prompt_invocation(self, user_input: str):
-        """Handle prompt invocation via /prompt_name syntax
+        """Handle prompt invocation via slash syntax.
 
         Args:
-            user_input: User input starting with / (e.g., "/summarize")
+            user_input: Prompt token, with or without leading slash
         """
-        # Extract prompt name (remove leading /)
-        prompt_name = user_input[1:].strip()
+        # Accept both '/prompt' and already-stripped prompt references.
+        prompt_name = user_input[1:].strip() if user_input.startswith('/') else user_input.strip()
 
         # Delegate to prompt handler
         await self.prompt_handler.invoke_prompt(

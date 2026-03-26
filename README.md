@@ -248,35 +248,41 @@ ollmcp -s /path/to/weather.py -u http://localhost:8000/mcp -a
 
 During chat, use these commands:
 
+> [!IMPORTANT]
+> **NEW:** Built-in interactive commands now require a leading `/`.
+> - Use `/help`, `/model`, `/tools`, `/prompts`, etc.
+> - Bare command names like `help` or `model` are no longer executed as commands.
+> - Prompt invocations also use `/`, with `/server:prompt_name` recommended to avoid collisions.
+
 ![ollmcp main interface](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-welcome.png?raw=true)
 
 | Command          | Shortcut         | Description                                         |
 |------------------|------------------|-----------------------------------------------------|
 | `abort`          | `a`              | While model is generating, abort the current response generation |
-| `clear`          | `cc`             | Clear conversation history and context              |
-| `cls`            | `clear-screen`   | Clear the terminal screen                           |
-| `context`        | `c`              | Toggle context retention                            |
-| `context-info`   | `ci`             | Display context statistics                          |
-| `export-history` | `eh`             | Export chat history to a JSON file                  |
-| `full-history`   | `fh`             | Display all conversation history                    |
-| `help`           | `h`              | Display help and available commands                 |
-| `import-history` | `ih`             | Import chat history from a JSON file                |
-| `human-in-loop`  | `hil`            | Toggle Human-in-the-Loop confirmations for tool execution |
-| `load-config`    | `lc`             | Load tool and model configuration from a file       |
-| `loop-limit`     | `ll`             | Set maximum iterative tool-loop iterations (Agent Mode). Default: 3 |
-| `model`          | `m`              | List and select a different Ollama model            |
-| `model-config`   | `mc`             | Configure advanced model parameters and system prompt |
-| `prompts`        | `pr`             | Browse and view all available MCP prompts             |
-| `/prompt_name`   | -                | Invoke a specific prompt by name (e.g., `/summarize`) |
-| `quit`, `exit`, `bye`   | `q` or `Ctrl+D`  | Exit the client                              |
-| `reload-servers` | `rs`             | Reload all MCP servers with current configuration   |
-| `reset-config`   | `rc`             | Reset configuration to defaults (all tools enabled) |
-| `save-config`    | `sc`             | Save current tool and model configuration to a file |
-| `show-metrics`   | `sm`             | Toggle performance metrics display                  |
-| `show-thinking`  | `st`             | Toggle thinking text visibility                     |
-| `thinking-mode`  | `tm`             | Toggle thinking mode on supported models            |
-| `show-tool-execution` | `ste`       | Toggle tool execution display visibility            |
-| `tools`          | `t`              | Open the tool selection interface                   |
+| `/clear`         | `/cc`            | Clear conversation history and context              |
+| `/cls`           | `/clear-screen`  | Clear the terminal screen                           |
+| `/context`       | `/c`             | Toggle context retention                            |
+| `/context-info`  | `/ci`            | Display context statistics                          |
+| `/export-history`| `/eh`            | Export chat history to a JSON file                  |
+| `/full-history`  | `/fh`            | Display all conversation history                    |
+| `/help`          | `/h`             | Display help and available commands                 |
+| `/import-history`| `/ih`            | Import chat history from a JSON file                |
+| `/human-in-the-loop` | `/hil`       | Toggle Human-in-the-Loop confirmations for tool execution |
+| `/load-config`   | `/lc`            | Load tool and model configuration from a file       |
+| `/loop-limit`    | `/ll`            | Set maximum iterative tool-loop iterations (Agent Mode). Default: 3 |
+| `/model`         | `/m`             | List and select a different Ollama model            |
+| `/model-config`  | `/mc`            | Configure advanced model parameters and system prompt |
+| `/prompts`       | `/pr`            | Browse and view all available MCP prompts             |
+| `/server:prompt_name`   | `/prompt_name`      | Invoke a prompt (qualified is recommended) |
+| `/quit`, `/exit`, `/bye`   | `/q`, `Ctrl+C`, or `Ctrl+D`  | Exit the client                              |
+| `/reload-servers`| `/rs`            | Reload all MCP servers with current configuration   |
+| `/reset-config`  | `/rc`            | Reset configuration to defaults (all tools enabled) |
+| `/save-config`   | `/sc`            | Save current tool and model configuration to a file |
+| `/show-metrics`  | `/sm`            | Toggle performance metrics display                  |
+| `/show-thinking` | `/st`            | Toggle thinking text visibility                     |
+| `/thinking-mode` | `/tm`            | Toggle thinking mode on supported models            |
+| `/show-tool-execution` | `/ste`      | Toggle tool execution display visibility            |
+| `/tools`         | `/t`             | Open the tool selection interface                   |
 
 
 ### Tool and Server Selection
@@ -369,7 +375,7 @@ The `reload-servers` command (`rs`) is particularly useful during MCP server dev
 - After changing Claude's MCP configuration
 - During debugging to ensure you're testing the latest server version
 
-Simply type `reload-servers` or `rs` in the chat interface, and the client will:
+Simply type `/reload-servers` or `/rs` in the chat interface, and the client will:
 1. Disconnect from all current MCP servers
 2. Reconnect using the same parameters (server paths, config files, auto-discovery)
 3. Restore your previous tool enabled/disabled settings
@@ -412,7 +418,7 @@ When prompted, you can choose from the following options:
 ### Human-in-the-Loop (HIL) Configuration
 
 - **Default State**: HIL confirmations are enabled by default for safety
-- **Toggle Command**: Use `human-in-loop` or `hil` to toggle on/off
+- **Toggle Command**: Use `/human-in-the-loop` or `/hil` to toggle on/off
 - **Persistent Settings**: HIL preference is saved with your configuration
 - **Quick Disable**: Choose "disable" during any confirmation to turn off permanently
 - **Session Auto-Approve**: Use "session" during confirmation to approve all tools for current query
@@ -434,7 +440,7 @@ MCP Prompts provide reusable, server-defined conversation starters and context t
 #### Features
 
 - 📋 **Browse Prompts**: View all available prompts from connected servers with descriptions and argument requirements
-- ⚡️ **Quick Invocation**: Use `/prompt_name` syntax to instantly invoke any prompt
+- ⚡️ **Quick Invocation**: Use slash syntax to invoke prompts (`/server:prompt_name` recommended)
 - 🔤 **Autocomplete**: Type `/` to see prompt suggestions with fuzzy matching
 - 📝 **Argument Collection**: Interactive prompts guide you through required parameters
 - 👁️ **Preview**: Review prompt content before injection to ensure it fits your needs
@@ -447,18 +453,25 @@ MCP Prompts provide reusable, server-defined conversation starters and context t
 
 **Browse Available Prompts:**
 ```
-prompts  # or 'pr'
+/prompts  # or '/pr'
 ```
 This displays all prompts grouped by server, showing their names, required arguments, and descriptions.
 
 **Invoke a Prompt:**
 ```
-/prompt_name
+/server:prompt_name
 ```
-For example, if a server provides a "summarize" prompt:
+For example, if a server named `docs` provides a "summarize" prompt:
+```
+/docs:summarize
+```
+
+If a prompt name is unique across connected servers, you can use the short form:
 ```
 /summarize
 ```
+
+If multiple servers expose the same prompt name, the client will ask you to use the qualified form and suggest valid `/server:prompt_name` options.
 
 **Autocomplete:**
 - Type `/` to see all available prompts with descriptions
@@ -469,7 +482,7 @@ For example, if a server provides a "summarize" prompt:
 > Prompts are discovered automatically when you connect to MCP servers. If a server supports prompts, they'll be available immediately in the `prompts` list and autocomplete.
 
 **Workflow:**
-1. Type `/prompt_name` or select from autocomplete
+1. Type `/server:prompt_name` (recommended) or select from autocomplete
 2. If the prompt requires arguments, you'll be prompted to provide them
 3. Review the prompt preview showing what will be injected
 4. Choose how to use the prompt:
@@ -578,19 +591,20 @@ Imports a previously exported chat history from a JSON file. The command validat
 
 ### FZF-style Autocomplete
 
-- Fuzzy matching for commands as you type
-- Arrow (`▶`) highlights the best match
+- Slash-namespace autocomplete for commands and prompts (`/`)
 - Command descriptions shown in the menu
 - Case-insensitive matching for convenience
 - Centralized command list for consistency
+- Plain text query typing is intentionally free of action autocomplete noise
 
 ### MCP Prompts Autocomplete
 
 - Type `/` to trigger prompt autocomplete
 - Fuzzy matching on prompt names and descriptions
-- Shows prompt arguments and descriptions in the menu
+- Supports qualified prompt references like `/server:prompt_name`
+- Shows prompt descriptions in the menu
+- Prompt arguments are collected during prompt invocation (not shown in autocomplete rows)
 - Terminal-width-aware description truncation
-- Arrow (`▶`) highlights the best match
 
 ### Contextual Prompt
 
