@@ -27,8 +27,9 @@ class FZFStyleCompleter(Completer):
 
     def _build_action_meta(self, action_type: str, description: str) -> FormattedText:
         """Build action badge metadata for completion rows."""
+        badge_color = "#00bcd4" if action_type.lower() == "prompt" else "#ff8c00"
         return FormattedText([
-            ("bg:#ff8c00 #111111 bold", action_type.upper()),
+            (f"bg:{badge_color} #ffffff italic", f" {action_type} "),
             ("bg:#1e1e1e #d6d6d6", f" {description}" if description else "")
         ])
 
