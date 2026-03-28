@@ -26,7 +26,8 @@ import httpx
 from . import __version__
 from .config.manager import ConfigManager
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART
+from .utils.connection import preflight_ollama
 from .server.connector import ServerConnector
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
@@ -696,7 +697,7 @@ class MCPClient:
         self.console.print(Panel(Text.from_markup("[bold green]Welcome to the MCP Client for Ollama 🦙[/bold green]", justify="center"), expand=True, border_style="green"))
         self.display_available_tools()
         self.display_current_model()
-        self.print_help()
+        self.print_startup_help()
         self.print_auto_load_default_config_status()
         await self.display_check_for_updates()
 
@@ -809,7 +810,7 @@ class MCPClient:
 
             "[bold cyan]MCP Prompts:[/bold cyan] \n"
             "• Type [bold]/prompts[/bold] or [bold]/pr[/bold] to browse available prompts\n"
-            "• Type [bold]/server:prompt_name[/bold] to invoke a prompt (recommended)\n"
+            "• Type [bold]/server:prompt_name[/bold] to invoke an MCP server prompt\n"
             "• Type [bold]/prompt_name[/bold] when the prompt name is unique\n"
             "• Type [bold]/[/bold] to see prompt autocomplete suggestions\n\n"
 
@@ -839,6 +840,28 @@ class MCPClient:
             "Examples: [bold]/help[/bold], [bold]/model[/bold], [bold]/tools[/bold], [bold]/prompts[/bold]\n"
             "Prompt invocations also use slash: [bold]/server:prompt_name[/bold] (or [bold]/prompt_name[/bold] when unique)\n",
             title="[bold]Help - Available Commands[/bold]", border_style="yellow", expand=False))
+
+    def print_startup_help(self):
+        """Print a reduced startup command panel with core actions only"""
+        self.console.print(Panel(
+            "\n"
+            "[bold cyan]Getting Started:[/bold cyan]\n"
+            "• Type [bold]/model[/bold] or [bold]/m[/bold] to select a model\n"
+            "• Type [bold]/tools[/bold] or [bold]/t[/bold] to configure tools\n"
+            "• Type [bold]/clear[/bold] or [bold]/cc[/bold] to clear conversation context\n"
+            "• Type [bold]/server:prompt_name[/bold] to invoke an MCP server prompt\n"
+            "• Type [bold]/help[/bold] or [bold]/h[/bold] to see the [underline]full command list[/underline]\n"
+            "• Type [bold]/quit[/bold] or [bold]/q[/bold] to exit the client\n\n"
+            "[bold bright_magenta]IMPORTANT NEW BEHAVIOR:[/bold bright_magenta]\n"
+            "Built-in commands now require [bold]/[/bold]\n"
+            "Examples: [bold]/help[/bold], [bold]/model[/bold], [bold]/tools[/bold]\n"
+            "Prompt invocations also use slash: [bold]/server:prompt_name[/bold] (or [bold]/prompt_name[/bold] when unique)\n",
+            title="[bold]Startup Help[/bold]", border_style="yellow", expand=False))
+
+    def print_welcome_ascii(self):
+        """Print startup ASCII logo after the tools list."""
+        self.console.print(Text(OLLMCP_ASCII_ART, style="bold bright_yellow"))
+        self.console.print()
 
     def toggle_context_retention(self):
         """Toggle whether to retain previous conversation context when sending queries"""
@@ -1325,7 +1348,14 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
     console = Console()
 
     # Create a temporary client to check if Ollama is running
-    client = MCPClient(model=model, host=host)
+    initial_host = host if host is not None else DEFAULT_OLLAMA_HOST
+    client = MCPClient(model=model, host=initial_host)
+
+    # Show startup banner before server discovery messages.
+    client.print_welcome_ascii()
+
+    if not await preflight_ollama(client, host):
+        return
 
     # Handle server configuration options - only use one source to prevent duplicates
     config_path = None
@@ -1368,19 +1398,6 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
             client.host = host
             client.ollama = ollama.AsyncClient(host=host)
             client.model_manager.ollama = client.ollama
-
-        if not await client.model_manager.check_ollama_running():
-            console.print(Panel(
-                "[bold red]Error: Ollama is not running![/bold red]\n\n"
-                f"[yellow]Ollama current configured host: {client.host}[/yellow]\n\n"
-                "This client requires Ollama to be running to process queries.\n\n"
-                "Please start Ollama by running the 'ollama serve' command in a terminal.\n\n"
-                "💡 [bold magenta]Tip:[/bold magenta] If you configured a different host in a saved default configuration you can\n\n"
-                "   1. Use --host flag to override the configured host for example: ollmcp --host http://localhost:11434\n"
-                "   2. Once done, you can save a new default configuration to avoid needing to specify it each time.",
-                title="Ollama Not Running", border_style="red", expand=False
-            ))
-            return
 
         # If model was explicitly provided via CLI flag (not default), override any loaded config
         if model != DEFAULT_MODEL:

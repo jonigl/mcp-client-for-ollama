@@ -34,6 +34,19 @@ PYPI_PACKAGE_URL = "https://pypi.org/pypi/mcp-client-for-ollama/json"
 # Supported versions: ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"]
 MCP_PROTOCOL_VERSION = LATEST_PROTOCOL_VERSION
 
+# Startup ASCII banner shown when launching ollmcp
+OLLMCP_ASCII_ART = r"""
+      ___    ___
+     /\_ \  /\_ \
+  ___\//\ \ \//\ \     ___ ___     ___   _____
+ / __`\\ \ \  \ \ \  /' __` __`\  /'___\/\ '__`\
+/\ \L\ \\_\ \_ \_\ \_/\ \/\ \/\ \/\ \__/\ \ \L\ \
+\ \____//\____\/\____\ \_\ \_\ \_\ \____\\ \ ,__/
+ \/___/ \/____/\/____/\/_/\/_/\/_/\/____/ \ \ \/
+                                           \ \_\
+                                            \/_/
+""".strip("\n")
+
 # Interactive commands and their descriptions for autocomplete
 INTERACTIVE_COMMANDS = {
     'bye': 'Exit the application',
