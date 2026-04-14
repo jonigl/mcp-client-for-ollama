@@ -1,4 +1,5 @@
 """ FZF-style command completer for interactive mode using prompt_toolkit """
+import os
 import shutil
 from prompt_toolkit.completion import Completer, Completion, FuzzyCompleter, WordCompleter
 from prompt_toolkit.document import Document
@@ -27,10 +28,20 @@ class FZFStyleCompleter(Completer):
 
     def _build_action_meta(self, action_type: str, description: str) -> FormattedText:
         """Build action badge metadata for completion rows."""
-        badge_color = "#00bcd4" if action_type.lower() == "prompt" else "#ff8c00"
+        is_prompt = action_type.lower() == "prompt"
+
+        # tmux color handling can vary based on terminal config; use ANSI-safe
+        # badge colors there to avoid surprising fg/bg rendering differences.
+        if os.environ.get("TMUX"):
+            badge_color = "#00bcd4" if is_prompt else "#ff8c00"
+            badge_text_color = "#ffffff"
+        else:
+            badge_color = "#00bcd4" if is_prompt else "#ff8c00"
+            badge_text_color = "#ffffff"
+
         return FormattedText([
-            (f"bg:{badge_color} #ffffff italic", f" {action_type} "),
-            ("bg:#1e1e1e #d6d6d6", f" {description}" if description else "")
+            (f"fg:{badge_text_color} bg:{badge_color}", f" {action_type} "),
+            ("fg:#d6d6d6 bg:#1e1e1e", f" {description}" if description else "")
         ])
 
     def _get_prompt_completions(self, prompt_query):

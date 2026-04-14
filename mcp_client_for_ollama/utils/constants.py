@@ -79,14 +79,14 @@ INTERACTIVE_COMMANDS = {
 # Default completion menu style (used by prompt_toolkit in interactive mode)
 DEFAULT_COMPLETION_STYLE = {
     'prompt': 'ansibrightyellow bold',
-    'completion-menu.completion': 'bg:#1e1e1e #ffffff',
-    'completion-menu.completion.current': 'bg:#1e1e1e #00ff00 bold reverse',
-    'completion-menu.meta': 'bg:#1e1e1e #d6d6d6',
-    'completion-menu.meta.current': 'bg:#1e1e1e #ffffff',
-    'completion-menu.meta.completion': 'bg:#1e1e1e #d6d6d6',
-    'completion-menu.meta.completion.current': 'bg:#1e1e1e #ffffff',
-    'completion-menu.multi-column-meta': 'bg:#1e1e1e #d6d6d6',
-    'completion-menu.multi-column-meta.current': 'bg:#1e1e1e #ffffff',
+    'completion-menu.completion': 'fg:#ffffff bg:#1e1e1e',
+    'completion-menu.completion.current': 'fg:#00ff00 bg:#1e1e1e bold',
+    'completion-menu.meta': 'fg:#d6d6d6 bg:#1e1e1e',
+    'completion-menu.meta.current': 'fg:#ffffff bg:#1e1e1e',
+    'completion-menu.meta.completion': 'fg:#d6d6d6 bg:#1e1e1e',
+    'completion-menu.meta.completion.current': 'fg:#ffffff bg:#1e1e1e',
+    'completion-menu.multi-column-meta': 'fg:#d6d6d6 bg:#1e1e1e',
+    'completion-menu.multi-column-meta.current': 'fg:#ffffff bg:#1e1e1e',
     'completion-menu.multi-column-meta.background': 'bg:#1e1e1e',
     'bottom-toolbar': 'reverse',
 }

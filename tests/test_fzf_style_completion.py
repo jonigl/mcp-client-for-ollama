@@ -1,6 +1,7 @@
 """Tests for slash-namespace completion behavior."""
 
 import unittest
+from unittest.mock import patch
 
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
@@ -41,6 +42,15 @@ class TestFZFStyleCompleter(unittest.TestCase):
     def test_does_not_complete_plain_text_queries(self):
         completions = self._complete("he")
         self.assertEqual(completions, [])
+
+    def test_uses_tmux_badge_white_text(self):
+        with patch.dict("os.environ", {"TMUX": "1"}, clear=False):
+            completions = self._complete("/he")
+
+        self.assertTrue(completions)
+        badge_style = completions[0].display_meta[0][0]
+        self.assertIn("bg:#ff8c00", badge_style)
+        self.assertIn("fg:#ffffff", badge_style)
 
 
 if __name__ == "__main__":
