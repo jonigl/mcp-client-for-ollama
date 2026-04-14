@@ -158,7 +158,7 @@ class ToolManager:
             subtitle = f"[bold]{enabled_count}/{len(self.available_tools)} tools enabled[/bold]"
             self.console.print(Panel(columns, title="[bold]🔧 Available Tools[/bold]", subtitle=subtitle, border_style="green"))
         else:
-            self.console.print("[yellow]No tools available from the server[/yellow]")
+            self.console.print("[yellow]No tools found. If you expected tools, verify the MCP server is running and configured correctly.[/yellow]")
 
     # These helper methods break down the select_tools method into more manageable pieces
     def _display_tool_selection_header(self) -> None:
