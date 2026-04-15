@@ -25,6 +25,7 @@ import httpx
 
 from . import __version__
 from .config.manager import ConfigManager
+from .config.defaults import get_config_path
 from .utils.version import check_for_updates
 from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART
 from .utils.connection import preflight_ollama
@@ -1358,7 +1359,7 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
         return
 
     # Handle server configuration options - only use one source to prevent duplicates
-    config_path = None
+    config_path = get_config_path()
     auto_discovery_final = auto_discovery
 
     if servers_json:
