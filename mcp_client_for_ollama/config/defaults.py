@@ -22,7 +22,7 @@ def default_config() -> dict:
         },
         "modelSettings": {
             "thinkingMode": True,
-            "showThinking": False
+            "showThinking": True
         },
         "agentSettings": {
             "loopLimit": 3

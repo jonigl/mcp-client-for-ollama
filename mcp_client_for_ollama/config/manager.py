@@ -150,7 +150,7 @@ class ConfigManager:
             "• All tools enabled\n"
             "• Context retention enabled\n"
             "• Thinking mode enabled\n"
-            "• Thinking text hidden\n"
+            "• Thinking text visible\n"
             "• Agent loop limit reset",
             title="Config Reset", border_style="green", expand=False
         ))

@@ -1,6 +1,7 @@
 """Tests for configuration manager. Copyright 2026 ITTH GmbH & Co. KG"""
 
 from mcp_client_for_ollama.config.manager import ConfigManager
+from mcp_client_for_ollama.config.defaults import default_config
 from rich.console import Console
 
 
@@ -35,3 +36,10 @@ def test_validate_config_omits_host_when_missing():
     # Host should NOT be in the validated config when not in original
     # This allows CLI arguments to take precedence
     assert "host" not in validated
+
+
+def test_default_config_shows_thinking_text():
+    """Test that thinking text is visible by default in new configurations."""
+    config = default_config()
+
+    assert config["modelSettings"]["showThinking"] is True

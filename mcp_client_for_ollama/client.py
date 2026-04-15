@@ -87,7 +87,7 @@ class MCPClient:
         self.actual_token_count = 0  # Actual token count from Ollama metrics
         # Thinking mode settings
         self.thinking_mode = True  # By default, thinking mode is enabled for models that support it
-        self.show_thinking = False   # By default, thinking text is hidden after completion
+        self.show_thinking = True   # By default, thinking text is visible after completion
         # Tool display settings
         self.show_tool_execution = True  # By default, show tool execution displays
         # Metrics display settings
