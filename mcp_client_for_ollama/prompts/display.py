@@ -13,7 +13,7 @@ def format_args_indicator(arguments: List[Any]) -> str:
         arguments: List of PromptArgument objects
 
     Returns:
-        String indicator like "(code: Code to review, lang)" or "" if no args
+        String indicator like "(code: Code to review; optional: lang)" or "" if no args
     """
     if not arguments:
         return ""
@@ -39,7 +39,7 @@ def format_args_indicator(arguments: List[Any]) -> str:
 
     parts = []
     if required_parts:
-        parts.append(f"requires: {', '.join(required_parts)}")
+        parts.append(", ".join(required_parts))
     if optional_parts:
         parts.append(f"optional: {', '.join(optional_parts)}")
 
@@ -127,7 +127,7 @@ def display_prompt_list(console: Console, prompts_by_server: Dict[str, List[Dict
                 description = description[:57] + "..."
 
             table.add_row(
-                f"/{prompt['name']}",
+                f"/{prompt['qualified_name']}",
                 args_indicator,
                 description
             )
@@ -135,4 +135,4 @@ def display_prompt_list(console: Console, prompts_by_server: Dict[str, List[Dict
         console.print(table)
         console.print()
 
-    console.print("[dim]Tip: Use /prompt_name to invoke a prompt, or type / to see autocomplete[/dim]")
+    console.print("[dim]Tip: Use /server:prompt_name to invoke prompts, or type / to see autocomplete[/dim]")
