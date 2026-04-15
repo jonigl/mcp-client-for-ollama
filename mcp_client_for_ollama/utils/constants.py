@@ -7,7 +7,7 @@ from mcp.types import LATEST_PROTOCOL_VERSION
 DEFAULT_CLAUDE_CONFIG = os.path.expanduser("~/Library/Application Support/Claude/claude_desktop_config.json")
 
 # Default config directory and filename for MCP client for Ollama
-DEFAULT_CONFIG_DIR = os.path.expanduser("~/.config/ollmcp")
+DEFAULT_CONFIG_DIR = os.path.expanduser("~/.config/ollmcp") if os.name != "nt" else os.path.expanduser("~/.config/ollmcp".replace("/","\\"))
 if not os.path.exists(DEFAULT_CONFIG_DIR):
     os.makedirs(DEFAULT_CONFIG_DIR)
 
