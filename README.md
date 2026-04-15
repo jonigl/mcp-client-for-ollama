@@ -17,10 +17,10 @@
 [![CI](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml/badge.svg)](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/v0.15.0/misc/ollmcp-demo.gif" alt="MCP Client for Ollama Demo">
+  <img src="https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/v0.27.0/misc/ollmcp-demo.gif" alt="MCP Client for Ollama Demo">
 </p>
 <p align="center">
-  <a href="https://asciinema.org/a/jxc6N8oKZAWrzH8aK867zhXdO" target="_blank">🎥 Watch this demo as an Asciinema recording</a>
+  <a href="https://asciinema.org/a/875917" target="_blank">🎥 Watch this demo as an Asciinema recording</a>
 </p>
 
 ## Table of Contents
@@ -279,7 +279,7 @@ During chat, use these commands:
 | `/reset-config`  | `/rc`            | Reset configuration to defaults (all tools enabled) |
 | `/save-config`   | `/sc`            | Save current tool and model configuration to a file |
 | `/show-metrics`  | `/sm`            | Toggle performance metrics display                  |
-| `/show-thinking` | `/st`            | Toggle thinking text visibility                     |
+| `/show-thinking` | `/st`            | Toggle thinking text visibility (visible by default) |
 | `/thinking-mode` | `/tm`            | Toggle thinking mode on supported models            |
 | `/show-tool-execution` | `/ste`      | Toggle tool execution display visibility            |
 | `/tools`         | `/t`             | Open the tool selection interface                   |
