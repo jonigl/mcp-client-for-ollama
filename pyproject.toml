@@ -12,7 +12,7 @@ dependencies = [
     "mcp~=1.25.0",
     "ollama~=0.6.0",
     "prompt-toolkit~=3.0.52",
-    "rich~=14.2.0",
+    "rich>=14.2,<14.4",
     "typer~=0.21.0",
 ]
 
