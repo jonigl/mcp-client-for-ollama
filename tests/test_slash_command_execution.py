@@ -24,6 +24,7 @@ class DummyClient:
         self.toggle_show_tool_execution = MagicMock()
         self.toggle_show_metrics = MagicMock()
         self.select_answer_render_mode = AsyncMock()
+        self.select_input_mode = AsyncMock()
         self.clear_context = MagicMock()
         self.display_context_stats = MagicMock()
         self.clear_console = MagicMock()
@@ -73,6 +74,14 @@ class TestSlashCommandExecution(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result)
         client.select_answer_render_mode.assert_awaited_once_with()
+
+    async def test_run_input_mode_command_awaits_selection(self):
+        client = DummyClient()
+
+        result = await run_slash_command(client, "input-mode")
+
+        self.assertTrue(result)
+        client.select_input_mode.assert_awaited_once_with()
 
     async def test_run_import_history_replaces_chat_history(self):
         client = DummyClient()

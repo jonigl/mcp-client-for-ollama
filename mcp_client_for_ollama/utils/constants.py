@@ -64,6 +64,7 @@ INTERACTIVE_COMMANDS = {
     'loop-limit': 'Set agent max loop limit',
     'model-config': 'Configure model parameters',
     'model': 'Select Ollama model',
+    'input-mode': 'Switch chat input between single-line and multiline',
     'prompts': 'Browse available MCP prompts',
     'quit': 'Exit the application',
     'reload-servers': 'Reload MCP servers',
@@ -89,5 +90,6 @@ DEFAULT_COMPLETION_STYLE = {
     'completion-menu.multi-column-meta': 'fg:#d6d6d6 bg:#1e1e1e',
     'completion-menu.multi-column-meta.current': 'fg:#ffffff bg:#1e1e1e',
     'completion-menu.multi-column-meta.background': 'bg:#1e1e1e',
-    'bottom-toolbar': 'reverse',
+    'bottom-toolbar': 'fg:#000000 bg:#ffff00 noreverse',
+    'bottom-toolbar.text': 'fg:#000000 bg:#ffff00 noreverse',
 }
