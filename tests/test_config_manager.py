@@ -63,3 +63,36 @@ def test_validate_config_preserves_answer_render_mode():
     })
 
     assert validated["displaySettings"]["answerRenderMode"] == "markdown"
+
+
+def test_default_config_uses_single_line_input_mode():
+    """Test that new configurations default to single-line chat input."""
+    config = default_config()
+
+    assert config["inputSettings"]["inputMode"] == "single"
+
+
+def test_validate_config_preserves_input_mode():
+    """Test that a valid input mode survives configuration validation."""
+    mgr = ConfigManager(Console())
+
+    validated = mgr._validate_config({
+        "inputSettings": {
+            "inputMode": "multiline"
+        }
+    })
+
+    assert validated["inputSettings"]["inputMode"] == "multiline"
+
+
+def test_validate_config_ignores_invalid_input_mode():
+    """Test that invalid input modes fall back to defaults."""
+    mgr = ConfigManager(Console())
+
+    validated = mgr._validate_config({
+        "inputSettings": {
+            "inputMode": "invalid"
+        }
+    })
+
+    assert validated["inputSettings"]["inputMode"] == "single"

@@ -50,6 +50,9 @@ def default_config() -> dict:
             "showMetrics": False,
             "answerRenderMode": "both"
         },
+        "inputSettings": {
+            "inputMode": "single"
+        },
         "hilSettings": {
             "enabled": True
         }

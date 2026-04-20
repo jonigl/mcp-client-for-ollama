@@ -276,6 +276,12 @@ class ConfigManager:
                 if answer_render_mode in {"plain", "markdown", "both"}:
                     validated["displaySettings"]["answerRenderMode"] = answer_render_mode
 
+        if "inputSettings" in config_data and isinstance(config_data["inputSettings"], dict):
+            if "inputMode" in config_data["inputSettings"]:
+                input_mode = str(config_data["inputSettings"]["inputMode"]).lower()
+                if input_mode in {"single", "multiline"}:
+                    validated["inputSettings"]["inputMode"] = input_mode
+
         if "hilSettings" in config_data and isinstance(config_data["hilSettings"], dict):
             if "enabled" in config_data["hilSettings"]:
                 validated["hilSettings"]["enabled"] = bool(config_data["hilSettings"]["enabled"])

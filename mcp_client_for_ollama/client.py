@@ -15,6 +15,8 @@ from typing import List, Optional
 
 import typer
 from prompt_toolkit import PromptSession
+from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.markdown import Markdown
@@ -52,6 +54,11 @@ class MCPClient:
         "both": "Both",
     }
 
+    INPUT_MODE_LABELS = {
+        "single": "Single-line",
+        "multiline": "Multiline",
+    }
+
     def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST):
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
@@ -81,13 +88,9 @@ class MCPClient:
         self.sessions = {}  # Dict to store multiple sessions
         # UI components
         self.chat_history = []  # Add chat history list to store interactions
+        self.chat_input_history = InMemoryHistory()  # Preserve prompt recall across mode switches
         # Command completer for interactive prompts
-        self.prompt_session = PromptSession(
-            completer=FZFStyleCompleter(),
-            style=Style.from_dict(DEFAULT_COMPLETION_STYLE),
-            complete_style='multi-column',
-            reserve_space_for_menu=MAX_COMPLETION_MENU_ROWS
-        )
+        self.prompt_session = self._create_chat_prompt_session()
         # Context retention settings
         self.retain_context = True  # By default, retain conversation context
         self.actual_token_count = 0  # Actual token count from Ollama metrics
@@ -99,6 +102,8 @@ class MCPClient:
         # Metrics display settings
         self.show_metrics = False  # By default, don't show metrics after each query
         self.answer_render_mode = "both"  # Show plain streaming output and final markdown by default
+        self.input_mode = "single"  # Keep chat input single-line by default
+        self.multiline_key_bindings = self._build_multiline_key_bindings()
         # Agent mode settings
         self.loop_limit = 3  # Maximum follow-up tool loops per query
         self.default_configuration_status = False  # Track if default configuration was loaded successfully
@@ -127,6 +132,74 @@ class MCPClient:
         except Exception:
             self.chat_history = backup
             raise
+
+    def _build_multiline_key_bindings(self):
+        """Build key bindings for multiline chat input."""
+        key_bindings = KeyBindings()
+
+        @key_bindings.add("enter")
+        def _insert_newline(event):
+            event.current_buffer.insert_text("\n")
+
+        @key_bindings.add("c-j")
+        def _insert_newline_ctrl_j(event):
+            event.current_buffer.insert_text("\n")
+
+        @key_bindings.add("escape", "enter")
+        def _submit_message(event):
+            event.current_buffer.validate_and_handle()
+
+        return key_bindings
+
+    def _get_multiline_key_bindings(self):
+        """Get or lazily initialize multiline key bindings."""
+        key_bindings = getattr(self, "multiline_key_bindings", None)
+        if key_bindings is None:
+            key_bindings = self._build_multiline_key_bindings()
+            self.multiline_key_bindings = key_bindings
+        return key_bindings
+
+    def _get_multiline_toolbar_text(self):
+        """Return help text shown while multiline chat input is active."""
+        return [
+            (
+                "fg:#000000 bg:#ffff00 noreverse",
+                " Multiline mode: Enter/Ctrl+J = newline | Esc then Enter = send | /input-mode to switch ",
+            )
+        ]
+
+    def _get_multiline_prompt_continuation(self, width: int, line_number: int, wrap_count: int):
+        """Return continuation text for wrapped multiline input lines."""
+        _ = (width, line_number, wrap_count)
+        return ""
+
+    def _create_chat_prompt_session(self, completer=None):
+        """Create a configured PromptSession for chat input."""
+        if completer is None:
+            completer = FZFStyleCompleter()
+            if getattr(self, "prompt_manager", None):
+                completer.set_prompts(self.prompt_manager.list_all())
+
+        history = getattr(self, "chat_input_history", None)
+        if history is None:
+            history = InMemoryHistory()
+            self.chat_input_history = history
+
+        return PromptSession(
+            completer=completer,
+            history=history,
+            style=Style.from_dict(DEFAULT_COMPLETION_STYLE),
+            complete_style='multi-column',
+            reserve_space_for_menu=MAX_COMPLETION_MENU_ROWS,
+        )
+
+    def _reset_chat_prompt_session(self):
+        """Recreate PromptSession while preserving the current completer state."""
+        completer = None
+        if getattr(self, "prompt_session", None) is not None:
+            completer = getattr(self.prompt_session, "completer", None)
+
+        self.prompt_session = self._create_chat_prompt_session(completer=completer)
 
     async def _process_query_with_monitoring(self, query: str):
         """Process a query with cancellation monitoring
@@ -592,8 +665,24 @@ class MCPClient:
                 if tool_count > 0:
                     prompt_text += f"/{tool_count}-tool" if tool_count == 1 else f"/{tool_count}-tools"
 
+            input_mode = getattr(self, "input_mode", "single")
+            is_multiline = input_mode == "multiline"
+            prompt_kwargs = {"multiline": is_multiline}
+
+            if is_multiline:
+                prompt_kwargs["key_bindings"] = self._get_multiline_key_bindings()
+                prompt_kwargs["bottom_toolbar"] = self._get_multiline_toolbar_text
+                prompt_kwargs["prompt_continuation"] = self._get_multiline_prompt_continuation
+            else:
+                # PromptSession persists these values between prompt() calls.
+                # Explicitly clear them when returning to single-line mode.
+                self.prompt_session.key_bindings = None
+                self.prompt_session.bottom_toolbar = None
+                self.prompt_session.prompt_continuation = None
+
             user_input = await self.prompt_session.prompt_async(
-                f"{prompt_text}❯ "
+                f"{prompt_text}❯ ",
+                **prompt_kwargs,
             )
             return user_input
         except KeyboardInterrupt:
@@ -806,7 +895,6 @@ class MCPClient:
             "• Type [bold]/model-config[/bold] or [bold]/mc[/bold] to configure system prompt and model parameters\n"
             "• Type [bold]/thinking-mode[/bold] or [bold]/tm[/bold] to toggle thinking mode\n"
             "• Type [bold]/show-thinking[/bold] or [bold]/st[/bold] to toggle thinking text visibility\n"
-            "• Type [bold]/display-mode[/bold] or [bold]/dm[/bold] to choose plain, markdown, or both display modes\n"
             "• Type [bold]/show-metrics[/bold] or [bold]/sm[/bold] to toggle performance metrics display\n\n"
 
             "[bold cyan]Agent Mode:[/bold cyan] \n"
@@ -839,8 +927,14 @@ class MCPClient:
             "• Type [bold]/load-config[/bold] or [bold]/lc[/bold] to load a configuration\n"
             "• Type [bold]/reset-config[/bold] or [bold]/rc[/bold] to reset configuration to defaults\n\n"
 
+            "[bold cyan]Interface:[/bold cyan]\n"
+            "• Type [bold]/display-mode[/bold] or [bold]/dm[/bold] to choose plain, markdown, or both display modes\n"
+            "• Type [bold]/input-mode[/bold] or [bold]/im[/bold] to switch single-line or multiline chat input\n\n"
+
             "[bold cyan]Basic Commands:[/bold cyan]\n"
             "• Press [bold]a[/bold] during model generation to abort \n"
+            "• In multiline mode: [bold]Enter[/bold] and [bold]Ctrl+J[/bold] add new lines, [bold]Esc[/bold] then [bold]Enter[/bold] sends\n"
+            "• [dim]Shift+Enter and Meta+Enter may work in some terminals, but are not portable[/dim]\n"
             "• Type [bold]/help[/bold] or [bold]/h[/bold] to show this help message\n"
             "• Type [bold]/clear-screen[/bold] or [bold]/cls[/bold] to clear the terminal screen\n"
             "• Type [bold]/quit[/bold], [bold]/q[/bold], [bold]/exit[/bold], [bold]/bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n\n"
@@ -858,8 +952,9 @@ class MCPClient:
             "[bold cyan]Getting Started:[/bold cyan]\n"
             "• Type [bold]/model[/bold] or [bold]/m[/bold] to select a model\n"
             "• Type [bold]/tools[/bold] or [bold]/t[/bold] to configure tools\n"
-            "• Type [bold]/clear[/bold] or [bold]/cc[/bold] to clear conversation context\n"
             "• Type [bold]/server:prompt_name[/bold] to invoke an MCP server prompt\n"
+            "• Type [bold]/input-mode[/bold] or [bold]/im[/bold] to switch single-line or multiline chat input\n"
+            "• Type [bold]/clear[/bold] or [bold]/cc[/bold] to clear conversation context\n"
             "• Type [bold]/help[/bold] or [bold]/h[/bold] to see the [underline]full command list[/underline]\n"
             "• Type [bold]/quit[/bold] or [bold]/q[/bold] to exit the client\n\n"
             "[bold bright_magenta]IMPORTANT NEW BEHAVIOR:[/bold bright_magenta]\n"
@@ -960,6 +1055,10 @@ class MCPClient:
         """Return a user-friendly label for the current answer render mode."""
         return self.ANSWER_RENDER_MODE_LABELS.get(self.answer_render_mode, self.ANSWER_RENDER_MODE_LABELS["both"])
 
+    def get_input_mode_label(self):
+        """Return a user-friendly label for the current chat input mode."""
+        return self.INPUT_MODE_LABELS.get(self.input_mode, self.INPUT_MODE_LABELS["single"])
+
     async def select_answer_render_mode(self):
         """Select how model answers should be shown while streaming."""
         mode_options = {
@@ -1007,6 +1106,55 @@ class MCPClient:
 
             self.console.print("[red]Invalid selection. Choose 1, 2, 3, plain, markdown, both, or q.[/red]")
 
+    async def select_input_mode(self):
+        """Select how chat input should be entered."""
+        mode_options = {
+            "1": ("single", "Single-line"),
+            "2": ("multiline", "Multiline"),
+            "single": ("single", "Single-line"),
+            "multiline": ("multiline", "Multiline"),
+        }
+
+        while True:
+            self.console.print(Panel(
+                "\n"
+                "1. [bold]Single-line[/bold] (default): Enter sends message\n"
+                "2. [bold]Multiline[/bold]: Enter or Ctrl+J inserts newline, Esc then Enter sends message\n\n"
+                "[dim]Shift+Enter and Meta+Enter may work in some terminals, but are not guaranteed.[/dim]\n"
+                "[dim]Type 1, 2, single, multiline, or q to cancel.[/dim]",
+                title="[bold]Chat Input Mode[/bold]",
+                border_style="cyan",
+                expand=False,
+            ))
+            self.console.print(f"Current mode: [bold green]{self.get_input_mode_label()}[/bold green]")
+
+            selection = await get_input_no_autocomplete("Select input mode")
+            normalized = selection.strip().lower()
+
+            if normalized in {"q", "quit"}:
+                self.console.print("[yellow]Chat input mode unchanged.[/yellow]")
+                return
+
+            if normalized in mode_options:
+                new_mode = mode_options[normalized][0]
+                mode_changed = new_mode != self.input_mode
+                self.input_mode = new_mode
+
+                if mode_changed:
+                    self._reset_chat_prompt_session()
+
+                self.console.print(
+                    f"[green]Chat input mode set to {mode_options[normalized][1]}![/green]"
+                )
+
+                if self.input_mode == "multiline":
+                    self.console.print("[cyan]Use Esc then Enter to send. Enter and Ctrl+J insert new lines.[/cyan]")
+                else:
+                    self.console.print("[cyan]Enter now sends your message on a single line.[/cyan]")
+                return
+
+            self.console.print("[red]Invalid selection. Choose 1, 2, single, multiline, or q.[/red]")
+
     async def set_loop_limit(self):
         """Configure the maximum number of follow-up tool loops per query."""
         user_input = await get_input_no_autocomplete(f"Set agent loop limit (current: {self.loop_limit})")
@@ -1053,6 +1201,7 @@ class MCPClient:
             f"{thinking_status}"
             f"Tool execution display: [{'green' if self.show_tool_execution else 'red'}]{'Enabled' if self.show_tool_execution else 'Disabled'}[/{'green' if self.show_tool_execution else 'red'}]\n"
             f"Answer display mode: [cyan]{self.get_answer_render_mode_label()}[/cyan]\n"
+            f"Chat input mode: [cyan]{self.get_input_mode_label()}[/cyan]\n"
             f"Performance metrics: [{'green' if self.show_metrics else 'red'}]{'Enabled' if self.show_metrics else 'Disabled'}[/{'green' if self.show_metrics else 'red'}]\n"
             f"Agent loop limit: [cyan]{self.loop_limit}[/cyan]\n"
             f"Human-in-the-Loop confirmations: [{'green' if self.hil_manager.is_enabled() else 'red'}]{'Enabled' if self.hil_manager.is_enabled() else 'Disabled'}[/{'green' if self.hil_manager.is_enabled() else 'red'}]\n"
@@ -1099,6 +1248,9 @@ class MCPClient:
                 "showToolExecution": self.show_tool_execution,
                 "showMetrics": self.show_metrics,
                 "answerRenderMode": self.answer_render_mode
+            },
+            "inputSettings": {
+                "inputMode": self.input_mode
             },
             "hilSettings": {
                 "enabled": self.hil_manager.is_enabled()
@@ -1182,6 +1334,12 @@ class MCPClient:
                 if answer_render_mode in {"plain", "markdown", "both"}:
                     self.answer_render_mode = answer_render_mode
 
+        if "inputSettings" in config_data:
+            if "inputMode" in config_data["inputSettings"]:
+                input_mode = str(config_data["inputSettings"]["inputMode"]).lower()
+                if input_mode in {"single", "multiline"}:
+                    self.input_mode = input_mode
+
         # Load HIL settings if specified
         if "hilSettings" in config_data:
             if "enabled" in config_data["hilSettings"]:
@@ -1256,6 +1414,19 @@ class MCPClient:
                     self.answer_render_mode = "both"
             else:
                 self.answer_render_mode = "both"
+
+        # Reset input settings from the default configuration
+        if "inputSettings" in config_data:
+            if "inputMode" in config_data["inputSettings"]:
+                input_mode = str(config_data["inputSettings"]["inputMode"]).lower()
+                if input_mode in {"single", "multiline"}:
+                    self.input_mode = input_mode
+                else:
+                    self.input_mode = "single"
+            else:
+                self.input_mode = "single"
+        else:
+            self.input_mode = "single"
 
         # Reset HIL settings from the default configuration
         if "hilSettings" in config_data:

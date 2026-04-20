@@ -64,6 +64,10 @@ async def run_slash_command(client: Any, command_name: str) -> bool:
         await client.select_answer_render_mode()
         return True
 
+    if command_name == 'input-mode':
+        await client.select_input_mode()
+        return True
+
     if command_name == 'clear':
         client.clear_context()
         return True

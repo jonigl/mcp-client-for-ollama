@@ -12,6 +12,7 @@ class TestClientInputRouting(unittest.TestCase):
         self.assertEqual(resolve_slash_command(" q "), "quit")
         self.assertEqual(resolve_slash_command("mc"), "model-config")
         self.assertEqual(resolve_slash_command("ste"), "show-tool-execution")
+        self.assertEqual(resolve_slash_command("im"), "input-mode")
 
     def test_resolve_interactive_command_unknown(self):
         self.assertIsNone(resolve_slash_command("not-a-command"))
@@ -50,6 +51,16 @@ class TestClientInputRouting(unittest.TestCase):
         intent, value = parse_user_input("hi there")
         self.assertEqual(intent, "query")
         self.assertEqual(value, "hi there")
+
+    def test_classify_multiline_query_preserves_internal_newlines(self):
+        intent, value = parse_user_input("  first line\nsecond line\nthird line  ")
+        self.assertEqual(intent, "query")
+        self.assertEqual(value, "first line\nsecond line\nthird line")
+
+    def test_classify_multiline_slash_command_still_routes_as_command(self):
+        intent, value = parse_user_input("\n/help\n")
+        self.assertEqual(intent, "slash-command")
+        self.assertEqual(value, "help")
 
     def test_classify_slash_empty(self):
         intent, value = parse_user_input("/")

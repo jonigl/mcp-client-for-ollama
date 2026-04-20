@@ -35,7 +35,8 @@
   - [How Tool Calls Work](#how-tool-calls-work)
   - ✨**NEW** [Agent Mode](#agent-mode)
 - [Interactive Commands](#interactive-commands)
-  - [Answer Display Modes](#answer-display-modes)
+  - ✨**NEW** [Answer Display Modes](#answer-display-modes)
+  - ✨**NEW** [Input Mode](#input-mode)
   - [Tool and Server Selection](#tool-and-server-selection)
   - [Model Selection](#model-selection)
   - [Advanced Model Configuration](#advanced-model-configuration)
@@ -275,6 +276,7 @@ During chat, use these commands:
 | `/model`         | `/m`             | List and select a different Ollama model            |
 | `/model-config`  | `/mc`            | Configure advanced model parameters and system prompt |
 | `/display-mode`  | `/dm`            | Choose Plain, Markdown, or Both answer display modes |
+| `/input-mode`    | `/im`            | Choose Single-line or Multiline chat input mode     |
 | `/prompts`       | `/pr`            | Browse and view all available MCP prompts             |
 | `/server:prompt_name`   | `/prompt_name`      | Invoke a prompt (qualified is recommended) |
 | `/quit`, `/exit`, `/bye`   | `/q`, `Ctrl+C`, or `Ctrl+D`  | Exit the client                              |
@@ -306,6 +308,19 @@ Use `/display-mode` or `/dm` during chat to open the interactive picker.
 
 > [!TIP]
 > Your selected display mode is saved with `save-config` and restored with `load-config`, so you can keep different viewing preferences for different workflows.
+
+### Input Mode
+
+The `input-mode` (`im`) command controls how you write chat messages:
+
+- **Single-line** (default): Press **Enter** to send immediately after typing your message
+- **Multiline**: Press **Enter** to add a new line, then press **Esc** followed by **Enter** to send the entire message when you're done. This allows for more complex messages with multiple paragraphs or code blocks.
+- **Ctrl+J** also inserts a new line in multiline mode as a reliable fallback across terminals
+
+Use `/input-mode` or `/im` during chat to open the interactive picker.
+
+> [!IMPORTANT]
+> Multiline send shortcuts can vary by terminal emulator and OS keyboard handling. This client relies on **Esc then Enter** as the portable submit shortcut in multiline mode. **Shift+Enter** and **Meta+Enter** may work in some terminals, but they are not guaranteed.
 
 
 ### Tool and Server Selection

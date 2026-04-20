@@ -30,6 +30,8 @@ SLASH_COMMAND_ALIASES = {
     "sm": "show-metrics",
     "display-mode": "display-mode",
     "dm": "display-mode",
+    "input-mode": "input-mode",
+    "im": "input-mode",
     "clear": "clear",
     "cc": "clear",
     "context-info": "context-info",
