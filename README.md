@@ -35,6 +35,7 @@
   - [How Tool Calls Work](#how-tool-calls-work)
   - ✨**NEW** [Agent Mode](#agent-mode)
 - [Interactive Commands](#interactive-commands)
+  - [Answer Display Modes](#answer-display-modes)
   - [Tool and Server Selection](#tool-and-server-selection)
   - [Model Selection](#model-selection)
   - [Advanced Model Configuration](#advanced-model-configuration)
@@ -67,6 +68,7 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 - ☁️ **Ollama Cloud Support**: Works seamlessly with Ollama Cloud models for tool calling, enabling access to powerful cloud-hosted models while using local MCP tools
 - 🎨 **Rich Terminal Interface**: Interactive console UI with modern styling
 - 🌊 **Streaming Responses**: View model outputs in real-time as they're generated
+- 📝 **Answer Display Modes**: Switch between Plain, Markdown, or Both response views while streaming
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
 - 🧑‍💻 **Human-in-the-Loop (HIL)**: Review and approve tool executions before they run for enhanced control and safety
 - 🎮 **Advanced Model Configuration**: Fine-tune 15+ model parameters including context window size, temperature, sampling, repetition control, and more
@@ -272,6 +274,7 @@ During chat, use these commands:
 | `/loop-limit`    | `/ll`            | Set maximum iterative tool-loop iterations (Agent Mode). Default: 3 |
 | `/model`         | `/m`             | List and select a different Ollama model            |
 | `/model-config`  | `/mc`            | Configure advanced model parameters and system prompt |
+| `/display-mode`  | `/dm`            | Choose Plain, Markdown, or Both answer display modes |
 | `/prompts`       | `/pr`            | Browse and view all available MCP prompts             |
 | `/server:prompt_name`   | `/prompt_name`      | Invoke a prompt (qualified is recommended) |
 | `/quit`, `/exit`, `/bye`   | `/q`, `Ctrl+C`, or `Ctrl+D`  | Exit the client                              |
@@ -283,6 +286,26 @@ During chat, use these commands:
 | `/thinking-mode` | `/tm`            | Toggle thinking mode on supported models            |
 | `/show-tool-execution` | `/ste`      | Toggle tool execution display visibility            |
 | `/tools`         | `/t`             | Open the tool selection interface                   |
+
+
+### Answer Display Modes
+
+The `display-mode` (`dm`) command lets you choose how model answers are shown while they stream:
+
+- **Plain**: Streams the response once as plain text with no final markdown re-render
+- **Markdown**: Renders the response as markdown during streaming with throttled redraws
+- **Both**: Streams plain text first, then renders the completed response again as markdown
+
+Use `/display-mode` or `/dm` during chat to open the interactive picker.
+
+**Why you might switch modes:**
+
+- **Plain** is the least noisy option if you want minimal redraw or flicker
+- **Markdown** is useful when formatting matters more than raw token-by-token output
+- **Both** gives you fast streaming feedback plus a clean final markdown rendering
+
+> [!TIP]
+> Your selected display mode is saved with `save-config` and restored with `load-config`, so you can keep different viewing preferences for different workflows.
 
 
 ### Tool and Server Selection
@@ -647,6 +670,7 @@ The configuration saves:
 - Enabled/disabled status of all tools
 - Context retention settings
 - Thinking mode settings
+- Answer display mode preference
 - Tool execution display preferences
 - Performance metrics display preferences
 - Human-in-the-Loop confirmation settings
@@ -673,7 +697,7 @@ The JSON configuration file supports STDIO, SSE, and Streamable HTTP server type
       "headers": {
         "Authorization": "Bearer your-token-here"
       },
-      "disabled": false
+      "disabled": true
     },
     "http-server": {
       "type": "streamable_http",
@@ -693,7 +717,7 @@ The JSON configuration file supports STDIO, SSE, and Streamable HTTP server type
 
 A common point of confusion is where to store MCP server configuration files and how the TUI's save/load feature is used. Here's a short, practical guide that has helped other users:
 
-- The TUI's `save-config` / `load-config` (or `sc` / `lc`) commands are intended to save *TUI preferences* like which tools you enabled, your selected model, thinking mode, and other client-side settings. They are not required to register MCP server connections with the client.
+- The TUI's `save-config` / `load-config` (or `sc` / `lc`) commands are intended to save *TUI preferences* like which tools you enabled, your selected model, thinking mode, display mode, and other client-side settings. They are not required to register MCP server connections with the client.
 - For MCP server JSON files (the `mcpServers` object shown above) we recommend keeping them outside the TUI config directory or in a clear subfolder, for example:
 
 ```

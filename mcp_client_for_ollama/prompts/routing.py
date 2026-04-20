@@ -28,6 +28,8 @@ SLASH_COMMAND_ALIASES = {
     "ste": "show-tool-execution",
     "show-metrics": "show-metrics",
     "sm": "show-metrics",
+    "display-mode": "display-mode",
+    "dm": "display-mode",
     "clear": "clear",
     "cc": "clear",
     "context-info": "context-info",

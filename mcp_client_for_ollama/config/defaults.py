@@ -47,7 +47,8 @@ def default_config() -> dict:
         },
         "displaySettings": {
             "showToolExecution": True,
-            "showMetrics": False
+            "showMetrics": False,
+            "answerRenderMode": "both"
         },
         "hilSettings": {
             "enabled": True

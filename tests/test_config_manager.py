@@ -43,3 +43,23 @@ def test_default_config_shows_thinking_text():
     config = default_config()
 
     assert config["modelSettings"]["showThinking"] is True
+
+
+def test_default_config_uses_both_answer_render_modes():
+    """Test that new configurations keep the current dual answer display behavior."""
+    config = default_config()
+
+    assert config["displaySettings"]["answerRenderMode"] == "both"
+
+
+def test_validate_config_preserves_answer_render_mode():
+    """Test that a valid answer render mode survives configuration validation."""
+    mgr = ConfigManager(Console())
+
+    validated = mgr._validate_config({
+        "displaySettings": {
+            "answerRenderMode": "markdown"
+        }
+    })
+
+    assert validated["displaySettings"]["answerRenderMode"] == "markdown"

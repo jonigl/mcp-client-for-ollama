@@ -46,6 +46,12 @@ from .utils.input import get_input_no_autocomplete
 class MCPClient:
     """Main client class for interacting with Ollama and MCP servers"""
 
+    ANSWER_RENDER_MODE_LABELS = {
+        "plain": "Plain",
+        "markdown": "Markdown",
+        "both": "Both",
+    }
+
     def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST):
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
@@ -92,6 +98,7 @@ class MCPClient:
         self.show_tool_execution = True  # By default, show tool execution displays
         # Metrics display settings
         self.show_metrics = False  # By default, don't show metrics after each query
+        self.answer_render_mode = "both"  # Show plain streaming output and final markdown by default
         # Agent mode settings
         self.loop_limit = 3  # Maximum follow-up tool loops per query
         self.default_configuration_status = False  # Track if default configuration was loaded successfully
@@ -401,6 +408,7 @@ class MCPClient:
             thinking_mode=self.thinking_mode,
             show_thinking=self.show_thinking,
             show_metrics=self.show_metrics,
+            answer_render_mode=self.answer_render_mode,
             cancellation_check=lambda: self.abort_current_query
         )
 
@@ -534,6 +542,7 @@ class MCPClient:
                 thinking_mode=self.thinking_mode,
                 show_thinking=self.show_thinking,
                 show_metrics=self.show_metrics,
+                answer_render_mode=self.answer_render_mode,
                 cancellation_check=lambda: self.abort_current_query
             )
 
@@ -797,6 +806,7 @@ class MCPClient:
             "• Type [bold]/model-config[/bold] or [bold]/mc[/bold] to configure system prompt and model parameters\n"
             "• Type [bold]/thinking-mode[/bold] or [bold]/tm[/bold] to toggle thinking mode\n"
             "• Type [bold]/show-thinking[/bold] or [bold]/st[/bold] to toggle thinking text visibility\n"
+            "• Type [bold]/display-mode[/bold] or [bold]/dm[/bold] to choose plain, markdown, or both display modes\n"
             "• Type [bold]/show-metrics[/bold] or [bold]/sm[/bold] to toggle performance metrics display\n\n"
 
             "[bold cyan]Agent Mode:[/bold cyan] \n"
@@ -946,6 +956,57 @@ class MCPClient:
         else:
             self.console.print("[cyan]🔇 Performance metrics will be hidden for a cleaner output.[/cyan]")
 
+    def get_answer_render_mode_label(self):
+        """Return a user-friendly label for the current answer render mode."""
+        return self.ANSWER_RENDER_MODE_LABELS.get(self.answer_render_mode, self.ANSWER_RENDER_MODE_LABELS["both"])
+
+    async def select_answer_render_mode(self):
+        """Select how model answers should be shown while streaming."""
+        mode_options = {
+            "1": ("plain", "Plain"),
+            "2": ("markdown", "Markdown"),
+            "3": ("both", "Both"),
+            "plain": ("plain", "Plain"),
+            "markdown": ("markdown", "Markdown"),
+            "both": ("both", "Both"),
+        }
+
+        while True:
+            self.console.print(Panel(
+                "\n"
+                "1. [bold]Plain[/bold] only\n"
+                "2. [bold]Markdown[/bold] only\n"
+                "3. [bold]Both[/bold] plain streaming and final markdown\n\n"
+                "[dim]Type 1, 2, 3, plain, markdown, both, or q to cancel.[/dim]",
+                title="[bold]📝 Answer Display Mode[/bold]",
+                border_style="cyan",
+                expand=False,
+            ))
+            self.console.print(f"Current mode: [bold green]{self.get_answer_render_mode_label()}[/bold green]")
+
+            selection = await get_input_no_autocomplete("Select display mode")
+            normalized = selection.strip().lower()
+
+            if normalized in {"q", "quit"}:
+                self.console.print("[yellow]Answer display mode unchanged.[/yellow]")
+                return
+
+            if normalized in mode_options:
+                self.answer_render_mode = mode_options[normalized][0]
+                self.console.print(
+                    f"[green]Answer display mode set to {mode_options[normalized][1]}![/green]"
+                )
+
+                if self.answer_render_mode == "plain":
+                    self.console.print("[cyan]Responses will stream once without the final markdown re-render.[/cyan]")
+                elif self.answer_render_mode == "markdown":
+                    self.console.print("[cyan]Responses will render as markdown during streaming with throttled redraws.[/cyan]")
+                else:
+                    self.console.print("[cyan]Responses will stream as plain text first, then re-render as markdown.[/cyan]")
+                return
+
+            self.console.print("[red]Invalid selection. Choose 1, 2, 3, plain, markdown, both, or q.[/red]")
+
     async def set_loop_limit(self):
         """Configure the maximum number of follow-up tool loops per query."""
         user_input = await get_input_no_autocomplete(f"Set agent loop limit (current: {self.loop_limit})")
@@ -991,6 +1052,7 @@ class MCPClient:
             f"Context retention: [{'green' if self.retain_context else 'red'}]{'Enabled' if self.retain_context else 'Disabled'}[/{'green' if self.retain_context else 'red'}]\n"
             f"{thinking_status}"
             f"Tool execution display: [{'green' if self.show_tool_execution else 'red'}]{'Enabled' if self.show_tool_execution else 'Disabled'}[/{'green' if self.show_tool_execution else 'red'}]\n"
+            f"Answer display mode: [cyan]{self.get_answer_render_mode_label()}[/cyan]\n"
             f"Performance metrics: [{'green' if self.show_metrics else 'red'}]{'Enabled' if self.show_metrics else 'Disabled'}[/{'green' if self.show_metrics else 'red'}]\n"
             f"Agent loop limit: [cyan]{self.loop_limit}[/cyan]\n"
             f"Human-in-the-Loop confirmations: [{'green' if self.hil_manager.is_enabled() else 'red'}]{'Enabled' if self.hil_manager.is_enabled() else 'Disabled'}[/{'green' if self.hil_manager.is_enabled() else 'red'}]\n"
@@ -1035,7 +1097,8 @@ class MCPClient:
             "modelConfig": self.model_config_manager.get_config(),
             "displaySettings": {
                 "showToolExecution": self.show_tool_execution,
-                "showMetrics": self.show_metrics
+                "showMetrics": self.show_metrics,
+                "answerRenderMode": self.answer_render_mode
             },
             "hilSettings": {
                 "enabled": self.hil_manager.is_enabled()
@@ -1114,6 +1177,10 @@ class MCPClient:
                 self.show_tool_execution = config_data["displaySettings"]["showToolExecution"]
             if "showMetrics" in config_data["displaySettings"]:
                 self.show_metrics = config_data["displaySettings"]["showMetrics"]
+            if "answerRenderMode" in config_data["displaySettings"]:
+                answer_render_mode = str(config_data["displaySettings"]["answerRenderMode"]).lower()
+                if answer_render_mode in {"plain", "markdown", "both"}:
+                    self.answer_render_mode = answer_render_mode
 
         # Load HIL settings if specified
         if "hilSettings" in config_data:
@@ -1181,6 +1248,14 @@ class MCPClient:
             else:
                 # Default show metrics to False if not specified
                 self.show_metrics = False
+            if "answerRenderMode" in config_data["displaySettings"]:
+                answer_render_mode = str(config_data["displaySettings"]["answerRenderMode"]).lower()
+                if answer_render_mode in {"plain", "markdown", "both"}:
+                    self.answer_render_mode = answer_render_mode
+                else:
+                    self.answer_render_mode = "both"
+            else:
+                self.answer_render_mode = "both"
 
         # Reset HIL settings from the default configuration
         if "hilSettings" in config_data:

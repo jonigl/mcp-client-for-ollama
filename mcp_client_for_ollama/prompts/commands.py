@@ -60,6 +60,10 @@ async def run_slash_command(client: Any, command_name: str) -> bool:
         client.toggle_show_metrics()
         return True
 
+    if command_name == 'display-mode':
+        await client.select_answer_render_mode()
+        return True
+
     if command_name == 'clear':
         client.clear_context()
         return True
