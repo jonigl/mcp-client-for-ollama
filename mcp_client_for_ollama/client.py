@@ -117,6 +117,9 @@ class MCPClient:
             'config_path': None,
             'auto_discovery': False
         }
+        
+        # Store images collected from tool responses for sending to LLM
+        self._tool_call_images: List[str] = []
 
     @contextmanager
     def _temporary_history_extension(self, entries: List[dict]):
@@ -583,16 +586,116 @@ class MCPClient:
                         # Continue with next tool call if any
                         continue
 
-                tool_response = f"{result.content[0].text}"
+                # Handle tool response - support both text and image content
+                # MCP responses can contain multiple content items (text, images, etc.)
+                tool_response_items = []
+                tool_images = []  # Store image data for LLM
+                
+                for i, content_item in enumerate(result.content):
+                    # Check if this is an image content item
+                    if hasattr(content_item, 'type') and content_item.type == "image":
+                        # Image content - extract Base64 data and mime type
+                        base64_data = getattr(content_item, 'data', '')
+                        mime_type = getattr(content_item, 'mimeType', 'unknown')
+                        
+                        tool_response_items.append({
+                            'type': 'image',
+                            'mime_type': mime_type,
+                            'size': len(base64_data),
+                            'preview': base64_data[:100] + '..' if len(base64_data) > 100 else base64_data
+                        })
+                        
+                        # Store image data for LLM - use bytes format for Ollama Image class
+                        # The ollama.Image class can handle base64 strings directly
+                        tool_images.append({
+                            'data': base64_data,
+                            'mime_type': mime_type,
+                            'size': len(base64_data)
+                        })
+                    # Skip EmbeddedResource content type (has 'type' == 'resource' and nested 'resource' field)
+                    # Embedded resources contain JSON that is not meant for direct display
+                    elif hasattr(content_item, 'type') and content_item.type == "resource" and hasattr(content_item, 'resource'):
+                        # Skip embedded resources entirely to avoid "Unknown Content 2" display
+                        continue
+                    elif hasattr(content_item, 'text'):
+                        # Text content
+                        tool_response_items.append({
+                            'type': 'text',
+                            'text': str(content_item.text)
+                        })
+                    else:
+                        # Unknown content type - convert to string representation
+                        tool_response_items.append({
+                            'type': 'unknown',
+                            'content': str(content_item)
+                        })
 
-                # Display the tool response
-                self.tool_display_manager.display_tool_response(tool_name, tool_args, tool_response, show=self.show_tool_execution)
+                # Display the tool response with all content types (user sees metadata only)
+                if self.tool_display_manager.display_tool_response_with_multiple_types(
+                    tool_name, tool_args, tool_response_items, show=self.show_tool_execution
+                ):
+                    # If there's text content to send to the LLM
+                    text_for_llm = " ".join([
+                        item['text'] for item in tool_response_items 
+                        if item['type'] == 'text'
+                    ])
+                    
+                    # Construct response for LLM - include both text and image info
+                    if tool_images:
+                        image_descriptions = []
+                        for idx, img in enumerate(tool_images):
+                            image_descriptions.append(f"[Image {idx+1}: {img['mime_type']}, size: {img['size']} bytes]")
+                        
+                        # Combine text with image metadata for LLM context
+                        if text_for_llm:
+                            tool_response = f"{text_for_llm}\n\nTool returned {len(tool_images)} image(s) with metadata. Image data included in message for LLM analysis."
+                        else:
+                            tool_response = "Tool returned images:\n" + "\n".join(image_descriptions)
+                            tool_response += "\n\nImage data included in message for LLM analysis."
+                    else:
+                        tool_response = text_for_llm if text_for_llm else "No content from tool"
+                else:
+                    # No content could be extracted
+                    tool_response = "Unknown response format from tool"
 
-                messages.append({
+                # Add tool message with images to messages for Ollama API
+                tool_message = {
                     "role": "tool",
                     "content": tool_response,
                     "tool_name": tool_name
-                })
+                }
+                
+                # Include images in the message if present - this allows LLM to see the actual image content
+                # Images need to be embedded in a user message, not a tool message
+                # We create a separate user message with the image data for Ollama's multimodal support
+                if tool_images:
+                    # First add the tool response (text only) to messages
+                    messages.append(tool_message)
+                    
+                    # Now create a user message with image data for LLM to see
+                    from ollama._types import Message, Image
+                    
+                    # Prepare images in Ollama's Image format
+                    ollama_images = []
+                    for img in tool_images:
+                        # The Image class can accept base64 strings directly
+                        img_obj = Image(value=img['data'])
+                        ollama_images.append(img_obj)
+                    
+                    # Create a user message with the images for LLM analysis
+                    # This allows the LLM to actually see the image content
+                    user_msg_with_images = Message (
+                        role="user",
+                        content=f"Here are the images returned by the tool. Please analyze them: ",
+                        images=ollama_images
+                    )
+                    
+                    messages.append(user_msg_with_images.model_dump(exclude_none=True))
+                    
+                    # No need to store in instance variable anymore - images are already in messages
+                else:
+                    messages.append(tool_message)
+
 
             # Get stream response from Ollama with the tool results
             chat_params_followup = {
