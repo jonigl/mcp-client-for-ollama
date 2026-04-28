@@ -108,9 +108,6 @@ class TestStreamingManager(unittest.IsolatedAsyncioTestCase):
         manager = StreamingManager(self.console)
 
         with patch("mcp_client_for_ollama.utils.streaming.Markdown", side_effect=lambda text: f"MD::{text}"), patch(
-            "mcp_client_for_ollama.utils.streaming.Group",
-            side_effect=lambda *items: tuple(items),
-        ), patch(
             "mcp_client_for_ollama.utils.streaming.Live",
             FakeLive,
         ), patch(
@@ -131,15 +128,14 @@ class TestStreamingManager(unittest.IsolatedAsyncioTestCase):
         printed = [call.args[0] for call in self.console.print.call_args_list if call.args]
         self.assertEqual(response_text, "hello **world**")
         self.assertNotIn("MD::📝 **Answer:**", printed)
-        self.assertNotIn("MD::📝 **Answer (Markdown):**", printed)
         self.assertNotIn("hello ", printed)
+        self.assertEqual(printed.count("MD::📝 **Answer (Markdown):**"), 1)
         self.assertEqual(len(FakeLive.instances), 1)
 
         live = FakeLive.instances[0]
         self.assertTrue(live.started)
         self.assertTrue(live.stopped)
-        self.assertEqual(live.renderable[0], "MD::📝 **Answer (Markdown):**")
-        self.assertEqual(live.renderable[2], "MD::hello **world**")
+        self.assertEqual(live.renderable, "MD::hello **world**")
         self.assertTrue(any(refresh for _, refresh in live.updates))
 
 

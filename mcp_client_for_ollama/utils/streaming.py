@@ -6,7 +6,6 @@ Classes:
 """
 from time import monotonic
 
-from rich.console import Group
 from rich.live import Live
 from rich.markdown import Markdown
 
@@ -33,19 +32,19 @@ class StreamingManager:
         return "both"
 
     def _build_markdown_answer_renderable(self, accumulated_text):
-        """Build the markdown-only answer renderable."""
-        return Group(
-            Markdown("📝 **Answer (Markdown):**"),
-            Markdown("---"),
-            Markdown(accumulated_text)
-        )
+        """Build the markdown body renderable for live updates."""
+        return Markdown(accumulated_text)
 
-    def _render_final_markdown_answer(self, accumulated_text):
-        """Render the completed markdown answer below the streamed output."""
+    def _print_markdown_answer_header(self):
+        """Print the static markdown answer header once before live updates begin."""
         self.console.print()
         self.console.print(Markdown("📝 **Answer (Markdown):**"))
         self.console.print(Markdown("---"))
         self.console.print()
+
+    def _render_final_markdown_answer(self, accumulated_text):
+        """Render the completed markdown answer below the streamed output."""
+        self._print_markdown_answer_header()
         self.console.print(Markdown(accumulated_text))
         self.console.print()
 
@@ -140,7 +139,7 @@ class StreamingManager:
                             self.console.print(chunk.message.content, end="")
                         elif render_mode == "markdown":
                             if live_markdown is None:
-                                self.console.print()
+                                self._print_markdown_answer_header()
                                 live_markdown = Live(
                                     self._build_markdown_answer_renderable(accumulated_text),
                                     console=self.console,
