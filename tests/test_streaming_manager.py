@@ -34,13 +34,11 @@ class FakeLive:
 
     instances = []
 
-    def __init__(self, renderable, console, refresh_per_second, transient, auto_refresh=True, vertical_overflow="ellipsis"):
+    def __init__(self, renderable, console, refresh_per_second, transient):
         self.renderable = renderable
         self.console = console
         self.refresh_per_second = refresh_per_second
         self.transient = transient
-        self.auto_refresh = auto_refresh
-        self.vertical_overflow = vertical_overflow
         self.started = False
         self.stopped = False
         self.updates = []
