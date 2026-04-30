@@ -18,6 +18,75 @@ class ToolDisplayManager:
 
     def __init__(self, console: Console):
         self.console = console
+    
+    def display_tool_response_with_multiple_types(self, tool_name: str, tool_args: Any, 
+                                                   tool_response_items: list, show: bool = True) -> bool:
+        """Display the tool response panel with support for multiple content types (text, images, etc.)
+
+        Args:
+            tool_name: Name of the tool that was executed
+            tool_args: Arguments that were passed to the tool (always JSON-serializable)
+            tool_response_items: List of dictionaries with 'type', 'mime_type', and other content fields
+            show: Whether to display the tool response panel (default: True)
+
+        Returns:
+            bool: True if there was content to display, False otherwise
+        """
+        if not show or not tool_response_items:
+            return False
+        
+        args_display = self._format_json(tool_args)
+        
+        # Build content display for each item type
+        content_displays = []
+        has_content = False
+        
+        for i, item in enumerate(tool_response_items):
+            content_type = item.get('type', 'unknown')
+            has_content = True
+            
+
+                
+            if content_type in ('text', 'unknown'):
+                # Text content - display as formatted text or markdown
+                # Unknown content is also displayed as text to avoid "Unknown Content" panels
+                text = item.get('text', item.get('content', str(item)))
+                markdown_count = self._count_markdown_patterns(text)
+                
+                if markdown_count > 7:  # Arbitrary threshold for markdown patterns
+                    text_display = Markdown(text)
+                else:
+                    text_display = Text(text, style="white")
+                
+                text_panel = Panel(
+                    text_display,
+                    title=f"[bold green]📝 Text Content {i+1}[/bold green]",
+                    border_style="green",
+                    expand=False
+                )
+                content_displays.append(text_panel)
+        
+        if not content_displays:
+            return False
+        
+        # Combine all displays with headers
+        header_text = Text.from_markup("[bold]Tool Response:[/bold]\n\n")
+        
+        # Build the complete group of all displays
+        all_displays = [header_text, args_display] + content_displays
+        panel_renderable = Group(*all_displays)
+        
+        self.console.print()  # Add a blank line before the panel
+        self.console.print(Panel(
+            panel_renderable,
+            border_style="green",
+            title=f"[bold green]✅ Tool Response[/bold green] [bold yellow]{tool_name}[/bold yellow]",
+            expand=False,
+            padding=(1, 2)
+        ))
+        self.console.print()  # Add a blank line after the panel
+        
+        return True
 
     def _format_json(self, data: Any) -> Syntax:
         """Format data as JSON with syntax highlighting
