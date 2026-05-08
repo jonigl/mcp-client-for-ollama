@@ -2,19 +2,168 @@
 This file implements streaming functionality for the MCP client for Ollama.
 
 Classes:
+    ProgressiveMarkdownRenderer: Progressive markdown renderer.
     StreamingManager: Handles streaming responses from Ollama.
 """
+import shutil
 from time import monotonic
 
 from rich.live import Live
 from rich.markdown import Markdown
+from rich.text import Text
 
 from .metrics import display_metrics, extract_metrics
+
+
+class ProgressiveMarkdownRenderer:
+    """Progressive markdown renderer.
+
+    Uses Rich Live with vertical_overflow="crop" to prevent scrollback
+    corruption, and progressively commits stable content above the Live
+    zone via console.print()
+    """
+
+    REFRESH_INTERVAL = 0.15
+    VIEWPORT_COMMIT_THRESHOLD = 0.6
+
+    def __init__(self, console):
+        self.console = console
+        self.full_text = ""
+        self.committed_text = ""
+        self._live = None
+        self._last_refresh = 0.0
+
+    def start(self):
+        """Start the live rendering zone."""
+        self._live = Live(
+            Text(""),
+            console=self.console,
+            vertical_overflow="crop",
+            refresh_per_second=15,
+            transient=True,
+        )
+        self._live.start()
+        self._last_refresh = monotonic()
+
+    def update(self, new_chunk):
+        """Append a new chunk and refresh the display (throttled)."""
+        self.full_text += new_chunk
+
+        now = monotonic()
+        if now - self._last_refresh < self.REFRESH_INTERVAL:
+            return
+        self._last_refresh = now
+
+        self._maybe_commit()
+        uncommitted = self.full_text[len(self.committed_text):]
+        if uncommitted:
+            self._live.update(Markdown(uncommitted), refresh=True)
+
+    def finish(self):
+        """Commit all remaining content and cleanly stop the Live zone."""
+        if self._live is None:
+            return
+
+        # Commit whatever remains
+        remaining = self.full_text[len(self.committed_text):]
+        if remaining:
+            self._print_markdown_preserving_trailing_newlines(remaining)
+            self.committed_text = self.full_text
+
+        # Clear the live zone (transient=True will erase it) and stop
+        self._live.update(Text(""), refresh=True)
+        self._live.stop()
+        self._live = None
+
+    def _maybe_commit(self):
+        """Commit content above the Live zone if uncommitted text is tall."""
+        uncommitted = self.full_text[len(self.committed_text):]
+        if not uncommitted:
+            return
+
+        terminal_size = shutil.get_terminal_size()
+        term_lines = terminal_size.lines
+        viewport_height = max(1, term_lines - 2)  # Ensure positive value for edge cases
+        threshold = int(viewport_height * self.VIEWPORT_COMMIT_THRESHOLD)
+
+        estimated_height = self._estimate_height(uncommitted, terminal_size.columns)
+        if estimated_height <= threshold:
+            return
+
+        commit_point = self._find_safe_commit_point(uncommitted)
+        if commit_point is None:
+            return
+
+        text_to_commit = uncommitted[:commit_point]
+        self._print_markdown_preserving_trailing_newlines(text_to_commit)
+        self.committed_text += text_to_commit
+
+    def _print_markdown_preserving_trailing_newlines(self, text):
+        """Render markdown while preserving source trailing blank lines.
+
+        Rich markdown rendering may collapse trailing blank lines when content is
+        split into progressive commits. Preserve newline count explicitly so
+        spacing between committed and live content remains stable.
+        """
+        if not text:
+            return
+
+        trailing_newlines = len(text) - len(text.rstrip("\n"))
+        markdown_text = text[:-trailing_newlines] if trailing_newlines else text
+
+        if markdown_text:
+            self.console.print(Markdown(markdown_text))
+            if trailing_newlines > 1:
+                self.console.print(end="\n" * (trailing_newlines - 1))
+            return
+
+        self.console.print(end="\n" * trailing_newlines)
+
+    def _estimate_height(self, text, terminal_width):
+        """Rough estimate of how many terminal lines text will occupy."""
+        lines = 0
+        for line in text.split("\n"):
+            # Each line wraps based on terminal width (rough: ignore markup)
+            if terminal_width > 0:
+                wrapped_lines = max(1, (len(line) + terminal_width - 1) // terminal_width)
+            else:
+                wrapped_lines = 1
+            lines += wrapped_lines
+        return lines
+
+    def _find_safe_commit_point(self, text):
+        """Find the last paragraph boundary (\\n\\n) not inside a fenced code block.
+
+        Returns the index (end of the committed portion) or None if no safe point.
+        """
+        # We need at least some minimum content to commit
+        if len(text) < 20:
+            return None
+
+        # Track fenced code block state and find safe paragraph breaks
+        in_code_block = False
+        last_safe_break = None
+        pos = 0
+
+        for line in text.split("\n"):
+            stripped = line.strip()
+            if stripped.startswith("```"):
+                in_code_block = not in_code_block
+
+            # Check for paragraph boundary: empty line outside code block
+            if not in_code_block and stripped == "":
+                # Include the newline in the break point
+                break_pos = pos + len(line) + 1
+                if break_pos < len(text):  # Don't commit everything
+                    last_safe_break = break_pos
+
+            pos += len(line) + 1  # Move past this line and its newline
+
+        return last_safe_break
 
 class StreamingManager:
     """Manages streaming responses for Ollama API calls"""
 
-    LIVE_MARKDOWN_REFRESH_INTERVAL = 0.15
     VALID_ANSWER_RENDER_MODES = {"plain", "markdown", "both"}
 
     def __init__(self, console):
@@ -31,20 +180,22 @@ class StreamingManager:
             return answer_render_mode
         return "both"
 
-    def _build_markdown_answer_renderable(self, accumulated_text):
-        """Build the markdown body renderable for live updates."""
-        return Markdown(accumulated_text)
-
-    def _print_markdown_answer_header(self):
-        """Print the static markdown answer header once before live updates begin."""
+    def _print_answer_transition_header(self, show_thinking, render_mode):
+        """Separate visible thinking output from the answer header."""
         self.console.print()
-        self.console.print(Markdown("📝 **Answer (Markdown):**"))
+        if show_thinking:
+            self.console.print()
+
+        if render_mode == "markdown":
+            self.console.print(Markdown("📝 **Answer (Markdown):**"))
+        else:
+            self.console.print(Markdown("📝 **Answer:**"))
         self.console.print(Markdown("---"))
         self.console.print()
 
     def _render_final_markdown_answer(self, accumulated_text):
         """Render the completed markdown answer below the streamed output."""
-        self._print_markdown_answer_header()
+        self._print_answer_transition_header(False, "markdown")
         self.console.print(Markdown(accumulated_text))
         self.console.print()
 
@@ -72,8 +223,7 @@ class StreamingManager:
         render_mode = self._normalize_answer_render_mode(answer_render_mode)
         stream_plain_text = render_mode in {"plain", "both"}
         render_markdown = render_mode in {"markdown", "both"}
-        live_markdown = None
-        last_live_markdown_refresh = 0.0
+        progressive_renderer = None
 
         if print_response:
             # Thinking header flag
@@ -127,10 +277,7 @@ class StreamingManager:
 
                         # Print separator and Answer label when transitioning from thinking to content
                         if not accumulated_text and stream_plain_text:
-                            self.console.print()
-                            self.console.print(Markdown("📝 **Answer:**"))
-                            self.console.print(Markdown("---"))
-                            self.console.print()
+                            self._print_answer_transition_header(show_thinking, "plain")
 
                         accumulated_text += chunk.message.content
 
@@ -138,24 +285,11 @@ class StreamingManager:
                         if stream_plain_text:
                             self.console.print(chunk.message.content, end="")
                         elif render_mode == "markdown":
-                            if live_markdown is None:
-                                self._print_markdown_answer_header()
-                                live_markdown = Live(
-                                    self._build_markdown_answer_renderable(accumulated_text),
-                                    console=self.console,
-                                    refresh_per_second=8,
-                                    transient=False,
-                                )
-                                live_markdown.start()
-                                last_live_markdown_refresh = monotonic()
-                            else:
-                                current_time = monotonic()
-                                if current_time - last_live_markdown_refresh >= self.LIVE_MARKDOWN_REFRESH_INTERVAL:
-                                    live_markdown.update(
-                                        self._build_markdown_answer_renderable(accumulated_text),
-                                        refresh=True,
-                                    )
-                                    last_live_markdown_refresh = current_time
+                            if progressive_renderer is None:
+                                self._print_answer_transition_header(show_thinking, "markdown")
+                                progressive_renderer = ProgressiveMarkdownRenderer(self.console)
+                                progressive_renderer.start()
+                            progressive_renderer.update(chunk.message.content)
 
                     # Handle tool calls
                     if (hasattr(chunk, 'message') and hasattr(chunk.message, 'tool_calls') and
@@ -168,19 +302,15 @@ class StreamingManager:
                         for tool in chunk.message.tool_calls:
                             tool_calls.append(tool)
             finally:
-                if live_markdown is not None:
-                    live_markdown.update(
-                        self._build_markdown_answer_renderable(accumulated_text),
-                        refresh=True,
-                    )
-                    live_markdown.stop()
+                if progressive_renderer is not None:
+                    progressive_renderer.finish()
                 status.stop()
 
             # Print newline at end
             if accumulated_text and stream_plain_text:
                 self.console.print()
-            # Render final markdown content properly
-            if accumulated_text and render_markdown and live_markdown is None:
+            # Render final markdown content properly (for "both" mode where progressive_renderer wasn't used)
+            if accumulated_text and render_markdown and progressive_renderer is None:
                 self._render_final_markdown_answer(accumulated_text)
 
         else:
