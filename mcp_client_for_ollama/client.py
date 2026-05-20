@@ -103,9 +103,6 @@ class MCPClient:
             'config_path': None,
             'auto_discovery': False
         }
-        
-        # Store images collected from tool responses for sending to LLM
-        self._tool_call_images: List[str] = []
 
     @contextmanager
     def _temporary_history_extension(self, entries: List[dict]):
@@ -196,6 +193,23 @@ class MCPClient:
             return False
         except Exception:
             # If we can't determine capabilities, assume no thinking support
+            return False
+
+    async def supports_vision(self) -> bool:
+        """Check if the current model supports vision (image) input
+
+        Returns:
+            bool: True if the current model supports vision, False otherwise
+        """
+        try:
+            current_model = self.model_manager.get_current_model()
+            model_info = await self.ollama.show(current_model)
+
+            if 'capabilities' in model_info and model_info['capabilities']:
+                return 'vision' in model_info['capabilities']
+
+            return False
+        except Exception:
             return False
 
     async def select_model(self):
@@ -391,6 +405,9 @@ class MCPClient:
         if supports_thinking:
             chat_params["think"] = self.thinking_mode
 
+        # Check vision capability once for the entire query
+        has_vision = await self.supports_vision()
+
         # Initial Ollama API call with the query and available tools
         stream = await self.ollama.chat(**chat_params)
 
@@ -503,115 +520,83 @@ class MCPClient:
                         # Continue with next tool call if any
                         continue
 
-                # Handle tool response - support both text and image content
+                # Extract content from tool response - decoupled from display
                 # MCP responses can contain multiple content items (text, images, etc.)
-                tool_response_items = []
-                tool_images = []  # Store image data for LLM
-                
-                for i, content_item in enumerate(result.content):
-                    # Check if this is an image content item
+                text_parts = []
+                tool_images = []  # List of base64 strings
+
+                for content_item in result.content:
                     if hasattr(content_item, 'type') and content_item.type == "image":
-                        # Image content - extract Base64 data and mime type
                         base64_data = getattr(content_item, 'data', '')
                         mime_type = getattr(content_item, 'mimeType', 'unknown')
-                        
-                        tool_response_items.append({
-                            'type': 'image',
-                            'mime_type': mime_type,
-                            'size': len(base64_data),
-                            'preview': base64_data[:100] + '..' if len(base64_data) > 100 else base64_data
-                        })
-                        
-                        # Store image data for LLM - use bytes format for Ollama Image class
-                        # The ollama.Image class can handle base64 strings directly
-                        tool_images.append({
-                            'data': base64_data,
-                            'mime_type': mime_type,
-                            'size': len(base64_data)
-                        })
-                    # Skip EmbeddedResource content type (has 'type' == 'resource' and nested 'resource' field)
-                    # Embedded resources contain JSON that is not meant for direct display
-                    elif hasattr(content_item, 'type') and content_item.type == "resource" and hasattr(content_item, 'resource'):
-                        # Skip embedded resources entirely to avoid "Unknown Content 2" display
-                        continue
-                    elif hasattr(content_item, 'text'):
-                        # Text content
-                        tool_response_items.append({
-                            'type': 'text',
-                            'text': str(content_item.text)
-                        })
-                    else:
-                        # Unknown content type - convert to string representation
-                        tool_response_items.append({
-                            'type': 'unknown',
-                            'content': str(content_item)
-                        })
-
-                # Display the tool response with all content types (user sees metadata only)
-                if self.tool_display_manager.display_tool_response_with_multiple_types(
-                    tool_name, tool_args, tool_response_items, show=self.show_tool_execution
-                ):
-                    # If there's text content to send to the LLM
-                    text_for_llm = " ".join([
-                        item['text'] for item in tool_response_items 
-                        if item['type'] == 'text'
-                    ])
-                    
-                    # Construct response for LLM - include both text and image info
-                    if tool_images:
-                        image_descriptions = []
-                        for idx, img in enumerate(tool_images):
-                            image_descriptions.append(f"[Image {idx+1}: {img['mime_type']}, size: {img['size']} bytes]")
-                        
-                        # Combine text with image metadata for LLM context
-                        if text_for_llm:
-                            tool_response = f"{text_for_llm}\n\nTool returned {len(tool_images)} image(s) with metadata. Image data included in message for LLM analysis."
+                        tool_images.append(base64_data)
+                        if has_vision:
+                            text_parts.append(f"[Image: {mime_type}, {len(base64_data)} bytes]")
                         else:
-                            tool_response = "Tool returned images:\n" + "\n".join(image_descriptions)
-                            tool_response += "\n\nImage data included in message for LLM analysis."
+                            text_parts.append(f"[Image returned but not processed: {mime_type} - current model does not support vision]")
+                    elif hasattr(content_item, 'type') and content_item.type == "audio":
+                        mime_type = getattr(content_item, 'mimeType', 'unknown')
+                        data = getattr(content_item, 'data', '')
+                        text_parts.append(f"[Audio returned but not processed: {mime_type}, {len(data)} bytes - Ollama does not support audio input]")
+                    elif hasattr(content_item, 'type') and content_item.type == "resource" and hasattr(content_item, 'resource'):
+                        # TODO: Handle MCP resource content (type="resource") — extract text/blob from
+                        #       content_item.resource and forward to LLM once resource support is implemented.
+                        resource = content_item.resource
+                        uri = getattr(resource, 'uri', 'unknown')
+                        mime_type = getattr(resource, 'mimeType', 'unknown')
+                        text_parts.append(f"[Resource returned but not processed: {uri} ({mime_type}) - resource support not yet implemented]")
+                    elif hasattr(content_item, 'type') and content_item.type == "resource_link":
+                        # TODO: Handle MCP resource links (type="resource_link") — fetch content via
+                        #       resources/read using the URI once resource support is implemented.
+                        uri = getattr(content_item, 'uri', 'unknown')
+                        name = getattr(content_item, 'name', '')
+                        mime_type = getattr(content_item, 'mimeType', 'unknown')
+                        label = f" ({name})" if name else ""
+                        text_parts.append(f"[Resource link returned but not fetched: {uri}{label} ({mime_type}) - resource support not yet implemented]")
+                    elif hasattr(content_item, 'text'):
+                        text_parts.append(str(content_item.text))
                     else:
-                        tool_response = text_for_llm if text_for_llm else "No content from tool"
-                else:
-                    # No content could be extracted
-                    tool_response = "Unknown response format from tool"
+                        text_parts.append(str(content_item))
 
-                # Add tool message with images to messages for Ollama API
+                tool_response = "\n\n".join(text_parts) if text_parts else "Tool executed successfully (no text content returned)"
+
+                # Display tool response (independent of content extraction)
+                self.tool_display_manager.display_tool_response(
+                    tool_name, tool_args, tool_response,
+                    show=self.show_tool_execution, image_count=len(tool_images),
+                    vision_supported=has_vision
+                )
+
+                # Build tool message for LLM
                 tool_message = {
                     "role": "tool",
                     "content": tool_response,
                     "tool_name": tool_name
                 }
-                
-                # Include images in the message if present - this allows LLM to see the actual image content
-                # Images need to be embedded in a user message, not a tool message
-                # We create a separate user message with the image data for Ollama's multimodal support
-                if tool_images:
-                    # First add the tool response (text only) to messages
-                    messages.append(tool_message)
-                    
-                    # Now create a user message with image data for LLM to see
-                    from ollama._types import Message, Image
-                    
-                    # Prepare images in Ollama's Image format
-                    ollama_images = []
-                    for img in tool_images:
-                        # The Image class can accept base64 strings directly
-                        img_obj = Image(value=img['data'])
-                        ollama_images.append(img_obj)
-                    
-                    # Create a user message with the images for LLM analysis
-                    # This allows the LLM to actually see the image content
-                    user_msg_with_images = Message (
-                        role="user",
-                        content=f"Here are the images returned by the tool. Please analyze them: ",
-                        images=ollama_images
-                    )
-                    
-                    messages.append(user_msg_with_images.model_dump(exclude_none=True))
-                    
-                    # No need to store in instance variable anymore - images are already in messages
-                else:
-                    messages.append(tool_message)
+
+                messages.append(tool_message)
+
+                # Ollama only processes images on user-role messages, so we
+                # must use role:"user" even though the images came from a tool.
+                # The content makes this clear to the model.
+                if tool_images and has_vision:
+                    messages.append({
+                        "role": "user",
+                        "content": f"Here are the images returned by the tool {tool_name}. Describe or use them based on the original query.",
+                        "images": tool_images
+                    })
+                elif tool_images and not has_vision:
+                    current_model = self.model_manager.get_current_model()
+                    image_label = "image" if len(tool_images) == 1 else "images"
+                    self.console.print(Panel(
+                        f"[yellow]The tool '{tool_name}' returned {len(tool_images)} {image_label}, "
+                        f"but the current model [cyan]{current_model}[/cyan] does not support vision.[/yellow]\n\n"
+                        "The images have been skipped. To process images, switch to a vision-capable model.",
+                        border_style="yellow",
+                        title="[bold yellow]Vision Not Supported[/bold yellow]",
+                        expand=False,
+                        padding=(1, 2)
+                    ))
 
 
             # Get stream response from Ollama with the tool results
