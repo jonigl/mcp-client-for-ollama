@@ -64,7 +64,9 @@ class ToolDisplayManager:
             padding=(1, 2)
         ))
 
-    def display_tool_response(self, tool_name: str, tool_args: Any, tool_response: str, show: bool = True) -> None:
+    def display_tool_response(self, tool_name: str, tool_args: Any, tool_response: str,
+                               show: bool = True, image_count: int = 0,
+                               vision_supported: bool = True) -> None:
         """Display the tool response panel with arguments and response
 
         Args:
@@ -72,6 +74,8 @@ class ToolDisplayManager:
             tool_args: Arguments that were passed to the tool (always JSON-serializable)
             tool_response: Response from the tool
             show: Whether to display the tool response panel (default: True)
+            image_count: Number of images returned by the tool (default: 0)
+            vision_supported: Whether the current model supports vision (default: True)
         """
         if not show:
             return
@@ -98,6 +102,15 @@ class ToolDisplayManager:
             header_text = Text.from_markup("[bold]Arguments:[/bold]\n\n")
             response_header_text = Text.from_markup("\n[bold]Response:[/bold]\n\n")
             panel_renderable = Group(header_text, args_display, response_header_text, response_display)
+
+        # Append image summary line if images were returned
+        if image_count > 0:
+            image_label = "image" if image_count == 1 else "images"
+            if vision_supported:
+                image_text = Text.from_markup(f"\n[bold magenta]🌃 {image_count} {image_label} attached[/bold magenta]")
+            else:
+                image_text = Text.from_markup(f"\n[bold yellow]❌ {image_count} {image_label} returned but skipped (model lacks vision)[/bold yellow]")
+            panel_renderable = Group(panel_renderable, image_text)
 
         self.console.print()  # Add a blank line before the panel
         self.console.print(Panel(

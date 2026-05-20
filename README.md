@@ -78,6 +78,7 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 - 🎨 **Enhanced Tool Display**: Beautiful, structured visualization of tool executions with JSON syntax highlighting
 - 🧠 **Context Management**: Control conversation memory with configurable retention settings
 - 🤔 **Thinking Mode**: Advanced reasoning capabilities with visible thought processes for supported models (e.g., gpt-oss, deepseek-r1, qwen3, etc.)
+- 🖼️ **Vision Tool Support**: Images returned by tools are automatically forwarded to vision-capable models
  - 🗣️ **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
  - 📜 **History Management**: View full conversation history, export to JSON for backup/analysis, and import previous sessions for continuity
 - 🔍 **Auto-Discovery**: Automatically find and use Claude's existing MCP server configurations
@@ -788,13 +789,15 @@ You can find more details in the [MCP specification version 2025-06-18 - Transpo
 
 The following Ollama models work well with tool use:
 
-- qwen2.5
-- qwen3
-- llama3.1
+- gemma4
+- qwen3.5
+- lfm2.5-thinking
 - llama3.2
 - mistral
 
 For a complete list of Ollama models with tool use capabilities, visit the [official Ollama models page](https://ollama.com/search?c=tools).
+
+For models that can also process images returned by tools, see the [Ollama vision models page](https://ollama.com/search?c=vision).
 
 ### Ollama Cloud Models
 
@@ -831,7 +834,8 @@ For more information about Ollama Cloud, visit the [Ollama Cloud documentation](
    - Shows a Human-in-the-Loop confirmation prompt (if enabled) allowing you to review and approve the tool call
    - Extracts the tool name and arguments from the model response
    - Calls the appropriate MCP server with these arguments (only if approved or HIL is disabled)
-   - Shows the tool response in a structured, easy-to-read format
+   - Shows the tool response in a structured, easy-to-read format (including image and unsupported-media summaries)
+   - If the tool returned images and the current model supports vision, attaches the images to the next LLM message; otherwise displays a warning
    - Sends the tool result back to Ollama
    - If in Agent Mode, repeats the process if the model requests more tool calls
 3. Finally, the client:

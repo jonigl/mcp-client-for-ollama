@@ -277,6 +277,23 @@ class MCPClient:
             # If we can't determine capabilities, assume no thinking support
             return False
 
+    async def supports_vision(self) -> bool:
+        """Check if the current model supports vision (image) input
+
+        Returns:
+            bool: True if the current model supports vision, False otherwise
+        """
+        try:
+            current_model = self.model_manager.get_current_model()
+            model_info = await self.ollama.show(current_model)
+
+            if 'capabilities' in model_info and model_info['capabilities']:
+                return 'vision' in model_info['capabilities']
+
+            return False
+        except Exception:
+            return False
+
     async def select_model(self):
         """Let the user select an Ollama model from the available ones"""
         await self.model_manager.select_model_interactive(clear_console_func=self.clear_console)
@@ -470,6 +487,9 @@ class MCPClient:
         if supports_thinking:
             chat_params["think"] = self.thinking_mode
 
+        # Check vision capability once for the entire query
+        has_vision = await self.supports_vision()
+
         # Initial Ollama API call with the query and available tools
         stream = await self.ollama.chat(**chat_params)
 
@@ -583,16 +603,84 @@ class MCPClient:
                         # Continue with next tool call if any
                         continue
 
-                tool_response = f"{result.content[0].text}"
+                # Extract content from tool response - decoupled from display
+                # MCP responses can contain multiple content items (text, images, etc.)
+                text_parts = []
+                tool_images = []  # List of base64 strings
 
-                # Display the tool response
-                self.tool_display_manager.display_tool_response(tool_name, tool_args, tool_response, show=self.show_tool_execution)
+                for content_item in result.content:
+                    if hasattr(content_item, 'type') and content_item.type == "image":
+                        base64_data = getattr(content_item, 'data', '')
+                        mime_type = getattr(content_item, 'mimeType', 'unknown')
+                        tool_images.append(base64_data)
+                        if has_vision:
+                            text_parts.append(f"[Image: {mime_type}, {len(base64_data)} bytes]")
+                        else:
+                            text_parts.append(f"[Image returned but not processed: {mime_type} - current model does not support vision]")
+                    elif hasattr(content_item, 'type') and content_item.type == "audio":
+                        mime_type = getattr(content_item, 'mimeType', 'unknown')
+                        data = getattr(content_item, 'data', '')
+                        text_parts.append(f"[Audio returned but not processed: {mime_type}, {len(data)} bytes - Ollama does not support audio input]")
+                    elif hasattr(content_item, 'type') and content_item.type == "resource" and hasattr(content_item, 'resource'):
+                        # TODO: Handle MCP resource content (type="resource") — extract text/blob from
+                        #       content_item.resource and forward to LLM once resource support is implemented.
+                        resource = content_item.resource
+                        uri = getattr(resource, 'uri', 'unknown')
+                        mime_type = getattr(resource, 'mimeType', 'unknown')
+                        text_parts.append(f"[Resource returned but not processed: {uri} ({mime_type}) - resource support not yet implemented]")
+                    elif hasattr(content_item, 'type') and content_item.type == "resource_link":
+                        # TODO: Handle MCP resource links (type="resource_link") — fetch content via
+                        #       resources/read using the URI once resource support is implemented.
+                        uri = getattr(content_item, 'uri', 'unknown')
+                        name = getattr(content_item, 'name', '')
+                        mime_type = getattr(content_item, 'mimeType', 'unknown')
+                        label = f" ({name})" if name else ""
+                        text_parts.append(f"[Resource link returned but not fetched: {uri}{label} ({mime_type}) - resource support not yet implemented]")
+                    elif hasattr(content_item, 'text'):
+                        text_parts.append(str(content_item.text))
+                    else:
+                        text_parts.append(str(content_item))
 
-                messages.append({
+                tool_response = "\n\n".join(text_parts) if text_parts else "Tool executed successfully (no text content returned)"
+
+                # Display tool response (independent of content extraction)
+                self.tool_display_manager.display_tool_response(
+                    tool_name, tool_args, tool_response,
+                    show=self.show_tool_execution, image_count=len(tool_images),
+                    vision_supported=has_vision
+                )
+
+                # Build tool message for LLM
+                tool_message = {
                     "role": "tool",
                     "content": tool_response,
                     "tool_name": tool_name
-                })
+                }
+
+                messages.append(tool_message)
+
+                # Ollama only processes images on user-role messages, so we
+                # must use role:"user" even though the images came from a tool.
+                # The content makes this clear to the model.
+                if tool_images and has_vision:
+                    messages.append({
+                        "role": "user",
+                        "content": f"Here are the images returned by the tool {tool_name}. Describe or use them based on the original query.",
+                        "images": tool_images
+                    })
+                elif tool_images and not has_vision:
+                    current_model = self.model_manager.get_current_model()
+                    image_label = "image" if len(tool_images) == 1 else "images"
+                    self.console.print(Panel(
+                        f"[yellow]The tool '{tool_name}' returned {len(tool_images)} {image_label}, "
+                        f"but the current model [cyan]{current_model}[/cyan] does not support vision.[/yellow]\n\n"
+                        "The images have been skipped. To process images, switch to a vision-capable model.",
+                        border_style="yellow",
+                        title="[bold yellow]Vision Not Supported[/bold yellow]",
+                        expand=False,
+                        padding=(1, 2)
+                    ))
+
 
             # Get stream response from Ollama with the tool results
             chat_params_followup = {
