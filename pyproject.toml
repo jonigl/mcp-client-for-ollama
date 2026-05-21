@@ -12,7 +12,7 @@ dependencies = [
     "mcp>=1.25,<1.27",
     "ollama~=0.6.0",
     "prompt-toolkit~=3.0.52",
-    "rich>=14.2,<14.4",
+    "rich>=14.2.0,<14.3",
     "typer~=0.21.0",
 ]
 
@@ -33,5 +33,5 @@ include = ["mcp_client_for_ollama*"]
 
 [dependency-groups]
 dev = [
-    "pytest~=8.4.2",
+    "pytest~=9.0.0",
 ]
