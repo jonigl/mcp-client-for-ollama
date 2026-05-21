@@ -2,9 +2,11 @@
 
 This module handles listing, selecting, and managing Ollama models.
 """
+import asyncio
 from typing import List, Dict, Any, Optional, Tuple
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
 from rich.prompt import Prompt
 from ..utils.constants import DEFAULT_MODEL
@@ -26,6 +28,7 @@ class ModelManager:
         self.console = console or Console()
         self.model = default_model
         self.ollama = ollama
+        self._capabilities_cache: Dict[str, List[str]] = {}
 
     async def check_ollama_running(self) -> bool:
         """Check if Ollama is running by making a request to its API.
@@ -71,10 +74,50 @@ class ModelManager:
         """
         self.model = model_name
 
+    async def fetch_capabilities(self, model_name: str) -> List[str]:
+        """Fetch and cache the capabilities of a model.
+
+        Args:
+            model_name: Name of the model to fetch capabilities for
+
+        Returns:
+            List[str]: List of capability strings (e.g. ['vision', 'tools', 'thinking'])
+        """
+        if model_name in self._capabilities_cache:
+            return self._capabilities_cache[model_name]
+        try:
+            model_info = await self.ollama.show(model_name)
+            caps = model_info.get('capabilities') or []
+            self._capabilities_cache[model_name] = list(caps)
+        except Exception:
+            self._capabilities_cache[model_name] = []
+        return self._capabilities_cache[model_name]
+
+    def format_capabilities_badges(self, capabilities: List[str]) -> str:
+        """Format model capabilities as colored emoji+word badges.
+
+        Args:
+            capabilities: List of capability strings from Ollama
+
+        Returns:
+            str: Separated colored badge string, or empty string if no known capabilities
+        """
+        badge_map = [
+            ("vision",   "[bold cyan]👀 Vision[/bold cyan]"),
+            ("tools",    "[bold orange3]🔧 Tools[/bold orange3]"),
+            ("thinking", "[bold magenta]💭 Thinking[/bold magenta]"),
+        ]
+        badges = [badge for cap, badge in badge_map if cap in capabilities]
+        return " [dim]│[/dim] ".join(badges)
+
     def display_current_model(self) -> None:
         """Display the currently selected model in the console."""
-        self.console.print(Panel(f"[bold blue]🧠 Current model:[/bold blue] [bold green]{self.model}[/bold green]",
-                              border_style="blue", expand=False))
+        capabilities = self._capabilities_cache.get(self.model, [])
+        badges = self.format_capabilities_badges(capabilities)
+        content = f"[bold blue]Current model:[/bold blue] [bold green]{self.model}[/bold green]"
+        if badges:
+            content += f"\n[bold blue]Capabilities:[/bold blue] {badges}"
+        self.console.print(Panel(content, border_style="blue", expand=False))
 
     def format_model_display_info(self, model: Dict[str, Any]) -> Tuple[str, str, str]:
         """Format model information for display.
@@ -135,9 +178,12 @@ class ModelManager:
         result_message = None
         result_style = "red"
 
-        # Get available models
+        # Get available models and pre-fetch capabilities in parallel
         with self.console.status("[cyan]Getting available models from Ollama...[/cyan]"):
             models = await self.list_ollama_models()
+            if models:
+                model_names = [self.format_model_display_info(m)[0] for m in models]
+                await asyncio.gather(*[self.fetch_capabilities(n) for n in model_names], return_exceptions=True)
 
         if not models:
             self.console.print("[yellow]No models available. Try pulling a model with 'ollama pull <model>'[/yellow]")
@@ -155,16 +201,28 @@ class ModelManager:
             # Sort models by name for easier reading
             models.sort(key=lambda x: x.get("name", ""))
 
-            # Display available models in a numbered list
-            self.console.print(Panel("[bold]Available Models[/bold]", border_style="blue", expand=False))
+            # Display available models as a table
+            table = Table(show_header=True, header_style="bold cyan", border_style="blue", expand=False)
+            table.add_column("#", style="bold magenta", width=4, justify="right")
+            table.add_column("Current", justify="center")
+            table.add_column("Name", style="bold blue")
+            table.add_column("Size", style="dim", justify="right")
+            table.add_column("Modified", style="dim")
+            table.add_column("👀 Vision", justify="center")
+            table.add_column("🔧 Tools", justify="center")
+            table.add_column("💭 Thinking", justify="center")
 
-            # Display available models
             for i, model in enumerate(models):
                 model_name, size_str, modified_at = self.format_model_display_info(model)
-                # Check if this model is the currently selected one (not yet saved)
                 is_current = model_name == selected_model
-                status = "[green]→[/green] " if is_current else "  "
-                self.console.print(f"{i+1}. {status} [bold blue]{model_name}[/bold blue] [dim]({size_str}, {modified_at})[/dim]")
+                indicator = "[green]→[/green]" if is_current else ""
+                caps = self._capabilities_cache.get(model_name, [])
+                vision   = "[green]✓[/green]" if "vision"   in caps else ""
+                tools    = "[green]✓[/green]" if "tools"    in caps else ""
+                thinking = "[green]✓[/green]" if "thinking" in caps else ""
+                table.add_row(str(i + 1), indicator, model_name, size_str, modified_at, vision, tools, thinking)
+
+            self.console.print(table)
 
             # Show current model with an indicator (this is the saved model)
             self.console.print(f"\nCurrent model: [bold green]{self.model}[/bold green]")

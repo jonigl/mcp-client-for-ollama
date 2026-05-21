@@ -300,6 +300,7 @@ class MCPClient:
 
         # After model selection, redisplay context
         self.display_available_tools()
+        await self.model_manager.fetch_capabilities(self.model_manager.get_current_model())
         self.display_current_model()
         self._display_chat_history()
 
@@ -901,6 +902,7 @@ class MCPClient:
         self.clear_console()
         self.console.print(Panel(Text.from_markup("[bold green]Welcome to the MCP Client for Ollama 🦙[/bold green]", justify="center"), expand=True, border_style="green"))
         self.display_available_tools()
+        await self.model_manager.fetch_capabilities(self.model_manager.get_current_model())
         self.display_current_model()
         self.print_startup_help()
         self.print_auto_load_default_config_status()
