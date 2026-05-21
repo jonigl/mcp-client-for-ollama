@@ -726,7 +726,26 @@ class MCPClient:
             enabled_tools = self.tool_manager.get_enabled_tool_objects()
 
         if not response_text and not self.abort_current_query:
-            self.console.print("[red]No content response received.[/red]")
+            current_model = self.model_manager.get_current_model()
+            tool_count = len(self.tool_manager.get_enabled_tool_objects())
+            history_count = len(self.chat_history)
+            self.console.print(Panel(
+                f"[yellow]The model produced no response or tool calls.[/yellow]\n\n"
+                f"Current model: [cyan]{current_model}[/cyan] · "
+                f"Enabled tools: [cyan]{tool_count}[/cyan] · "
+                f"Conversation history: [cyan]{history_count}[/cyan] entries\n\n"
+                "[bold]Possible causes:[/bold]\n"
+                "• The model is too small for tool use (models <7B often fail to produce tool calls)\n"
+                "• Too many tools enabled — the tool descriptions may overwhelm the model's context\n"
+                "• Conversation history is too long — try [bold cyan]clear[/bold cyan] or [bold cyan]cc[/bold cyan] to reset context\n"
+                "• Tool descriptions are unclear — the model couldn't determine which tool to use\n\n"
+                "[bold]Things to try:[/bold]\n"
+                "• Switch to a larger model with [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan] (7B+ recommended)\n"
+                "• Disable unneeded tools with [bold cyan]tools[/bold cyan] or [bold cyan]t[/bold cyan] to reduce context size\n"
+                "• Clear conversation history with [bold cyan]clear[/bold cyan] or [bold cyan]cc[/bold cyan]\n"
+                "• Rephrase your query to be more specific",
+                title="[yellow]No Response from Model[/yellow]", border_style="yellow", expand=False
+            ))
             response_text = ""
 
         # Append query and response to chat history
