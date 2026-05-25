@@ -585,19 +585,26 @@ There are two ways to use `@uri`:
 
 **Standalone example:**
 ```
-You: @file:///project/README.md
-✅ Read resource 'README.md' (1234 chars)
+qwen3/show-thinking/6-tools❯ @server://info
+✅ Read resource 'get_server_info' (197 chars)
 
-Preview: ...
+Preview:
+This is a simple MCP server with streamable HTTP transport. It supports tools for greeting, adding numbers, generating
+random numbers, and calculating BMI. It also provides a BMI calculator prompt.
 
 1 resource(s) buffered. Type your query, or include @another_uri inline.
-You: Summarize the key features from this README
+
+qwen3/show-thinking/6-tools❯ Next question here
 ```
 
 **Inline example:**
 ```
-You: Summarize the key features from @file:///project/README.md
-✅ Read resource 'README.md' (1234 chars)
+qwen3/show-thinking/6-tools❯ summarize the key features from @server://info
+✅ Read resource 'get_server_info' (197 chars)
+
+Preview:
+This is a simple MCP server with streamable HTTP transport. It supports tools for greeting, adding numbers, generating
+random numbers, and calculating BMI. It also provides a BMI calculator prompt.
 [model response]
 ```
 
