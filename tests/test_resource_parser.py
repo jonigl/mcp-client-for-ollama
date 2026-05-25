@@ -120,6 +120,14 @@ class TestExtractResourceRefs(unittest.TestCase):
         clean = self._clean('a @file:///b.txt  c')
         self.assertEqual(clean, 'a c')
 
+    def test_mid_sentence_resource_ref(self):
+        """@uri in middle or end of sentence should be extracted."""
+        clean, refs = extract_resource_refs(
+            'summarize the key features from @server://info', set()
+        )
+        self.assertEqual(refs, [ResourceRef('server://info', False)])
+        self.assertEqual(clean, 'summarize the key features from')
+
 
 class TestExtractTemplateVariables(unittest.TestCase):
     """Tests for extract_template_variables()."""

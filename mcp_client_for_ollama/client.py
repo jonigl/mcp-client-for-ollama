@@ -972,6 +972,16 @@ class MCPClient:
 
                 query_to_process = value
 
+                # Check for inline @resource refs in plain queries (e.g.
+                # "summarize @server://info").  The "resource" intent only
+                # fires when the input *starts* with '@'.
+                if '@' in query_to_process:
+                    known_uris = self.resource_manager.get_known_uris()
+                    clean_query, refs = extract_resource_refs(query_to_process, known_uris)
+                    if refs:
+                        await self._handle_inline_resources(clean_query, refs)
+                        continue
+
                 try:
                     # If resources were buffered (standalone @uri lines), inject as context
                     if self.pending_resources:
