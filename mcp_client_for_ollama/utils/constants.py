@@ -66,6 +66,7 @@ INTERACTIVE_COMMANDS = {
     'model': 'Select Ollama model',
     'input-mode': 'Switch chat input between single-line and multiline',
     'prompts': 'Browse available MCP prompts',
+    'resources': 'Browse available MCP resources',
     'quit': 'Exit the application',
     'reload-servers': 'Reload MCP servers',
     'reset-config': 'Reset to default config',

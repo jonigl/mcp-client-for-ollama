@@ -56,6 +56,8 @@ SLASH_COMMAND_ALIASES = {
     "eh": "export-history",
     "import-history": "import-history",
     "ih": "import-history",
+    "resources": "resources",
+    "res": "resources",
 }
 
 

@@ -17,6 +17,9 @@ class FZFStyleCompleter(Completer):
             ignore_case=True
         ))
         self.prompts = []  # List of prompt info dicts
+        self.resources = []  # List of resource info dicts
+        self.resource_templates = []  # List of resource template info dicts
+
 
     def set_prompts(self, prompts):
         """Set available prompts for completion
@@ -43,6 +46,22 @@ class FZFStyleCompleter(Completer):
             (f"fg:{badge_text_color} bg:{badge_color}", f" {action_type} "),
             ("fg:#d6d6d6 bg:#1e1e1e", f" {description}" if description else "")
         ])
+
+    def set_resources(self, resources):
+        """Set available static resources for completion"""
+        self.resources = resources
+
+    def set_resource_templates(self, templates):
+        """Set available resource templates for completion"""
+        self.resource_templates = templates
+
+    @staticmethod
+    def _compute_max_meta_length(min_val=30, max_val=100, fallback=60) -> int:
+        """Return a terminal-width-aware max length for completion metadata strings."""
+        try:
+            return max(min_val, min(max_val, int((shutil.get_terminal_size().columns - 30) * 0.7)))
+        except (AttributeError, ValueError):
+            return fallback
 
     def _get_prompt_completions(self, prompt_query):
         """Generate qualified prompt completions for slash namespace.
@@ -106,8 +125,86 @@ class FZFStyleCompleter(Completer):
                 display_meta=self._build_action_meta("prompt", display_meta)
             )
 
-    def _get_slash_command_completions(self, prompt_query, complete_event):
-        """Generate slash command completions for /command syntax.
+    def _get_resource_completions(self, resource_query, start_offset=None):
+        """Generate completions for resource reads triggered by @.
+
+        Works for both leading-@ (``@file://...``) and mid-input
+        (``tell me about @file://...``) positions.
+
+        Args:
+            resource_query: The partial URI typed after ``@`` (lowercased).
+            start_offset: If given, used as the ``start_position`` for all
+                yielded completions. When ``None`` the offset is computed
+                from ``-len(resource_query)`` (standard behaviour).
+        """
+        # Build combined candidate list: static resources + templates
+        candidates = []
+        for resource in self.resources:
+            candidates.append({
+                'completion_text': str(resource['uri']),
+                'display_uri': str(resource['uri']),
+                'name': resource['name'],
+                'description': resource.get('description', '') or '',
+                'mimeType': resource.get('mimeType', '') or '',
+                'is_template': False,
+            })
+        for template in self.resource_templates:
+            candidates.append({
+                'completion_text': template['uriTemplate'],
+                'display_uri': template['uriTemplate'],
+                'name': template['name'],
+                'description': template.get('description', '') or '',
+                'mimeType': template.get('mimeType', '') or '',
+                'is_template': True,
+            })
+
+        sp = start_offset if start_offset is not None else -len(resource_query)
+
+        if not candidates:
+            yield Completion(
+                "[no-resources]",
+                start_position=sp,
+                display=" No resources available",
+                display_meta="No resources found from connected MCP servers"
+            )
+            return
+
+        # Filter by query matching URI/name/description
+        matches = [
+            c for c in candidates
+            if (resource_query in c['display_uri'].lower() or
+                resource_query in c['name'].lower() or
+                (c['description'] and resource_query in c['description'].lower()))
+        ]
+
+        max_meta_length = self._compute_max_meta_length()
+
+        for i, candidate in enumerate(matches):
+            meta_parts = []
+            if candidate['name'] and candidate['name'] != candidate['display_uri']:
+                meta_parts.append(candidate['name'])
+            if candidate['description']:
+                meta_parts.append(candidate['description'])
+            if candidate['mimeType']:
+                meta_parts.append(f"[{candidate['mimeType']}]")
+            if candidate['is_template']:
+                meta_parts.append("[template]")
+
+            display_meta = " • ".join(meta_parts)
+            if len(display_meta) > max_meta_length:
+                display_meta = display_meta[:max_meta_length - 3] + "..."
+
+            display = f"▶ @{candidate['display_uri']}" if i == 0 else f"  @{candidate['display_uri']}"
+
+            yield Completion(
+                candidate['completion_text'],
+                start_position=sp,
+                display=display,
+                display_meta=display_meta
+            )
+
+    def _get_command_completions(self, prompt_query, complete_event):
+        """Generate completions for interactive commands
 
         Args:
             prompt_query: The token being typed after /
@@ -136,12 +233,25 @@ class FZFStyleCompleter(Completer):
             prompt_query = text_before_cursor[1:].lower()
             yielded_any = False
 
-            for completion in self._get_slash_command_completions(prompt_query, complete_event):
+            for completion in self._get_command_completions(prompt_query, complete_event):
                 yielded_any = True
                 yield completion
 
             yield from self._get_prompt_completions(prompt_query)
             if not yielded_any and prompt_query == "":
+                return
+
+        # Resource completion: find the last '@' that has no whitespace after it.
+        # This handles both leading '@uri' and mid-input 'text @uri' forms.
+        at_pos = text_before_cursor.rfind('@')
+        if at_pos != -1:
+            after_at = text_before_cursor[at_pos + 1:]
+            if ' ' not in after_at:
+                resource_query = after_at.lower()
+                # start_position replaces the partial URI after '@'; '@' stays.
+                yield from self._get_resource_completions(
+                    resource_query, start_offset=-len(after_at)
+                )
                 return
 
         # Keep plain query typing free from action autocomplete noise.
