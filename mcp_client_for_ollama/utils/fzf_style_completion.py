@@ -1,5 +1,4 @@
 """ FZF-style command completer for interactive mode using prompt_toolkit """
-import os
 import shutil
 from prompt_toolkit.completion import Completer, Completion, FuzzyCompleter, WordCompleter
 from prompt_toolkit.document import Document
@@ -29,23 +28,26 @@ class FZFStyleCompleter(Completer):
         """
         self.prompts = prompts
 
-    def _build_action_meta(self, action_type: str, description: str) -> FormattedText:
+    def _build_action_meta(self, action_type: str, description: str, mime_type: str = "") -> FormattedText:
         """Build action badge metadata for completion rows."""
-        is_prompt = action_type.lower() == "prompt"
+        _BADGE_COLORS = {
+            "prompt":   "#00bcd4",
+            "command":  "#ff8c00",
+            "static":   "#4caf50",
+            "template": "#9c27b0",
+        }
+        badge_color = _BADGE_COLORS.get(action_type.lower(), "#ff8c00")
 
-        # tmux color handling can vary based on terminal config; use ANSI-safe
-        # badge colors there to avoid surprising fg/bg rendering differences.
-        if os.environ.get("TMUX"):
-            badge_color = "#00bcd4" if is_prompt else "#ff8c00"
-            badge_text_color = "#ffffff"
-        else:
-            badge_color = "#00bcd4" if is_prompt else "#ff8c00"
-            badge_text_color = "#ffffff"
-
-        return FormattedText([
-            (f"fg:{badge_text_color} bg:{badge_color}", f" {action_type} "),
-            ("fg:#d6d6d6 bg:#1e1e1e", f" {description}" if description else "")
-        ])
+        parts = [
+            (f"fg:#ffffff bg:{badge_color}", f" {action_type} "),
+            ("fg:#d6d6d6 bg:#1e1e1e", f" {description}" if description else ""),
+        ]
+        if mime_type:
+            parts += [
+                ("fg:#d6d6d6 bg:#1e1e1e", "  "),
+                ("fg:#ffffff bg:#546e7a", f" {mime_type} "),
+            ]
+        return FormattedText(parts)
 
     def set_resources(self, resources):
         """Set available static resources for completion"""
@@ -144,6 +146,7 @@ class FZFStyleCompleter(Completer):
                 'completion_text': str(resource['uri']),
                 'display_uri': str(resource['uri']),
                 'name': resource['name'],
+                'server': resource.get('server', ''),
                 'description': resource.get('description', '') or '',
                 'mimeType': resource.get('mimeType', '') or '',
                 'is_template': False,
@@ -153,6 +156,7 @@ class FZFStyleCompleter(Completer):
                 'completion_text': template['uriTemplate'],
                 'display_uri': template['uriTemplate'],
                 'name': template['name'],
+                'server': template.get('server', ''),
                 'description': template.get('description', '') or '',
                 'mimeType': template.get('mimeType', '') or '',
                 'is_template': True,
@@ -179,28 +183,27 @@ class FZFStyleCompleter(Completer):
 
         max_meta_length = self._compute_max_meta_length()
 
-        for i, candidate in enumerate(matches):
+        for candidate in matches:
             meta_parts = []
+            if candidate['server']:
+                meta_parts.append(candidate['server'])
             if candidate['name'] and candidate['name'] != candidate['display_uri']:
                 meta_parts.append(candidate['name'])
             if candidate['description']:
                 meta_parts.append(candidate['description'])
-            if candidate['mimeType']:
-                meta_parts.append(f"[{candidate['mimeType']}]")
-            if candidate['is_template']:
-                meta_parts.append("[template]")
 
-            display_meta = " • ".join(meta_parts)
-            if len(display_meta) > max_meta_length:
-                display_meta = display_meta[:max_meta_length - 3] + "..."
+            description_text = " ".join(meta_parts)
+            if len(description_text) > max_meta_length:
+                description_text = description_text[:max_meta_length - 3] + "..."
 
-            display = f"▶ @{candidate['display_uri']}" if i == 0 else f"  @{candidate['display_uri']}"
+            action_type = "template" if candidate['is_template'] else "static"
+            display = f"@{candidate['display_uri']}"
 
             yield Completion(
                 candidate['completion_text'],
                 start_position=sp,
                 display=display,
-                display_meta=display_meta
+                display_meta=self._build_action_meta(action_type, description_text, candidate['mimeType'])
             )
 
     def _get_command_completions(self, prompt_query, complete_event):
