@@ -142,6 +142,25 @@ class MCPClient:
             self.chat_history = backup
             raise
 
+    def _warn_vision_not_supported(self, image_count: int, source: str):
+        """Display a warning panel when images cannot be processed by the current model.
+
+        Args:
+            image_count: Number of images that were skipped.
+            source: Description of where the images came from (e.g. tool name, 'resource').
+        """
+        current_model = self.model_manager.get_current_model()
+        image_label = "image" if image_count == 1 else "images"
+        self.console.print(Panel(
+            f"[yellow]{source} returned {image_count} {image_label}, "
+            f"but the current model [cyan]{current_model}[/cyan] does not support vision.[/yellow]\n\n"
+            "The images have been skipped. To process images, switch to a vision-capable model.",
+            border_style="yellow",
+            title="[bold yellow]Vision Not Supported[/bold yellow]",
+            expand=False,
+            padding=(1, 2)
+        ))
+
     def _build_multiline_key_bindings(self):
         """Build key bindings for multiline chat input."""
         key_bindings = KeyBindings()
@@ -700,17 +719,7 @@ class MCPClient:
                         "images": tool_images
                     })
                 elif tool_images and not has_vision:
-                    current_model = self.model_manager.get_current_model()
-                    image_label = "image" if len(tool_images) == 1 else "images"
-                    self.console.print(Panel(
-                        f"[yellow]The tool '{tool_name}' returned {len(tool_images)} {image_label}, "
-                        f"but the current model [cyan]{current_model}[/cyan] does not support vision.[/yellow]\n\n"
-                        "The images have been skipped. To process images, switch to a vision-capable model.",
-                        border_style="yellow",
-                        title="[bold yellow]Vision Not Supported[/bold yellow]",
-                        expand=False,
-                        padding=(1, 2)
-                    ))
+                    self._warn_vision_not_supported(len(tool_images), f"The tool '{tool_name}'")
 
 
             # Get stream response from Ollama with the tool results
@@ -991,6 +1000,9 @@ class MCPClient:
                         ]
                         pending_images = [img for r in self.pending_resources for img in r.get('images', [])]
                         self.pending_resources = []
+                        if pending_images and not await self.supports_vision():
+                            self._warn_vision_not_supported(len(pending_images), "The buffered resource(s)")
+                            pending_images = []
                         with self._temporary_history_extension(context_entries):
                             await self._process_query_with_monitoring(
                                 query, images=pending_images or None
@@ -1712,6 +1724,10 @@ class MCPClient:
             inline_images += [img for r in self.pending_resources for img in r.get('images', [])]
             self.pending_resources = []
             context_entries = pending_entries + context_entries
+
+        if inline_images and not await self.supports_vision():
+            self._warn_vision_not_supported(len(inline_images), "The resource(s)")
+            inline_images = []
 
         try:
             with self._temporary_history_extension(context_entries):
