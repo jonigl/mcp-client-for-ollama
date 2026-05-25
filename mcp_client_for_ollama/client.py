@@ -1070,7 +1070,7 @@ class MCPClient:
             "• Type [bold]/prompt_name[/bold] when the prompt name is unique\n"
             "• Type [bold]/[/bold] to see prompt autocomplete suggestions\n\n"
 
-            "[bold cyan]MCP Resources:[/bold cyan] [bold bright_magenta](New!)[/bold bright_magenta]\n"
+            "[bold bright_magenta](New!)[/bold bright_magenta] [bold cyan]MCP Resources:[/bold cyan]\n"
             "• Type [bold]/resources[/bold] or [bold]/res[/bold] to browse available resources\n"
             "• Type [bold]@resource_uri[/bold] to read a resource\n"
             "• Type [bold]@[/bold] to see resource autocomplete suggestions\n\n"
@@ -1100,12 +1100,7 @@ class MCPClient:
             "• [dim]Shift+Enter and Meta+Enter may work in some terminals, but are not portable[/dim]\n"
             "• Type [bold]/help[/bold] or [bold]/h[/bold] to show this help message\n"
             "• Type [bold]/clear-screen[/bold] or [bold]/cls[/bold] to clear the terminal screen\n"
-            "• Type [bold]/quit[/bold], [bold]/q[/bold], [bold]/exit[/bold], [bold]/bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n\n"
-
-            "[bold bright_magenta]IMPORTANT NEW BEHAVIOR:[/bold bright_magenta]\n"
-            "Built-in commands now require [bold]/[/bold]\n"
-            "Examples: [bold]/help[/bold], [bold]/model[/bold], [bold]/tools[/bold], [bold]/prompts[/bold]\n"
-            "Prompt invocations also use slash: [bold]/server:prompt_name[/bold] (or [bold]/prompt_name[/bold] when unique)\n",
+            "• Type [bold]/quit[/bold], [bold]/q[/bold], [bold]/exit[/bold], [bold]/bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n",
             title="[bold]Help - Available Commands[/bold]", border_style="yellow", expand=False))
 
     def print_startup_help(self):
@@ -1116,14 +1111,11 @@ class MCPClient:
             "• Type [bold]/model[/bold] or [bold]/m[/bold] to select a model\n"
             "• Type [bold]/tools[/bold] or [bold]/t[/bold] to configure tools\n"
             "• Type [bold]/server:prompt_name[/bold] to invoke an MCP server prompt\n"
+            "• [bold bright_magenta](New!)[/bold bright_magenta] Type [bold]@resource_uri[/bold] to read a resource or [bold]@[/bold] for autocomplete suggestions\n"
             "• Type [bold]/input-mode[/bold] or [bold]/im[/bold] to switch single-line or multiline chat input\n"
             "• Type [bold]/clear[/bold] or [bold]/cc[/bold] to clear conversation context\n"
             "• Type [bold]/help[/bold] or [bold]/h[/bold] to see the [underline]full command list[/underline]\n"
-            "• Type [bold]/quit[/bold] or [bold]/q[/bold] to exit the client\n\n"
-            "[bold bright_magenta]IMPORTANT NEW BEHAVIOR:[/bold bright_magenta]\n"
-            "Built-in commands now require [bold]/[/bold]\n"
-            "Examples: [bold]/help[/bold], [bold]/model[/bold], [bold]/tools[/bold]\n"
-            "Prompt invocations also use slash: [bold]/server:prompt_name[/bold] (or [bold]/prompt_name[/bold] when unique)\n",
+            "• Type [bold]/quit[/bold] or [bold]/q[/bold] to exit the client\n",
             title="[bold]Startup Help[/bold]", border_style="yellow", expand=False))
 
     def print_welcome_ascii(self):
