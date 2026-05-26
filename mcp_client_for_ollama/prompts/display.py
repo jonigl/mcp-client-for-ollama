@@ -135,4 +135,4 @@ def display_prompt_list(console: Console, prompts_by_server: Dict[str, List[Dict
         console.print(table)
         console.print()
 
-    console.print("[dim]Tip: Use /server:prompt_name to invoke prompts, or type / to see autocomplete[/dim]")
+    console.print("💡 [bold magenta]Tip:[/bold magenta] Use /server:prompt_name to invoke prompts, or type / to see autocomplete")

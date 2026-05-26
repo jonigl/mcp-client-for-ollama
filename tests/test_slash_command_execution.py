@@ -37,6 +37,7 @@ class DummyClient:
         self.hil_manager = MagicMock()
         self.hil_manager.toggle = MagicMock()
         self.browse_prompts = MagicMock()
+        self.browse_resources = MagicMock()
         self.chat_history = []
 
 

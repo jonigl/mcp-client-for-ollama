@@ -38,6 +38,9 @@ from .prompts.manager import PromptManager
 from .prompts.handler import PromptHandler
 from .prompts.commands import run_slash_command
 from .prompts.routing import parse_user_input
+from .resources.manager import ResourceManager
+from .resources.handler import ResourceHandler
+from .resources.parser import extract_resource_refs
 from .utils.streaming import StreamingManager
 from .utils.tool_display import ToolDisplayManager
 from .utils.hil_manager import HumanInTheLoopManager, AbortQueryException
@@ -78,6 +81,10 @@ class MCPClient:
         self.prompt_manager = PromptManager(console=self.console)
         # Initialize the prompt handler
         self.prompt_handler = PromptHandler(console=self.console, prompt_manager=self.prompt_manager)
+        # Initialize the resource manager
+        self.resource_manager = ResourceManager(console=self.console)
+        # Initialize the resource handler
+        self.resource_handler = ResourceHandler(console=self.console, resource_manager=self.resource_manager, server_connector=self.server_connector)
         # Initialize the streaming manager
         self.streaming_manager = StreamingManager(console=self.console)
         # Initialize the tool display manager
@@ -110,6 +117,8 @@ class MCPClient:
         self.abort_current_query = False  # Flag to abort the current query execution
         self.monitor_paused = False  # Flag to pause cancellation monitoring
         self.monitor_paused_ack = asyncio.Event()  # Event to acknowledge pause
+        # Buffer of resources loaded via @uri, injected as context before the next query
+        self.pending_resources: List[dict] = []
 
         # Store server connection parameters for reloading
         self.server_connection_params = {
@@ -132,6 +141,25 @@ class MCPClient:
         except Exception:
             self.chat_history = backup
             raise
+
+    def _warn_vision_not_supported(self, image_count: int, source: str):
+        """Display a warning panel when images cannot be processed by the current model.
+
+        Args:
+            image_count: Number of images that were skipped.
+            source: Description of where the images came from (e.g. tool name, 'resource').
+        """
+        current_model = self.model_manager.get_current_model()
+        image_label = "image" if image_count == 1 else "images"
+        self.console.print(Panel(
+            f"[yellow]{source} returned {image_count} {image_label}, "
+            f"but the current model [cyan]{current_model}[/cyan] does not support vision.[/yellow]\n\n"
+            "The images have been skipped. To process images, switch to a vision-capable model.",
+            border_style="yellow",
+            title="[bold yellow]Vision Not Supported[/bold yellow]",
+            expand=False,
+            padding=(1, 2)
+        ))
 
     def _build_multiline_key_bindings(self):
         """Build key bindings for multiline chat input."""
@@ -201,11 +229,20 @@ class MCPClient:
 
         self.prompt_session = self._create_chat_prompt_session(completer=completer)
 
-    async def _process_query_with_monitoring(self, query: str):
+    @staticmethod
+    def _make_resource_context_entry(r: dict) -> dict:
+        """Build a chat-history entry that injects a resource as a user/assistant turn."""
+        return {
+            'query': f"I'm providing the content of resource '{r['uri']}':\n\n{r['text']}",
+            'response': f"I've received the content of '{r['uri']}'. I'll use it to answer your next message."
+        }
+
+    async def _process_query_with_monitoring(self, query: str, images=None):
         """Process a query with cancellation monitoring
 
         Args:
             query: The query to process
+            images: Optional list of base64 image strings for vision models
         """
         # Reset HIL session state for new query
         self.hil_manager.reset_session()
@@ -216,7 +253,7 @@ class MCPClient:
         self.monitor_paused_ack.clear()
 
         # Create tasks for query processing and cancellation monitoring
-        query_task = asyncio.create_task(self.process_query(query))
+        query_task = asyncio.create_task(self.process_query(query, images=images))
         monitor_task = asyncio.create_task(self.monitor_cancellation())
 
         try:
@@ -354,7 +391,7 @@ class MCPClient:
         }
 
         # Connect to servers using the server connector
-        sessions, available_tools, enabled_tools, prompts_by_server = await self.server_connector.connect_to_servers(
+        sessions, available_tools, enabled_tools, prompts_by_server, resources_by_server, templates_by_server = await self.server_connector.connect_to_servers(
             server_paths=server_paths,
             server_urls=server_urls,
             config_path=config_path,
@@ -371,10 +408,16 @@ class MCPClient:
         # Set up the prompt manager with available prompts
         self.prompt_manager.set_prompts(prompts_by_server)
 
-        # Update the FZF completer with available prompts
+        # Set up the resource manager with available resources and templates
+        self.resource_manager.set_resources(resources_by_server)
+        self.resource_manager.set_templates(templates_by_server)
+
+        # Update the FZF completer with available prompts, resources, and templates
         if self.prompt_session and self.prompt_session.completer:
             prompt_list = self.prompt_manager.list_all()
             self.prompt_session.completer.set_prompts(prompt_list)
+            self.prompt_session.completer.set_resources(self.resource_manager.list_all())
+            self.prompt_session.completer.set_resource_templates(self.resource_manager.list_all_templates())
 
     def select_tools(self):
         """Let the user select which tools to enable using interactive prompts with server-based grouping"""
@@ -405,6 +448,9 @@ class MCPClient:
             history_to_show = self.chat_history[-max_history:]
 
             for i, entry in enumerate(history_to_show):
+                # Skip resource context entries (not real conversation turns)
+                if entry["query"].startswith("I'm providing the content of resource '"):
+                    continue
                 # Calculate query number starting from 1 for the first query
                 query_number = len(self.chat_history) - len(history_to_show) + i + 1
                 self.console.print(f"[bold green]Query {query_number}:[/bold green]")
@@ -416,13 +462,15 @@ class MCPClient:
             if len(self.chat_history) > max_history:
                 self.console.print(f"[dim](Showing last {max_history} of {len(self.chat_history)} conversations)[/dim]")
 
-    async def process_query(self, query: str) -> str:
+    async def process_query(self, query: str, images=None) -> str:
         """Process a query using Ollama and available tools"""
         # Create base message with current query
         current_message = {
             "role": "user",
             "content": query
         }
+        if images:
+            current_message["images"] = images
 
         # Build messages array based on context retention setting
         if self.retain_context and self.chat_history:
@@ -434,11 +482,12 @@ class MCPClient:
                     "role": "user",
                     "content": entry["query"]
                 })
-                # Add assistant response
-                messages.append({
-                    "role": "assistant",
-                    "content": entry["response"]
-                })
+                # Add assistant response only if it's not empty
+                if entry["response"]:
+                    messages.append({
+                        "role": "assistant",
+                        "content": entry["response"]
+                    })
             # Add the current query
             messages.append(current_message)
         else:
@@ -670,17 +719,7 @@ class MCPClient:
                         "images": tool_images
                     })
                 elif tool_images and not has_vision:
-                    current_model = self.model_manager.get_current_model()
-                    image_label = "image" if len(tool_images) == 1 else "images"
-                    self.console.print(Panel(
-                        f"[yellow]The tool '{tool_name}' returned {len(tool_images)} {image_label}, "
-                        f"but the current model [cyan]{current_model}[/cyan] does not support vision.[/yellow]\n\n"
-                        "The images have been skipped. To process images, switch to a vision-capable model.",
-                        border_style="yellow",
-                        title="[bold yellow]Vision Not Supported[/bold yellow]",
-                        expand=False,
-                        padding=(1, 2)
-                    ))
+                    self._warn_vision_not_supported(len(tool_images), f"The tool '{tool_name}'")
 
 
             # Get stream response from Ollama with the tool results
@@ -933,12 +972,44 @@ class MCPClient:
                     await self.handle_prompt_invocation(value)
                     continue
 
-                # Reserved for future @ resource shortcuts. For now, send as normal query.
+                if intent == "resource" and value:
+                    known_uris = self.resource_manager.get_known_uris()
+                    clean_query, refs = extract_resource_refs(value, known_uris)
+                    if refs:
+                        await self._handle_inline_resources(clean_query, refs)
+                    continue
+
                 query_to_process = value
 
+                # Check for inline @resource refs in plain queries (e.g.
+                # "summarize @server://info").  The "resource" intent only
+                # fires when the input *starts* with '@'.
+                if '@' in query_to_process:
+                    known_uris = self.resource_manager.get_known_uris()
+                    clean_query, refs = extract_resource_refs(query_to_process, known_uris)
+                    if refs:
+                        await self._handle_inline_resources(clean_query, refs)
+                        continue
+
                 try:
-                    # Process query with monitoring
-                    await self._process_query_with_monitoring(query_to_process)
+                    # If resources were buffered (standalone @uri lines), inject as context
+                    if self.pending_resources:
+                        context_entries = [
+                            self._make_resource_context_entry(r)
+                            for r in self.pending_resources
+                        ]
+                        pending_images = [img for r in self.pending_resources for img in r.get('images', [])]
+                        self.pending_resources = []
+                        if pending_images and not await self.supports_vision():
+                            self._warn_vision_not_supported(len(pending_images), "The buffered resource(s)")
+                            pending_images = []
+                        with self._temporary_history_extension(context_entries):
+                            await self._process_query_with_monitoring(
+                                query, images=pending_images or None
+                            )
+                    else:
+                        # Process query with monitoring
+                        await self._process_query_with_monitoring(query_to_process)
 
                 except AbortQueryException:
                     # User aborted the query - don't save to history
@@ -1021,6 +1092,11 @@ class MCPClient:
             "• Type [bold]/prompt_name[/bold] when the prompt name is unique\n"
             "• Type [bold]/[/bold] to see prompt autocomplete suggestions\n\n"
 
+            "[bold bright_magenta](New!)[/bold bright_magenta] [bold cyan]MCP Resources:[/bold cyan]\n"
+            "• Type [bold]/resources[/bold] or [bold]/res[/bold] to browse available resources\n"
+            "• Type [bold]@resource_uri[/bold] to read a resource\n"
+            "• Type [bold]@[/bold] to see resource autocomplete suggestions\n\n"
+
             "[bold cyan]Context:[/bold cyan]\n"
             "• Type [bold]/context[/bold] or [bold]/c[/bold] to toggle context retention\n"
             "• Type [bold]/clear[/bold] or [bold]/cc[/bold] to clear conversation context\n"
@@ -1046,12 +1122,7 @@ class MCPClient:
             "• [dim]Shift+Enter and Meta+Enter may work in some terminals, but are not portable[/dim]\n"
             "• Type [bold]/help[/bold] or [bold]/h[/bold] to show this help message\n"
             "• Type [bold]/clear-screen[/bold] or [bold]/cls[/bold] to clear the terminal screen\n"
-            "• Type [bold]/quit[/bold], [bold]/q[/bold], [bold]/exit[/bold], [bold]/bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n\n"
-
-            "[bold bright_magenta]IMPORTANT NEW BEHAVIOR:[/bold bright_magenta]\n"
-            "Built-in commands now require [bold]/[/bold]\n"
-            "Examples: [bold]/help[/bold], [bold]/model[/bold], [bold]/tools[/bold], [bold]/prompts[/bold]\n"
-            "Prompt invocations also use slash: [bold]/server:prompt_name[/bold] (or [bold]/prompt_name[/bold] when unique)\n",
+            "• Type [bold]/quit[/bold], [bold]/q[/bold], [bold]/exit[/bold], [bold]/bye[/bold], [bold]Ctrl+C[/bold] or [bold]Ctrl+D[/bold] to exit the client\n",
             title="[bold]Help - Available Commands[/bold]", border_style="yellow", expand=False))
 
     def print_startup_help(self):
@@ -1062,14 +1133,11 @@ class MCPClient:
             "• Type [bold]/model[/bold] or [bold]/m[/bold] to select a model\n"
             "• Type [bold]/tools[/bold] or [bold]/t[/bold] to configure tools\n"
             "• Type [bold]/server:prompt_name[/bold] to invoke an MCP server prompt\n"
+            "• [bold bright_magenta](New!)[/bold bright_magenta] Type [bold]@resource_uri[/bold] to read a resource or [bold]@[/bold] for autocomplete suggestions\n"
             "• Type [bold]/input-mode[/bold] or [bold]/im[/bold] to switch single-line or multiline chat input\n"
             "• Type [bold]/clear[/bold] or [bold]/cc[/bold] to clear conversation context\n"
             "• Type [bold]/help[/bold] or [bold]/h[/bold] to see the [underline]full command list[/underline]\n"
-            "• Type [bold]/quit[/bold] or [bold]/q[/bold] to exit the client\n\n"
-            "[bold bright_magenta]IMPORTANT NEW BEHAVIOR:[/bold bright_magenta]\n"
-            "Built-in commands now require [bold]/[/bold]\n"
-            "Examples: [bold]/help[/bold], [bold]/model[/bold], [bold]/tools[/bold]\n"
-            "Prompt invocations also use slash: [bold]/server:prompt_name[/bold] (or [bold]/prompt_name[/bold] when unique)\n",
+            "• Type [bold]/quit[/bold] or [bold]/q[/bold] to exit the client\n",
             title="[bold]Startup Help[/bold]", border_style="yellow", expand=False))
 
     def print_welcome_ascii(self):
@@ -1287,10 +1355,11 @@ class MCPClient:
             self.console.print("[red]Invalid loop limit. Please enter a positive integer.[/red]")
 
     def clear_context(self):
-        """Clear conversation history and token count"""
+        """Clear conversation history, token count, and pending resource buffer"""
         original_history_length = len(self.chat_history)
         self.chat_history = []
         self.actual_token_count = 0
+        self.pending_resources = []
         self.console.print(f"[green]Context cleared! Removed {original_history_length} conversation entries.[/green]")
 
     def display_context_stats(self):
@@ -1567,6 +1636,17 @@ class MCPClient:
         self.display_current_model()
         self._display_chat_history()
 
+    def browse_resources(self):
+        """Display all available resources grouped by server"""
+        self.clear_console()
+        self.resource_handler.browse_resources()
+
+        # Redisplay context
+        self.clear_console()
+        self.display_available_tools()
+        self.display_current_model()
+        self._display_chat_history()
+
     async def handle_prompt_invocation(self, user_input: str):
         """Handle prompt invocation via slash syntax.
 
@@ -1583,6 +1663,79 @@ class MCPClient:
             self._process_query_with_monitoring,
             self._temporary_history_extension
         )
+
+    async def _handle_inline_resources(
+        self, clean_query: str, refs
+    ):
+        """Fetch @uri resources extracted inline from a query and process it.
+
+        When ``clean_query`` is empty (the user typed only ``@uri`` tokens),
+        resources are buffered for the next query instead of being sent
+        immediately — preserving the existing standalone ``@uri`` workflow.
+
+        Args:
+            clean_query: User query with @uri tokens stripped out.
+            refs: List of :class:`~resources.parser.ResourceRef` namedtuples.
+        """
+        fetched = []  # List of {'uri': str, 'text': str, 'images': list}
+        for ref in refs:
+            uri = ref.uri
+            if ref.is_template:
+                resolved = await self.resource_handler.resolve_template_interactive(uri)
+                if resolved is None:
+                    return  # User cancelled the template resolution
+                uri = resolved
+
+            result = await self.resource_handler.read_resource(uri, self.sessions)
+            if result:
+                fetched.append({'uri': uri, 'text': result.text, 'images': result.images})
+
+        if not fetched:
+            return  # Nothing could be read
+
+        # Standalone @uri (no query text) → buffer for the next user query.
+        if not clean_query.strip():
+            self.pending_resources.extend(fetched)
+            count = len(self.pending_resources)
+            self.console.print(
+                f"[cyan]{count} resource(s) buffered. "
+                "Type your query, or include @another_uri inline.[/cyan]"
+            )
+            return
+
+        # Short query guard (reuse the same 5-char rule).
+        if len(clean_query.strip()) < 5:
+            self.console.print("[yellow]Query must be at least 5 characters long.[/yellow]")
+            return
+
+        # Build context history entries for each resource.
+        context_entries = [
+            self._make_resource_context_entry(r)
+            for r in fetched
+        ]
+        inline_images = [img for r in fetched for img in r['images']]
+
+        # Merge any already-buffered resources (added via earlier standalone @uri).
+        if self.pending_resources:
+            pending_entries = [
+                self._make_resource_context_entry(r)
+                for r in self.pending_resources
+            ]
+            inline_images += [img for r in self.pending_resources for img in r.get('images', [])]
+            self.pending_resources = []
+            context_entries = pending_entries + context_entries
+
+        if inline_images and not await self.supports_vision():
+            self._warn_vision_not_supported(len(inline_images), "The resource(s)")
+            inline_images = []
+
+        try:
+            with self._temporary_history_extension(context_entries):
+                await self._process_query_with_monitoring(
+                    clean_query, images=inline_images or None
+                )
+        except AbortQueryException:
+            self.console.print("[yellow]Query aborted.[/yellow]")
 
     async def reload_servers(self):
         """Reload all MCP servers with the same connection parameters"""

@@ -41,8 +41,10 @@ class ServerConnector:
         self.enabled_tools = {}  # Dict to store tool enabled status
         self.session_ids = {}  # Dict to store session IDs for HTTP connections
         self.prompts_by_server = {}  # Dict to store prompts grouped by server
+        self.resources_by_server = {}  # Dict to store resources grouped by server
+        self.templates_by_server = {}  # Dict to store resource templates grouped by server
 
-    async def connect_to_servers(self, server_paths=None, server_urls=None, config_path=None, auto_discovery=False) -> Tuple[dict, list, dict, dict]:
+    async def connect_to_servers(self, server_paths=None, server_urls=None, config_path=None, auto_discovery=False) -> Tuple[dict, list, dict, dict, dict, dict]:
         """Connect to one or more MCP servers
 
         Args:
@@ -52,7 +54,7 @@ class ServerConnector:
             auto_discovery: Whether to automatically discover servers
 
         Returns:
-            Tuple of (sessions, available_tools, enabled_tools, prompts_by_server)
+            Tuple of (sessions, available_tools, enabled_tools, prompts_by_server, resources_by_server, templates_by_server)
         """
         all_servers = []
 
@@ -93,7 +95,7 @@ class ServerConnector:
                 "The client will continue without tool support.",
                 title="Warning", border_style="yellow", expand=False
             ))
-            return self.sessions, self.available_tools, self.enabled_tools, self.prompts_by_server
+            return self.sessions, self.available_tools, self.enabled_tools, self.prompts_by_server, self.resources_by_server, self.templates_by_server
 
         # Check all servers url connectivity
         servers_to_connect = []
@@ -125,7 +127,7 @@ class ServerConnector:
                 title="Error", border_style="red", expand=False
             ))
 
-        return self.sessions, self.available_tools, self.enabled_tools, self.prompts_by_server
+        return self.sessions, self.available_tools, self.enabled_tools, self.prompts_by_server, self.resources_by_server, self.templates_by_server
 
     async def _connect_to_server(self, server: Dict[str, Any]) -> bool:
         """Connect to a single MCP server
@@ -247,15 +249,39 @@ class ServerConnector:
             else:
                 self.console.print(f"[dim]Server {server_name} does not support prompts capability[/dim]")
 
-            # @TODO Resources capability check (not yet implemented)
-            # if capabilities and getattr(capabilities, 'resources', None):
-            #     # Future: Implement resources support
-            #     pass
-            # else:
-            #     self.console.print(f"[dim]Server {server_name} does not support resources capability[/dim]")
+            # Get resources (static list + templates) if capability is present
+            server_resources = []
+            server_templates = []
+            if capabilities and getattr(capabilities, 'resources', None):
+                try:
+                    resources_response = await session.list_resources()
+                    server_resources = resources_response.resources if hasattr(resources_response, 'resources') else []
+                    if server_resources:
+                        self.resources_by_server[server_name] = server_resources
+                except Exception as e:
+                    self.console.print(f"[yellow]Warning: Failed to list resources from {server_name}: {str(e)}[/yellow]")
+                try:
+                    templates_response = await session.list_resource_templates()
+                    server_templates = templates_response.resourceTemplates if hasattr(templates_response, 'resourceTemplates') else []
+                    if server_templates:
+                        self.templates_by_server[server_name] = server_templates
+                except Exception as e:
+                    self.console.print(f"[yellow]Warning: Failed to list resource templates from {server_name}: {str(e)}[/yellow]")
+                summary_parts = []
+                if server_resources:
+                    summary_parts.append(f"{len(server_resources)} resource(s)")
+                if server_templates:
+                    summary_parts.append(f"{len(server_templates)} template(s)")
+                if summary_parts:
+                    self.console.print(f"[dim]  {server_name}: {', '.join(summary_parts)}[/dim]")
+                else:
+                    self.console.print(f"[dim]  {server_name} has resources capability but returned none[/dim]")
+            else:
+                self.console.print(f"[dim]Server {server_name} does not support resources capability[/dim]")
 
-            prompt_count_msg = f" and {len(server_prompts)} prompt(s)"
-            self.console.print(f"[green]Successfully connected to {server_name} with {len(server_tools)} tool(s){prompt_count_msg}[/green]")
+            prompt_count_msg = f" and {len(server_prompts)} prompt(s)" if server_prompts else ""
+            resource_count_msg = f" and {len(server_resources) + len(server_templates)} resource(s)/template(s)" if (server_resources or server_templates) else ""
+            self.console.print(f"[green]Successfully connected to {server_name} with {len(server_tools)} tool(s){prompt_count_msg}{resource_count_msg}[/green]")
             return True
 
         except FileNotFoundError as e:

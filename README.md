@@ -37,12 +37,13 @@
 - [Interactive Commands](#interactive-commands)
   - ✨**NEW** [Answer Display Modes](#answer-display-modes)
   - ✨**NEW** [Input Mode](#input-mode)
-  - [Tool and Server Selection](#tool-and-server-selection)
+  - [MCP Tools](#mcp-tools)
   - [Model Selection](#model-selection)
   - [Advanced Model Configuration](#advanced-model-configuration)
   - [Server Reloading for Development](#server-reloading-for-development)
   - [Human-in-the-Loop (HIL) Tool Execution](#human-in-the-loop-hil-tool-execution)
   - ✨**NEW** [MCP Prompts](#mcp-prompts)
+  - ✨**NEW** [MCP Resources](#mcp-resources)
   - [Performance Metrics](#performance-metrics)
   - ✨**NEW** [History Management](#history-management)
 - [Autocomplete and Prompt Features](#autocomplete-and-prompt-features)
@@ -66,6 +67,7 @@ MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (
 - 🌐 **Multi-Server Support**: Connect to multiple MCP servers simultaneously
 - 🚀 **Multiple Transport Types**: Supports STDIO, SSE, and Streamable HTTP server connections
 - 📋 **MCP Prompts Support**: Browse, invoke, and manage prompts from MCP servers with argument collection, preview, and safe rollback
+- 📦 **MCP Resources Support**: Browse and read contextual data from MCP servers including files, documents, and structured data
 - ☁️ **Ollama Cloud Support**: Works seamlessly with Ollama Cloud models for tool calling, enabling access to powerful cloud-hosted models while using local MCP tools
 - 🎨 **Rich Terminal Interface**: Interactive console UI with modern styling
 - 🌊 **Streaming Responses**: View model outputs in real-time as they're generated
@@ -280,6 +282,8 @@ During chat, use these commands:
 | `/input-mode`    | `/im`            | Choose Single-line or Multiline chat input mode     |
 | `/prompts`       | `/pr`            | Browse and view all available MCP prompts             |
 | `/server:prompt_name`   | `/prompt_name`      | Invoke a prompt (qualified is recommended) |
+| `/resources`     | `/res`           | Browse and view all available MCP resources         |
+| `@uri`           | -                | Read a specific resource by URI (e.g., `@server://info`) |
 | `/quit`, `/exit`, `/bye`   | `/q`, `Ctrl+C`, or `Ctrl+D`  | Exit the client                              |
 | `/reload-servers`| `/rs`            | Reload all MCP servers with current configuration   |
 | `/reset-config`  | `/rc`            | Reset configuration to defaults (all tools enabled) |
@@ -324,7 +328,7 @@ Use `/input-mode` or `/im` during chat to open the interactive picker.
 > Multiline send shortcuts can vary by terminal emulator and OS keyboard handling. This client relies on **Esc then Enter** as the portable submit shortcut in multiline mode. **Shift+Enter** and **Meta+Enter** may work in some terminals, but they are not guaranteed.
 
 
-### Tool and Server Selection
+### MCP Tools
 
 The tool and server selection interface allows you to enable or disable specific tools:
 
@@ -541,8 +545,80 @@ If multiple servers expose the same prompt name, the client will ask you to use 
 > - 🖼️ **Images** - Image content in prompts
 > - 🎵 **Audio** - Audio content in prompts
 > - 📦 **Resources** - Embedded resource content
+
+### MCP Resources
+
+MCP Resources provide access to contextual data exposed by MCP servers-files, documents, structured data, and more. Servers can expose resources with metadata (name, description, MIME type) that you can browse and read into your conversation context.
+
+#### Features
+
+- 📋 **Browse Resources**: View all available resources from connected servers with URIs, names, MIME types, and descriptions
+- 📖 **Read Resources**: Use `@uri` syntax to read resource content, standalone or inline within a query
+- 📝 **Text Content**: Full support for text-based resources (markdown, code, logs, etc.)
+- 🖼️ **Vision Image Support**: Image resources (`image/*`) are automatically forwarded as base64 images to vision-capable models
+- 🎯 **Context Injection**: Resource content is buffered and injected as context alongside your next query
+- 🔍 **Autocomplete**: Type `@` to see available resource and template suggestions with fuzzy matching
+- 🛡️ **Binary Safety**: Non-image binary content (audio, video, PDFs, archives) is detected and gracefully skipped with informative messages
+
+#### How to Use MCP Resources
+
+**Browse Available Resources:**
+```
+/resources  # or '/res'
+```
+This displays all resources and templates grouped by server, showing URIs, names, MIME types, and descriptions. Binary resources are marked with a `[binary]` tag and templates with a `[template]` tag.
+
+**Read a Resource:**
+```
+@<uri>
+```
+For example, to read a file resource:
+```
+@file:///path/to/document.md
+```
+
+There are two ways to use `@uri`:
+
+**1. Standalone (buffer then query):** Type `@uri` on its own. The resource is fetched and buffered. Then type your query on the next prompt. The resource content is injected as context automatically.
+
+**2. Inline (single turn):** Include `@uri` anywhere inside your query text. The resource is fetched and the query is processed immediately in one step.
+
+**Standalone example:**
+```
+qwen3/show-thinking/6-tools❯ @server://info
+✅ Read resource 'get_server_info' (197 chars)
+
+Preview:
+This is a simple MCP server with streamable HTTP transport. It supports tools for greeting, adding numbers, generating
+random numbers, and calculating BMI. It also provides a BMI calculator prompt.
+
+1 resource(s) buffered. Type your query, or include @another_uri inline.
+
+qwen3/show-thinking/6-tools❯ Next question here
+```
+
+**Inline example:**
+```
+qwen3/show-thinking/6-tools❯ summarize the key features from @server://info
+✅ Read resource 'get_server_info' (197 chars)
+
+Preview:
+This is a simple MCP server with streamable HTTP transport. It supports tools for greeting, adding numbers, generating
+random numbers, and calculating BMI. It also provides a BMI calculator prompt.
+[model response]
+```
+
+> [!TIP]
+> Resources are discovered automatically when you connect to MCP servers. If a server supports resources, they'll be available immediately in the `resources` list and `@` autocomplete.
+
+> [!NOTE]
+> 🖼️ **Images** (`image/*`) **are** supported, they are passed directly to vision-capable models as base64 data.
+> **Binary Content**: The following resource types are **not** supported as context and will be skipped with an informative message:
+> - 🎵 **Audio** - `audio/*` MIME types
+> - 📹 **Video** - `video/*` MIME types
+> - 📄 **PDFs** - `application/pdf`
+> - 🗜️ **Archives** - `application/zip`, `application/octet-stream`
 >
-> If a prompt contains these unsupported types, you'll see a warning during the preview, and only the text portions will be injected. Make sure your prompt still makes sense without the multimedia content before proceeding. Full multimedia support is planned for a future release.
 
 
 ### Performance Metrics

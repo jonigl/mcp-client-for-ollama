@@ -139,5 +139,9 @@ async def run_slash_command(client: Any, command_name: str) -> bool:
             client.console.print("[yellow]Import cancelled: No filepath provided.[/yellow]")
         return True
 
+    if command_name == 'resources':
+        client.browse_resources()
+        return True
+
     # parse_user_input() only routes canonical command names here.
     raise AssertionError(f"Unhandled slash command: {command_name}")
