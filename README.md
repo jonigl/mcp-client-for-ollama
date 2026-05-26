@@ -283,7 +283,7 @@ During chat, use these commands:
 | `/prompts`       | `/pr`            | Browse and view all available MCP prompts             |
 | `/server:prompt_name`   | `/prompt_name`      | Invoke a prompt (qualified is recommended) |
 | `/resources`     | `/res`           | Browse and view all available MCP resources         |
-| `@uri`           | -                | Read a specific resource by URI (e.g., `@file:///path`) |
+| `@uri`           | -                | Read a specific resource by URI (e.g., `@server://info`) |
 | `/quit`, `/exit`, `/bye`   | `/q`, `Ctrl+C`, or `Ctrl+D`  | Exit the client                              |
 | `/reload-servers`| `/rs`            | Reload all MCP servers with current configuration   |
 | `/reset-config`  | `/rc`            | Reset configuration to defaults (all tools enabled) |
