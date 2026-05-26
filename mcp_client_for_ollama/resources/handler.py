@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .parser import extract_template_variables, resolve_template
-from ..utils.input import get_input_no_autocomplete
+from ..utils.input import get_input_no_autocomplete, read_single_keypress
 
 # MIME-type prefixes that should be passed to the model as vision images.
 _IMAGE_MIME_PREFIXES = ('image/',)
@@ -44,8 +44,8 @@ class ResourceHandler:
 
         if not any(resources_by_server.values()) and not any(templates_by_server.values()):
             self.console.print("[yellow]No resources available from connected servers.[/yellow]")
-            self.console.print("\n[dim]Press Enter to return to chat...[/dim]")
-            input()
+            self.console.print("\n[dim]Press any key to return to chat...[/dim]")
+            read_single_keypress()
             return
 
         all_servers = sorted(set(list(resources_by_server) + list(templates_by_server)))
@@ -86,11 +86,10 @@ class ResourceHandler:
             self.console.print(table)
 
         self.console.print(
-            "\n[dim]Use '@<uri>' in your query to attach a resource, "
-            "or type a template URI to fill its variables[/dim]"
+            "\n💡 [bold magenta]Tip:[/bold magenta] Use '@<uri>' in your query to attach a resource, or type a template URI to fill its variables"
         )
-        self.console.print("[dim]Press Enter to return to chat...[/dim]")
-        input()
+        self.console.print("\n[dim]Press any key to return to chat...[/dim]")
+        read_single_keypress()
     # Reading
     async def read_resource(self, uri: str, sessions: Dict[str, Any]) -> Optional['ResourceResult']:
         """Read a resource by URI and return its content.

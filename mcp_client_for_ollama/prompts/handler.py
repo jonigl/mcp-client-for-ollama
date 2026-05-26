@@ -8,7 +8,7 @@ from .display import display_prompt_list, display_prompt_preview
 from .content import filter_prompt_messages
 from .injection import convert_prompt_messages_to_history
 from ..utils.hil_manager import AbortQueryException
-from ..utils.input import get_input_no_autocomplete
+from ..utils.input import get_input_no_autocomplete, read_single_keypress
 
 
 class PromptHandler:
@@ -23,8 +23,8 @@ class PromptHandler:
         prompts_by_server = self.prompt_manager.get_prompts_by_server()
         display_prompt_list(self.console, prompts_by_server)
 
-        self.console.print("\n[dim]Press Enter to return to chat...[/dim]")
-        input()
+        self.console.print("\n[dim]Press any key to return to chat...[/dim]")
+        read_single_keypress()
 
     async def invoke_prompt(self, prompt_name: str, sessions: Dict[str, Any],
                           process_query_fn, history_context_manager) -> bool:
