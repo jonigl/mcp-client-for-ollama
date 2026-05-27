@@ -309,7 +309,12 @@ class ServerConnector:
             self.console.print(f"[red]Error connecting to {server_name}: Permission denied[/red]")
             return False
         except Exception as e:
-            self.console.print(f"[red]Error connecting to {server_name}: {str(e)}[/red]")
+            sub_exceptions = getattr(e, 'exceptions', None)
+            if sub_exceptions:
+                for sub in sub_exceptions:
+                    self.console.print(f"[red]Error connecting to {server_name}: {str(sub)}[/red]")
+            else:
+                self.console.print(f"[red]Error connecting to {server_name}: {str(e)}[/red]")
             return False
 
     def _create_script_params(self, server: Dict[str, Any]) -> Optional[StdioServerParameters]:
