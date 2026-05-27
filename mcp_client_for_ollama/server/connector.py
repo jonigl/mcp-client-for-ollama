@@ -4,6 +4,7 @@ This module handles connections to one or more MCP servers, including setup,
 initialization, and communication.
 """
 
+import asyncio
 import os
 import shutil
 from contextlib import AsyncExitStack
@@ -145,63 +146,73 @@ class ServerConnector:
             server_type = server.get("type", "script")
             session = None
 
-            # Connect based on server type
-            if server_type == "sse":
-                # Connect to SSE server
-                url = self._get_url_from_server(server)
-                if not url:
-                    self.console.print(f"[red]Error: SSE server {server_name} missing URL[/red]")
-                    return False
+            # Use a local exit stack for this connection attempt.  On failure
+            # it exits immediately, closing the transport and clearing any
+            # cancelled anyio scope so it cannot leak into later operations.
+            # On success, contexts are transferred to self.exit_stack via pop_all().
+            async with AsyncExitStack() as local_stack:
 
-                headers = self._get_headers_from_server(server)
+                # Connect based on server type
+                if server_type == "sse":
+                    # Connect to SSE server
+                    url = self._get_url_from_server(server)
+                    if not url:
+                        self.console.print(f"[red]Error: SSE server {server_name} missing URL[/red]")
+                        return False
 
-                # Connect using SSE transport
-                sse_transport = await self.exit_stack.enter_async_context(sse_client(url, headers=headers))
-                read_stream, write_stream = sse_transport
-                session = await self.exit_stack.enter_async_context(ClientSession(read_stream, write_stream))
+                    headers = self._get_headers_from_server(server)
 
-            elif server_type == "streamable_http":
-                # Connect to Streamable HTTP server
-                url = self._get_url_from_server(server)
-                if not url:
-                    self.console.print(f"[red]Error: HTTP server {server_name} missing URL[/red]")
-                    return False
+                    # Connect using SSE transport
+                    sse_transport = await local_stack.enter_async_context(sse_client(url, headers=headers))
+                    read_stream, write_stream = sse_transport
+                    session = await local_stack.enter_async_context(ClientSession(read_stream, write_stream))
 
-                headers = self._get_headers_from_server(server)
+                elif server_type == "streamable_http":
+                    # Connect to Streamable HTTP server
+                    url = self._get_url_from_server(server)
+                    if not url:
+                        self.console.print(f"[red]Error: HTTP server {server_name} missing URL[/red]")
+                        return False
 
-                # Use the streamablehttp_client for Streamable HTTP connections
-                transport = await self.exit_stack.enter_async_context(
-                    streamablehttp_client(url, headers=headers)
-                )
-                read_stream, write_stream, session_info = transport
-                session = await self.exit_stack.enter_async_context(ClientSession(read_stream, write_stream))
+                    headers = self._get_headers_from_server(server)
 
-                # Store session ID if provided
-                if hasattr(session_info, 'session_id') and session_info.session_id:
-                    self.session_ids[server_name] = session_info.session_id
+                    # Use the streamablehttp_client for Streamable HTTP connections
+                    transport = await local_stack.enter_async_context(
+                        streamablehttp_client(url, headers=headers)
+                    )
+                    read_stream, write_stream, session_info = transport
+                    session = await local_stack.enter_async_context(ClientSession(read_stream, write_stream))
 
-            elif server_type == "script":
-                # Connect to script-based server using STDIO
-                server_params = self._create_script_params(server)
-                if server_params is None:
-                    return False
+                    # Store session ID if provided
+                    if hasattr(session_info, 'session_id') and session_info.session_id:
+                        self.session_ids[server_name] = session_info.session_id
 
-                stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
-                read_stream, write_stream = stdio_transport
-                session = await self.exit_stack.enter_async_context(ClientSession(read_stream, write_stream))
+                elif server_type == "script":
+                    # Connect to script-based server using STDIO
+                    server_params = self._create_script_params(server)
+                    if server_params is None:
+                        return False
 
-            else:
-                # Connect to config-based server using STDIO
-                server_params = self._create_config_params(server)
-                if server_params is None:
-                    return False
+                    stdio_transport = await local_stack.enter_async_context(stdio_client(server_params))
+                    read_stream, write_stream = stdio_transport
+                    session = await local_stack.enter_async_context(ClientSession(read_stream, write_stream))
 
-                stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
-                read_stream, write_stream = stdio_transport
-                session = await self.exit_stack.enter_async_context(ClientSession(read_stream, write_stream))
+                else:
+                    # Connect to config-based server using STDIO
+                    server_params = self._create_config_params(server)
+                    if server_params is None:
+                        return False
 
-            # Initialize the session and capture capabilities
-            init_result = await session.initialize()
+                    stdio_transport = await local_stack.enter_async_context(stdio_client(server_params))
+                    read_stream, write_stream = stdio_transport
+                    session = await local_stack.enter_async_context(ClientSession(read_stream, write_stream))
+
+                # Initialize the session and capture capabilities
+                init_result = await session.initialize()
+
+                # Success — transfer connection contexts to the main exit_stack.
+                # local_stack is now empty; its __aexit__ becomes a no-op.
+                await self.exit_stack.enter_async_context(local_stack.pop_all())
 
             # Store the session
             self.sessions[server_name] = {
@@ -284,6 +295,13 @@ class ServerConnector:
             self.console.print(f"[green]Successfully connected to {server_name} with {len(server_tools)} tool(s){prompt_count_msg}{resource_count_msg}[/green]")
             return True
 
+        except asyncio.CancelledError:
+            self.console.print(
+                f"[red]Error connecting to {server_name}: Server did not respond to MCP "
+                f"initialization. Verify the URL serves an MCP endpoint, not a regular web "
+                f"page or other service.[/red]"
+            )
+            return False
         except FileNotFoundError as e:
             self.console.print(f"[red]Error connecting to {server_name}: File not found - {str(e)}[/red]")
             return False
