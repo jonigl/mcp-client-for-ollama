@@ -780,9 +780,9 @@ class MCPClient:
                 "• Conversation history is too long — try [bold cyan]clear[/bold cyan] or [bold cyan]cc[/bold cyan] to reset context\n"
                 "• Tool descriptions are unclear — the model couldn't determine which tool to use\n\n"
                 "[bold]Things to try:[/bold]\n"
-                "• Switch to a larger model with [bold cyan]model[/bold cyan] or [bold cyan]m[/bold cyan] (7B+ recommended)\n"
-                "• Disable unneeded tools with [bold cyan]tools[/bold cyan] or [bold cyan]t[/bold cyan] to reduce context size\n"
-                "• Clear conversation history with [bold cyan]clear[/bold cyan] or [bold cyan]cc[/bold cyan]\n"
+                "• Switch to a larger model with [bold cyan]/model[/bold cyan] or [bold cyan]/m[/bold cyan] (7B+ recommended)\n"
+                "• Disable unneeded tools with [bold cyan]/tools[/bold cyan] or [bold cyan]/t[/bold cyan] to reduce context size\n"
+                "• Clear conversation history with [bold cyan]/clear[/bold cyan] or [bold cyan]/cc[/bold cyan]\n"
                 "• Rephrase your query to be more specific",
                 title="[yellow]No Response from Model[/yellow]", border_style="yellow", expand=False
             ))
