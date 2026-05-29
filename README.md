@@ -3,7 +3,7 @@
   <img src="https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-logo-512.png?raw=true" width="256" />
 </p>
 <p align="center">
-<i>A simple yet powerful Python client for interacting with Model Context Protocol (MCP) servers using Ollama, allowing local LLMs to use tools.</i>
+<i>A simple yet powerful Python client for interacting with Model Context Protocol (MCP) servers using Ollama, allowing you to harness local LLMs for advanced tool execution.</i>
 </p>
 
 ---
@@ -59,7 +59,7 @@
 
 ## Overview
 
-MCP Client for Ollama (`ollmcp`) is a modern, interactive terminal application (TUI) for connecting local Ollama LLMs to one or more Model Context Protocol (MCP) servers, enabling advanced tool use and workflow automation. With a rich, user-friendly interface, it lets you manage tools, models, and server connections in real time—no coding required. Whether you're building, testing, or just exploring LLM tool use, this client streamlines your workflow with features like fuzzy autocomplete, advanced model configuration, MCP servers hot-reloading for development, and Human-in-the-Loop safety controls.
+MCP Client for Ollama (ollmcp) is a modern, interactive terminal application (TUI) built for harness engineering, connecting local Ollama LLMs to one or more Model Context Protocol (MCP) servers. By fully supporting the core MCP primitives (tools, prompts, and resources), it provides a controlled terminal space where you steer, and the agent executes. With a rich, user-friendly interface, it lets you safely manage your setup in real time with no coding required. Whether you're building, testing, or exploring, this client streamlines your workflow with features like fuzzy autocomplete, advanced model configuration, MCP server hot-reloading for rapid development, and strict Human-in-the-Loop safety controls.
 
 ## Features
 
