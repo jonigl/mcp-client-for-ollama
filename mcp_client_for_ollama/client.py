@@ -22,11 +22,11 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
-import ollama
 import httpx
 
 from . import __version__
 from .config.manager import ConfigManager
+from .providers import ProviderResponseError, build_llm_client, get_provider_name_for_host, is_atlascloud_host
 from .utils.version import check_for_updates
 from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART
 from .utils.connection import preflight_ollama
@@ -49,7 +49,7 @@ from .utils.input import get_input_no_autocomplete
 
 
 class MCPClient:
-    """Main client class for interacting with Ollama and MCP servers"""
+    """Main client class for interacting with LLM providers and MCP servers"""
 
     ANSWER_RENDER_MODE_LABELS = {
         "plain": "Plain",
@@ -66,7 +66,7 @@ class MCPClient:
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
         self.host = host
-        self.ollama = ollama.AsyncClient(host=host)
+        self.ollama = build_llm_client(host)
         self.console = Console()
         self.config_manager = ConfigManager(self.console)
         # Initialize the server connector
@@ -463,7 +463,7 @@ class MCPClient:
                 self.console.print(f"[dim](Showing last {max_history} of {len(self.chat_history)} conversations)[/dim]")
 
     async def process_query(self, query: str, images=None) -> str:
-        """Process a query using Ollama and available tools"""
+        """Process a query using the configured provider and available tools."""
         # Create base message with current query
         current_message = {
             "role": "user",
@@ -632,7 +632,8 @@ class MCPClient:
                     messages.append({
                         "role": "tool",
                         "content": tool_response,
-                        "tool_name": tool_name
+                        "tool_name": tool_name,
+                        "tool_call_id": getattr(tool, "id", None),
                     })
                     continue
 
@@ -648,7 +649,8 @@ class MCPClient:
                         messages.append({
                             "role": "tool",
                             "content": error_msg,
-                            "tool_name": tool_name
+                            "tool_name": tool_name,
+                            "tool_call_id": getattr(tool, "id", None),
                         })
                         # Continue with next tool call if any
                         continue
@@ -704,7 +706,8 @@ class MCPClient:
                 tool_message = {
                     "role": "tool",
                     "content": tool_response,
-                    "tool_name": tool_name
+                    "tool_name": tool_name,
+                    "tool_call_id": getattr(tool, "id", None),
                 }
 
                 messages.append(tool_message)
@@ -1017,26 +1020,31 @@ class MCPClient:
                     self.console.print("[yellow]Query aborted. Nothing saved to history.[/yellow]")
 
                 except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError):
-                    # Connection errors when Ollama server is not available
+                    provider_name = get_provider_name_for_host(self.host)
                     self.console.print(Panel(
-                        f"[bold red]Connection Error:[/bold red] Unable to connect to Ollama server.\n\n"
+                        f"[bold red]Connection Error:[/bold red] Unable to connect to {provider_name}.\n\n"
                         f"Configured host: [yellow]{self.host}[/yellow]\n\n"
                         "Possible causes:\n"
-                        "• Ollama server is not running\n"
+                        f"• {provider_name} is unavailable or blocked by the network\n"
                         "• Incorrect host/port configuration\n"
                         "• Network connectivity issues\n\n"
                         "Solutions:\n"
-                        "• Start Ollama with: [bold cyan]ollama serve[/bold cyan]\n"
-                        "• Check if Ollama is running on the correct port\n"
+                        + (
+                            "• Start Ollama with: [bold cyan]ollama serve[/bold cyan]\n"
+                            "• Check if Ollama is running on the correct port\n"
+                            if not is_atlascloud_host(self.host)
+                            else "• Verify your Atlas Cloud API key and account access\n"
+                        ) +
                         "• Use [bold cyan]--host[/bold cyan] flag to specify a different host\n"
                         "• Verify your network connection",
-                        title="Ollama Server Unavailable",
+                        title=f"{provider_name} Unavailable",
                         border_style="red", expand=False
                     ))
 
-                except ollama.ResponseError as e:
+                except ProviderResponseError as e:
                     # Extract error message without the traceback
                     error_msg = str(e)
+                    provider_name = get_provider_name_for_host(self.host)
                     if "does not support tools" in error_msg.lower():
                         model_name = self.model_manager.get_current_model()
                         self.console.print(Panel(
@@ -1047,7 +1055,7 @@ class MCPClient:
                             border_style="red", expand=False
                         ))
                     else:
-                        self.console.print(Panel(f"[bold red]Ollama Error:[/bold red] {error_msg}",
+                        self.console.print(Panel(f"[bold red]{provider_name} Error:[/bold red] {error_msg}",
                                                  border_style="red", expand=False))
 
                     # If it's a "model not found" error, suggest how to fix it
@@ -1459,7 +1467,7 @@ class MCPClient:
             new_host = config_data["host"]
             if new_host != self.host:
                 self.host = new_host
-                self.ollama = ollama.AsyncClient(host=new_host)
+                self.ollama = build_llm_client(new_host)
                 self.model_manager.ollama = self.ollama
 
         if "model" in config_data:
@@ -1541,7 +1549,7 @@ class MCPClient:
             new_host = config_data["host"]
             if new_host != self.host:
                 self.host = new_host
-                self.ollama = ollama.AsyncClient(host=new_host)
+                self.ollama = build_llm_client(new_host)
                 self.model_manager.ollama = self.ollama
 
         # Reset context settings from the default configuration
@@ -1809,16 +1817,16 @@ def main(
         rich_help_panel="MCP Server Configuration"
     ),
 
-    # Ollama Configuration
+    # LLM Provider Configuration
     model: str = typer.Option(
         DEFAULT_MODEL, "--model", "-m",
-        help="Ollama model to use",
-        rich_help_panel="Ollama Configuration"
+        help="Model to use with the configured host",
+        rich_help_panel="LLM Provider Configuration"
     ),
     host: str = typer.Option(
         None, "--host", "-H",
-        help="Ollama host URL",
-        rich_help_panel="Ollama Configuration"
+        help="LLM provider host URL (for example Ollama or Atlas Cloud)",
+        rich_help_panel="LLM Provider Configuration"
     ),
 
     # General Options
@@ -1856,7 +1864,7 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
 
     console = Console()
 
-    # Create a temporary client to check if Ollama is running
+    # Create a temporary client to check if the configured provider is reachable
     initial_host = host if host is not None else DEFAULT_OLLAMA_HOST
     client = MCPClient(model=model, host=initial_host)
 
@@ -1905,7 +1913,7 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
 
         if host != client.host and host is not None:
             client.host = host
-            client.ollama = ollama.AsyncClient(host=host)
+            client.ollama = build_llm_client(host)
             client.model_manager.ollama = client.ollama
 
         # If model was explicitly provided via CLI flag (not default), override any loaded config
