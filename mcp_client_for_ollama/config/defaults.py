@@ -16,6 +16,8 @@ def default_config() -> dict:
     return {
         "host": DEFAULT_OLLAMA_HOST,
         "model": DEFAULT_MODEL,
+        "provider": "ollama",
+        "apiKey": "",
         "enabledTools": {},  # Will be populated with available tools
         "contextSettings": {
             "retainContext": True

@@ -1,10 +1,11 @@
 """Utility to test connectivity"""
 from typing import Any, Optional
 
-import ollama
 from rich.panel import Panel
 import urllib.request
 import urllib.error
+
+from any_llm import AnyLLM
 
 def check_url_connectivity(url):
     """
@@ -48,29 +49,46 @@ async def preflight_ollama(client: Any, cli_host: Optional[str] = None) -> bool:
         bool: True when Ollama is reachable, otherwise False.
     """
     preflight_host = cli_host if cli_host is not None else client.host
+    preflight_provider = client.provider
+    preflight_api_key = client.api_key
 
     if cli_host is None and client.config_manager.config_exists("default"):
         default_config = client.config_manager.load_configuration("default")
         config_host = default_config.get("host")
         if config_host:
             preflight_host = config_host
+        config_provider = default_config.get("provider")
+        if config_provider:
+            preflight_provider = config_provider
+        config_api_key = default_config.get("apiKey")
+        if config_api_key:
+            preflight_api_key = config_api_key
 
-    if preflight_host != client.host:
+    if preflight_host != client.host or preflight_provider != client.provider:
         client.host = preflight_host
-        client.ollama = ollama.AsyncClient(host=preflight_host)
-        client.model_manager.ollama = client.ollama
+        client.provider = preflight_provider
+        client.api_key = preflight_api_key
+        client.llm = AnyLLM.create(preflight_provider, api_key=preflight_api_key, api_base=preflight_host)
+        client.model_manager.llm = client.llm
+        client.model_manager.provider = preflight_provider
+        client.model_manager.api_base = preflight_host
+        client.model_manager.api_key = preflight_api_key
 
     is_running = await client.model_manager.check_ollama_running()
     if not is_running:
         client.console.print(Panel(
-            "[bold red]Error: Ollama is not running![/bold red]\n\n"
-            f"[yellow]Ollama current configured host: {client.host}[/yellow]\n\n"
-            "This client requires Ollama to be running to process queries.\n\n"
-            "Please start Ollama by running the 'ollama serve' command in a terminal.\n\n"
-            "💡 [bold magenta]Tip:[/bold magenta] If you configured a different host in a saved default configuration you can\n\n"
-            "   1. Use --host flag to override the configured host for example: ollmcp --host http://localhost:11434\n"
-            "   2. Once done, you can save a new default configuration to avoid needing to specify it each time.",
-            title="Ollama Not Running", border_style="red", expand=False
+            "[bold red]Error: Cannot connect to the LLM provider![/bold red]\n\n"
+            f"[yellow]Current configured host: {client.host}[/yellow]\n"
+            f"[yellow]Current provider: {client.provider}[/yellow]\n\n"
+            "Possible causes:\n"
+            "• LLM provider is not running or unreachable\n"
+            "• Incorrect host/port configuration\n"
+            "• Invalid API key\n\n"
+            "Solutions:\n"
+            "• For local Ollama: start it with [bold cyan]ollama serve[/bold cyan]\n"
+            "• Use [bold cyan]--host[/bold cyan] flag to specify a different host\n"
+            "• Use [bold cyan]--provider[/bold cyan] and [bold cyan]--api-key[/bold cyan] for remote providers",
+            title="LLM Provider Not Available", border_style="red", expand=False
         ))
 
     return is_running

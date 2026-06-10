@@ -1,5 +1,6 @@
 """MCP Client for Ollama - A TUI client for interacting with Ollama models and MCP servers"""
 import asyncio
+import json
 import os
 import sys
 import select
@@ -22,14 +23,15 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
-import ollama
 import httpx
 
 from . import __version__
 from .config.manager import ConfigManager
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_PROVIDER, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART
+from any_llm import AnyLLM
 from .utils.connection import preflight_ollama
+from .utils.images import apply_images
 from .server.connector import ServerConnector
 from .server import registry
 from .server.cli_commands import mcp_app
@@ -64,17 +66,19 @@ class MCPClient:
         "multiline": "Multiline",
     }
 
-    def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST):
+    def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST, provider: str = DEFAULT_PROVIDER, api_key: str = None):
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
         self.host = host
-        self.ollama = ollama.AsyncClient(host=host)
+        self.provider = provider
+        self.api_key = api_key or ""
+        self.llm = AnyLLM.create(provider, api_key=api_key, api_base=host)
         self.console = Console()
         self.config_manager = ConfigManager(self.console)
         # Initialize the server connector
         self.server_connector = ServerConnector(self.exit_stack, self.console)
         # Initialize the model manager
-        self.model_manager = ModelManager(console=self.console, default_model=model, ollama=self.ollama)
+        self.model_manager = ModelManager(console=self.console, default_model=model, llm=self.llm, provider=provider, api_base=host, api_key=api_key or "")
         # Initialize the model config manager
         self.model_config_manager = ModelConfigManager(console=self.console)
         # Initialize the tool manager with server connector reference
@@ -306,15 +310,9 @@ class MCPClient:
         try:
             current_model = self.model_manager.get_current_model()
             # Query the model's capabilities using ollama.show()
-            model_info = await self.ollama.show(current_model)
-
-            # Check if the model has 'thinking' capability
-            if 'capabilities' in model_info and model_info['capabilities']:
-                return 'thinking' in model_info['capabilities']
-
-            return False
+            caps = await self.model_manager.fetch_capabilities(current_model)
+            return 'thinking' in caps
         except Exception:
-            # If we can't determine capabilities, assume no thinking support
             return False
 
     async def supports_vision(self) -> bool:
@@ -325,12 +323,8 @@ class MCPClient:
         """
         try:
             current_model = self.model_manager.get_current_model()
-            model_info = await self.ollama.show(current_model)
-
-            if 'capabilities' in model_info and model_info['capabilities']:
-                return 'vision' in model_info['capabilities']
-
-            return False
+            caps = await self.model_manager.fetch_capabilities(current_model)
+            return 'vision' in caps
         except Exception:
             return False
 
@@ -535,28 +529,24 @@ class MCPClient:
         # Get current model from the model manager
         model = self.model_manager.get_current_model()
 
-        # Get model options in Ollama format
-        model_options = self.model_config_manager.get_ollama_options()
-
-        # Prepare chat parameters
-        chat_params = {
-            "model": model,
-            "messages": messages,
-            "stream": True,
-            "tools": available_tools,
-            "options": model_options
-        }
-
         # Add thinking parameter if thinking mode is enabled and model supports it
         supports_thinking = await self.supports_thinking_mode()
-        if supports_thinking:
-            chat_params["think"] = self.thinking_mode
 
         # Check vision capability once for the entire query
         has_vision = await self.supports_vision()
 
-        # Initial Ollama API call with the query and available tools
-        stream = await self.ollama.chat(**chat_params)
+        # Initial LLM API call with the query and available tools
+        stream = await self.llm.acompletion(
+            model=model,
+            messages=apply_images(messages),
+            stream=True,
+            stream_options={"include_usage": True},
+            tools=available_tools or None,
+            **({
+                "reasoning_effort": "high"
+            } if supports_thinking and self.thinking_mode else {}),
+            **self.model_config_manager.get_completion_kwargs(self.provider),
+        )
 
         # Process the streaming response with thinking mode support
         response_text = ""
@@ -582,8 +572,8 @@ class MCPClient:
         })
 
         # Update actual token count from metrics if available
-        if metrics and metrics.get('eval_count'):
-            self.actual_token_count += metrics['eval_count']
+        if metrics and metrics.get('completion_tokens'):
+            self.actual_token_count += metrics['completion_tokens']
 
         enabled_tools = self.tool_manager.get_enabled_tool_objects()
 
@@ -607,8 +597,9 @@ class MCPClient:
             loop_count += 1
 
             for tool in pending_tool_calls:
-                tool_name = tool.function.name
-                tool_args = tool.function.arguments
+                tool_name = tool["function"]["name"]
+                tool_call_id = tool["id"]
+                tool_args = json.loads(tool["function"]["arguments"]) if tool["function"]["arguments"] else {}
 
                 # Parse server name and actual tool name from the qualified name
                 server_name, actual_tool_name = tool_name.split('.', 1) if '.' in tool_name else (None, tool_name)
@@ -647,7 +638,7 @@ class MCPClient:
                     messages.append({
                         "role": "tool",
                         "content": tool_response,
-                        "tool_name": tool_name
+                        "tool_call_id": tool_call_id
                     })
                     continue
 
@@ -663,7 +654,7 @@ class MCPClient:
                         messages.append({
                             "role": "tool",
                             "content": error_msg,
-                            "tool_name": tool_name
+                            "tool_call_id": tool_call_id
                         })
                         # Continue with next tool call if any
                         continue
@@ -719,7 +710,7 @@ class MCPClient:
                 tool_message = {
                     "role": "tool",
                     "content": tool_response,
-                    "tool_name": tool_name
+                    "tool_call_id": tool_call_id
                 }
 
                 messages.append(tool_message)
@@ -737,20 +728,18 @@ class MCPClient:
                     self._warn_vision_not_supported(len(tool_images), f"The tool '{tool_name}'")
 
 
-            # Get stream response from Ollama with the tool results
-            chat_params_followup = {
-                "model": model,
-                "messages": messages,
-                "stream": True,
-                "tools": available_tools,
-                "options": model_options
-            }
-
-            # Add thinking parameter if thinking mode is enabled and model supports it
-            if supports_thinking:
-                chat_params_followup["think"] = self.thinking_mode
-
-            stream = await self.ollama.chat(**chat_params_followup)
+            # Get stream response from LLM with the tool results
+            stream = await self.llm.acompletion(
+                model=model,
+                messages=apply_images(messages),
+                stream=True,
+                stream_options={"include_usage": True},
+                tools=available_tools or None,
+                **({
+                    "reasoning_effort": "high"
+                } if supports_thinking and self.thinking_mode else {}),
+                **self.model_config_manager.get_completion_kwargs(self.provider),
+            )
 
             # Process the streaming response with thinking mode support
             followup_response, pending_tool_calls, followup_metrics = await self.streaming_manager.process_streaming_response(
@@ -772,8 +761,8 @@ class MCPClient:
             })
 
             # Update actual token count from followup metrics if available
-            if followup_metrics and followup_metrics.get('eval_count'):
-                self.actual_token_count += followup_metrics['eval_count']
+            if followup_metrics and followup_metrics.get('completion_tokens'):
+                self.actual_token_count += followup_metrics['completion_tokens']
 
             if followup_response:
                 response_text = followup_response
@@ -1052,7 +1041,7 @@ class MCPClient:
                         border_style="red", expand=False
                     ))
 
-                except ollama.ResponseError as e:
+                except Exception as e:
                     # Extract error message without the traceback
                     error_msg = str(e)
                     if "does not support tools" in error_msg.lower():
@@ -1065,7 +1054,7 @@ class MCPClient:
                             border_style="red", expand=False
                         ))
                     else:
-                        self.console.print(Panel(f"[bold red]Ollama Error:[/bold red] {error_msg}",
+                        self.console.print(Panel(f"[bold red]LLM Error:[/bold red] {error_msg}",
                                                  border_style="red", expand=False))
 
                     # If it's a "model not found" error, suggest how to fix it
@@ -1429,6 +1418,8 @@ class MCPClient:
         config_data = {
             "host": self.host,
             "model": self.model_manager.get_current_model(),
+            "provider": self.provider,
+            "apiKey": self.api_key,
             "enabledTools": self.tool_manager.get_enabled_tools(),
             "contextSettings": {
                 "retainContext": self.retain_context
@@ -1473,12 +1464,18 @@ class MCPClient:
             return False
 
         # Apply the loaded configuration
+        if "provider" in config_data:
+            self.provider = config_data["provider"]
+        if "apiKey" in config_data:
+            self.api_key = config_data["apiKey"]
+
         if "host" in config_data:
             new_host = config_data["host"]
             if new_host != self.host:
                 self.host = new_host
-                self.ollama = ollama.AsyncClient(host=new_host)
-                self.model_manager.ollama = self.ollama
+                self.llm = AnyLLM.create(self.provider, api_key=self.api_key, api_base=new_host)
+                self.model_manager.llm = self.llm
+                self.model_manager.api_base = new_host
 
         if "model" in config_data:
             self.model_manager.set_model(config_data["model"])
@@ -1555,12 +1552,18 @@ class MCPClient:
         self.server_connector.enable_all_tools()
 
         # Reset host from the default configuration
+        if "provider" in config_data:
+            self.provider = config_data.get("provider", DEFAULT_PROVIDER)
+        if "apiKey" in config_data:
+            self.api_key = config_data.get("apiKey", "")
+
         if "host" in config_data:
             new_host = config_data["host"]
             if new_host != self.host:
                 self.host = new_host
-                self.ollama = ollama.AsyncClient(host=new_host)
-                self.model_manager.ollama = self.ollama
+                self.llm = AnyLLM.create(self.provider, api_key=self.api_key, api_base=new_host)
+                self.model_manager.llm = self.llm
+                self.model_manager.api_base = new_host
 
         # Reset context settings from the default configuration
         if "contextSettings" in config_data:
@@ -1839,8 +1842,19 @@ def main(
     ),
     host: str = typer.Option(
         None, "--host", "-H",
-        help="Ollama host URL",
-        rich_help_panel="Ollama Configuration"
+        help="LLM host URL (Ollama host or API base URL for other providers)",
+        rich_help_panel="LLM Configuration"
+    ),
+    provider: str = typer.Option(
+        DEFAULT_PROVIDER, "--provider", "-p",
+        help="LLM provider (e.g., ollama, openai, anthropic, mistral, groq, deepseek, together, openrouter, etc.)",
+        rich_help_panel="LLM Configuration"
+    ),
+    api_key: Optional[str] = typer.Option(
+        None, "--api-key", "-k",
+        help="API key for the LLM provider (also reads $OLLMCP_API_KEY env var)",
+        rich_help_panel="LLM Configuration",
+        envvar="OLLMCP_API_KEY"
     ),
 
     # General Options
@@ -1863,7 +1877,7 @@ def main(
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host))
+        loop.run_until_complete(async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host, provider, api_key))
     finally:
         try:
             # Ensure executor cleanup completes before closing loop
@@ -1872,14 +1886,14 @@ def main(
         finally:
             loop.close()
 
-async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host):
+async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host, provider, api_key):
     """Asynchronous main function to run the MCP Client for Ollama"""
 
     console = Console()
 
     # Create a temporary client to check if Ollama is running
     initial_host = host if host is not None else DEFAULT_OLLAMA_HOST
-    client = MCPClient(model=model or DEFAULT_MODEL, host=initial_host)
+    client = MCPClient(model=model or DEFAULT_MODEL, host=initial_host, provider=provider, api_key=api_key)
 
     # Show startup banner before server discovery messages.
     client.print_welcome_ascii()
@@ -1920,10 +1934,24 @@ async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, m
         await client.connect_to_servers(mcp_server, mcp_server_url, config_path, claude_desktop, server_configs)
         client.auto_load_default_config()
 
-        if host != client.host and host is not None:
+        # CLI args take precedence over loaded config
+        cli_changed = False
+        if provider != DEFAULT_PROVIDER:
+            client.provider = provider
+            cli_changed = True
+        if api_key:
+            client.api_key = api_key
+            cli_changed = True
+        if host is not None and host != client.host:
             client.host = host
-            client.ollama = ollama.AsyncClient(host=host)
-            client.model_manager.ollama = client.ollama
+            cli_changed = True
+
+        if cli_changed:
+            client.llm = AnyLLM.create(client.provider, api_key=client.api_key, api_base=client.host)
+            client.model_manager.llm = client.llm
+            client.model_manager.provider = client.provider
+            client.model_manager.api_base = client.host
+            client.model_manager.api_key = client.api_key
 
         # Resolve the model to use: --model flag > saved config > first available
         # model, validated against what's actually installed (auto_load_default_config()

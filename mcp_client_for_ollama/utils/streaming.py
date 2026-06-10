@@ -203,7 +203,7 @@ class StreamingManager:
         """Process a streaming response from Ollama with status spinner and content updates
 
         Args:
-            stream: Async iterator of response chunks
+            stream: Async iterator of ChatCompletionChunk objects
             print_response: Flag to control live updating of response text
             thinking_mode: Whether to handle thinking mode responses
             show_thinking: Whether to keep thinking text visible in final output
@@ -234,27 +234,47 @@ class StreamingManager:
             status = self.console.status("[cyan]working...", spinner="dots")
             status.start()
 
+            # Buffer for incremental tool call deltas
+            tool_call_buffers = {}
 
             try:
-                async for chunk in stream:
+                stream_iter = stream.__aiter__()
+                while True:
+                    try:
+                        chunk = await stream_iter.__anext__()
+                    except StopAsyncIteration:
+                        break
+                    except Exception as e:
+                        import logging
+                        logging.getLogger(__name__).debug("Skipping unparseable stream chunk: %s", e)
+                        continue
+
                     # Check for cancellation
                     if cancellation_check and cancellation_check():
                         self.console.print("\n[yellow]Generation aborted by user.[/yellow]")
                         return accumulated_text, tool_calls, metrics
 
-                    # Capture metrics when chunk is done
+                    # Capture metrics when chunk carries usage data
                     extracted_metrics = extract_metrics(chunk)
                     if extracted_metrics:
                         metrics = extracted_metrics
 
+                    if not getattr(chunk, "choices", None):
+                        continue
+
+                    choice = chunk.choices[0]
+                    delta = choice.delta
+
                     # Handle thinking content
-                    if (thinking_mode and hasattr(chunk, 'message') and
-                        hasattr(chunk.message, 'thinking') and chunk.message.thinking):
-                        # Stop spinner on first thinking chunk ONLY if show_thinking is True
+                    thinking = None
+                    reasoning = getattr(delta, "reasoning", None)
+                    if reasoning is not None:
+                        thinking = reasoning.content if hasattr(reasoning, "content") else (reasoning if isinstance(reasoning, str) else None)
+
+                    if thinking_mode and thinking:
                         if first_chunk and show_thinking:
                             status.stop()
                             first_chunk = False
-
                         if not thinking_content:
                             thinking_content = "🤔 **Thinking:**\n\n"
                             if not thinking_started and show_thinking:
@@ -262,45 +282,57 @@ class StreamingManager:
                                 self.console.print(Markdown("---"))
                                 self.console.print()
                                 thinking_started = True
-                        thinking_content += chunk.message.thinking
-                        # Print thinking content as plain text only if show_thinking is True
+                        thinking_content += thinking
                         if show_thinking:
-                            self.console.print(chunk.message.thinking, end="")
+                            self.console.print(thinking, end="")
 
                     # Handle regular content
-                    if (hasattr(chunk, 'message') and hasattr(chunk.message, 'content') and
-                        chunk.message.content):
-                        # Stop spinner on first content chunk (always)
+                    content = getattr(delta, "content", None) or ""
+                    if content:
                         if first_chunk:
                             status.stop()
                             first_chunk = False
-
-                        # Print separator and Answer label when transitioning from thinking to content
                         if not accumulated_text and stream_plain_text:
                             self._print_answer_transition_header(show_thinking, "plain")
-
-                        accumulated_text += chunk.message.content
-
-                        # Print only new content as plain text (will render full markdown at end)
+                        accumulated_text += content
                         if stream_plain_text:
-                            self.console.print(chunk.message.content, end="")
+                            self.console.print(content, end="")
                         elif render_mode == "markdown":
                             if progressive_renderer is None:
                                 self._print_answer_transition_header(show_thinking, "markdown")
                                 progressive_renderer = ProgressiveMarkdownRenderer(self.console)
                                 progressive_renderer.start()
-                            progressive_renderer.update(chunk.message.content)
+                            progressive_renderer.update(content)
 
-                    # Handle tool calls
-                    if (hasattr(chunk, 'message') and hasattr(chunk.message, 'tool_calls') and
-                        chunk.message.tool_calls):
-                        # Stop spinner on first tool call chunk (always) - just in case no content arrives
+                    # Buffer incremental tool call deltas
+                    delta_tool_calls = getattr(delta, "tool_calls", None)
+                    if delta_tool_calls:
                         if first_chunk:
                             status.stop()
                             first_chunk = False
+                        for tc in delta_tool_calls:
+                            idx = tc.index if hasattr(tc, "index") else 0
+                            if idx not in tool_call_buffers:
+                                tool_call_buffers[idx] = {"id": "", "name": "", "arguments": ""}
+                            buf = tool_call_buffers[idx]
+                            if getattr(tc, "id", None):
+                                buf["id"] = tc.id
+                            if hasattr(tc, "function") and tc.function:
+                                if getattr(tc.function, "name", None):
+                                    buf["name"] += tc.function.name
+                                if getattr(tc.function, "arguments", None):
+                                    buf["arguments"] += tc.function.arguments
 
-                        for tool in chunk.message.tool_calls:
-                            tool_calls.append(tool)
+                    # On finish, emit completed tool calls
+                    if getattr(choice, "finish_reason", None) and tool_call_buffers:
+                        for idx, buf in sorted(tool_call_buffers.items()):
+                            tool_calls.append({
+                                "id": buf["id"] or f"call_{idx}",
+                                "type": "function",
+                                "function": {"name": buf["name"], "arguments": buf["arguments"]},
+                            })
+                        tool_call_buffers.clear()
+
             finally:
                 if progressive_renderer is not None:
                     progressive_renderer.finish()
@@ -315,28 +347,65 @@ class StreamingManager:
 
         else:
             # Silent processing without display
-            async for chunk in stream:
+            tool_call_buffers = {}
+            stream_iter = stream.__aiter__()
+            while True:
+                try:
+                    chunk = await stream_iter.__anext__()
+                except StopAsyncIteration:
+                    break
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).debug("Skipping unparseable stream chunk: %s", e)
+                    continue
+
                 # Check for cancellation
                 if cancellation_check and cancellation_check():
                     return accumulated_text, tool_calls, metrics
 
-                # Capture metrics when chunk is done
                 extracted_metrics = extract_metrics(chunk)
                 if extracted_metrics:
                     metrics = extracted_metrics
 
-                if (thinking_mode and hasattr(chunk, 'message') and
-                    hasattr(chunk.message, 'thinking') and chunk.message.thinking):
-                    thinking_content += chunk.message.thinking
+                if not getattr(chunk, "choices", None):
+                    continue
 
-                if (hasattr(chunk, 'message') and hasattr(chunk.message, 'content') and
-                    chunk.message.content):
-                    accumulated_text += chunk.message.content
+                choice = chunk.choices[0]
+                delta = choice.delta
 
-                if (hasattr(chunk, 'message') and hasattr(chunk.message, 'tool_calls') and
-                    chunk.message.tool_calls):
-                    for tool in chunk.message.tool_calls:
-                        tool_calls.append(tool)
+                reasoning = getattr(delta, "reasoning", None)
+                if thinking_mode and reasoning is not None:
+                    thinking = reasoning.content if hasattr(reasoning, "content") else (reasoning if isinstance(reasoning, str) else None)
+                    if thinking:
+                        thinking_content += thinking
+
+                content = getattr(delta, "content", None) or ""
+                if content:
+                    accumulated_text += content
+
+                delta_tool_calls = getattr(delta, "tool_calls", None)
+                if delta_tool_calls:
+                    for tc in delta_tool_calls:
+                        idx = tc.index if hasattr(tc, "index") else 0
+                        if idx not in tool_call_buffers:
+                            tool_call_buffers[idx] = {"id": "", "name": "", "arguments": ""}
+                        buf = tool_call_buffers[idx]
+                        if getattr(tc, "id", None):
+                            buf["id"] = tc.id
+                        if hasattr(tc, "function") and tc.function:
+                            if getattr(tc.function, "name", None):
+                                buf["name"] += tc.function.name
+                            if getattr(tc.function, "arguments", None):
+                                buf["arguments"] += tc.function.arguments
+
+                if getattr(choice, "finish_reason", None) and tool_call_buffers:
+                    for idx, buf in sorted(tool_call_buffers.items()):
+                        tool_calls.append({
+                            "id": buf["id"] or f"call_{idx}",
+                            "type": "function",
+                            "function": {"name": buf["name"], "arguments": buf["arguments"]},
+                        })
+                    tool_call_buffers.clear()
 
         # Display metrics if requested
         if show_metrics and metrics:

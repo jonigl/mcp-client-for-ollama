@@ -27,6 +27,9 @@ DEFAULT_MODEL = "qwen3:0.6b"
 # Default ollama lcoal url for API requests
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 
+# Default LLM provider
+DEFAULT_PROVIDER = "ollama"
+
 # Default number of history entries to display when returning from menus
 DEFAULT_HISTORY_DISPLAY_LIMIT = 5
 

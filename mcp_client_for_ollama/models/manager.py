@@ -3,7 +3,10 @@
 This module handles listing, selecting, and managing Ollama models.
 """
 import asyncio
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Tuple
+
+import httpx
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -18,45 +21,79 @@ class ModelManager:
     Ollama is running, and selecting models to use with the client.
     """
 
-    def __init__(self, console: Optional[Console] = None, default_model: str = DEFAULT_MODEL, ollama: Optional[Any] = None):
+    def __init__(self, console: Optional[Console] = None, default_model: str = DEFAULT_MODEL, llm: Optional[Any] = None, provider: str = "ollama", api_base: Optional[str] = None, api_key: Optional[str] = None):
         """Initialize the ModelManager.
 
         Args:
             console: Rich console for output (optional)
             default_model: Default model to use if none is specified
+            llm: AnyLLM instance for provider access
+            provider: Provider name (e.g. 'ollama', 'openai')
+            api_base: Provider base URL
+            api_key: Provider API key
         """
         self.console = console or Console()
         self.model = default_model
-        self.ollama = ollama
+        self.llm = llm
+        self.provider = provider
+        self.api_base = api_base
+        self.api_key = api_key
         self._capabilities_cache: Dict[str, List[str]] = {}
 
     async def check_ollama_running(self) -> bool:
-        """Check if Ollama is running by making a request to its API.
+        """Check if the LLM provider is reachable.
 
         Returns:
-            bool: True if Ollama is running, False otherwise
+            bool: True if the provider is reachable, False otherwise
         """
         try:
-            result = await self.ollama.list()
-            if result:
-                return True
+            await self._list_models()
+            return True
         except Exception:
             return False
 
     async def list_ollama_models(self) -> List[Dict[str, Any]]:
-        """Get a list of available Ollama models.
+        """Get a list of available models from the provider.
 
         Returns:
             List[Dict[str, Any]]: List of model objects each with name and other metadata
         """
         try:
-            result = await self.ollama.list()
-            if result:
-                models = result.get("models", [])
-                return models
+            return await self._list_models()
         except Exception as e:
-            self.console.print(f"[red]Error getting models from Ollama: {str(e)}[/red]")
+            self.console.print(f"[red]Error getting models: {str(e)}[/red]")
             return []
+
+    async def _list_models(self) -> List[Dict[str, Any]]:
+        """Fetch models from the provider, returning a list of dicts with 'name' etc."""
+        if self.provider == "ollama":
+            return await self._ollama_list_models()
+        return await self._generic_list_models()
+
+    async def _ollama_list_models(self) -> List[Dict[str, Any]]:
+        """Call ollama's native /api/tags for full model metadata."""
+        base = (self.api_base or "http://localhost:11434").rstrip("/")
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{base}/api/tags")
+            resp.raise_for_status()
+            return resp.json().get("models", [])
+
+    async def _generic_list_models(self) -> List[Dict[str, Any]]:
+        """List models via any-llm for OpenAI-compatible providers."""
+        if self.llm is None:
+            return []
+        result = await self.llm.alist_models()
+        items = result.data if hasattr(result, "data") else result
+        models = []
+        for m in (items or []):
+            model_id = getattr(m, "id", str(m))
+            created = getattr(m, "created", None)
+            modified_at = (
+                datetime.fromtimestamp(created, tz=timezone.utc).isoformat()
+                if created else ""
+            )
+            models.append({"name": model_id, "model": model_id, "modified_at": modified_at, "size": 0, "digest": "", "details": {}})
+        return models
 
     def get_current_model(self) -> str:
         """Get the currently selected model.
@@ -86,12 +123,27 @@ class ModelManager:
         if model_name in self._capabilities_cache:
             return self._capabilities_cache[model_name]
         try:
-            model_info = await self.ollama.show(model_name)
-            caps = model_info.get('capabilities') or []
+            caps = await self._fetch_capabilities(model_name)
             self._capabilities_cache[model_name] = list(caps)
         except Exception:
             self._capabilities_cache[model_name] = []
         return self._capabilities_cache[model_name]
+
+    async def _fetch_capabilities(self, model_name: str) -> List[str]:
+        """Fetch raw capabilities for a model from the provider."""
+        if self.provider == "ollama":
+            return await self._ollama_fetch_capabilities(model_name)
+        # For non-ollama providers, assume all capabilities are available.
+        # The provider API will surface an error if a specific capability is unsupported.
+        return ["tools", "vision", "thinking"]
+
+    async def _ollama_fetch_capabilities(self, model_name: str) -> List[str]:
+        """Call ollama's /api/show endpoint for real capability data."""
+        base = (self.api_base or "http://localhost:11434").rstrip("/")
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(f"{base}/api/show", json={"name": model_name})
+            resp.raise_for_status()
+            return resp.json().get("capabilities", [])
 
     def format_capabilities_badges(self, capabilities: List[str]) -> str:
         """Format model capabilities as colored emoji+word badges.
@@ -143,12 +195,20 @@ class ModelManager:
 
         # Format the date if available
         modified_at = model.get("modified_at", "Unknown")
-        if modified_at != "Unknown":
+        if modified_at and modified_at != "Unknown":
             try:
-                # Directly format the datetime object
-                modified_at = modified_at.strftime("%Y-%m-%d %H:%M:%S")
+                if hasattr(modified_at, "strftime"):
+                    # datetime object (e.g. from non-ollama providers)
+                    modified_at = modified_at.strftime("%Y-%m-%d %H:%M:%S")
+                elif isinstance(modified_at, str):
+                    # ISO string from ollama native API — parse then format
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(modified_at)
+                    modified_at = dt.strftime("%Y-%m-%d %H:%M:%S")
             except Exception:
                 modified_at = "Unknown date"
+        else:
+            modified_at = "Unknown"
 
         return model_name, size_str, modified_at
 
