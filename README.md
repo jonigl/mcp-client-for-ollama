@@ -29,6 +29,7 @@
 - [Features](#features)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
+- [Atlas Cloud Provider](#atlas-cloud-provider)
 - [Usage](#usage)
   - [Command-line Arguments](#command-line-arguments)
   - [Usage Examples](#usage-examples)
@@ -69,6 +70,7 @@ MCP Client for Ollama (ollmcp) is a modern, interactive terminal application (TU
 - 📋 **MCP Prompts Support**: Browse, invoke, and manage prompts from MCP servers with argument collection, preview, and safe rollback
 - 📦 **MCP Resources Support**: Browse and read contextual data from MCP servers including files, documents, and structured data
 - ☁️ **Ollama Cloud Support**: Works seamlessly with Ollama Cloud models for tool calling, enabling access to powerful cloud-hosted models while using local MCP tools
+- 🌍 **Atlas Cloud Support**: Connect to Atlas Cloud's OpenAI-compatible API for hosted text generation, streaming, and tool-calling workflows
 - 🎨 **Rich Terminal Interface**: Interactive console UI with modern styling
 - 🌊 **Streaming Responses**: View model outputs in real-time as they're generated
 - 📝 **Answer Display Modes**: Switch between Plain, Markdown, or Both response views while streaming
@@ -125,6 +127,60 @@ uv venv && source .venv/bin/activate
 uv pip install .
 uv run -m mcp_client_for_ollama
 ```
+
+## Atlas Cloud Provider
+
+Atlas Cloud can be used as a hosted provider for this client through its OpenAI-compatible API.
+
+<p align="center">
+  <img src="https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/atlascloud-readme-intro.png?raw=true" alt="Atlas Cloud Provider Intro">
+</p>
+
+> [!TIP]
+> [Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=mcp-client-for-ollama) is a full-modal AI inference platform that gives developers a single AI API to access video generation, image generation, and LLM APIs. Instead of managing multiple vendor integrations, you connect once and get unified access to 300+ curated models across all modalities.
+>
+> Check out Atlas Cloud's coding plan promotion for more budget-friendly API access:
+> https://www.atlascloud.ai/console/coding-plan
+
+### Atlas Cloud Setup
+
+1. Save your Atlas Cloud key locally in `~/.config/ollmcp/atlascloud.json`:
+
+```json
+{
+  "apiKey": "YOUR_ATLAS_API_KEY"
+}
+```
+
+2. Or export it before launch:
+
+```bash
+export ATLAS_API_KEY=YOUR_ATLAS_API_KEY
+```
+
+3. Start the client against the Atlas Cloud endpoint:
+
+```bash
+ollmcp \
+  --host https://api.atlascloud.ai/v1 \
+  --model openai/gpt-4o-mini
+```
+
+### Atlas Cloud Notes
+
+- Atlas Cloud uses `https://api.atlascloud.ai/v1` as the base URL
+- The client auto-detects Atlas Cloud from the configured `--host`
+- Text generation, streaming responses, and tool-calling requests use the OpenAI-compatible `/chat/completions` API
+- Model discovery uses the Atlas Cloud `/models` endpoint
+- The local key file `~/.config/ollmcp/atlascloud.json` is not tracked by git
+
+Validated Atlas 50-LLM model pool for `ollmcp --model <model-id>`:
+
+- `deepseek-ai/DeepSeek-V3-0324`, `deepseek-ai/deepseek-r1-0528`, `moonshotai/Kimi-K2-Instruct`, `Qwen/Qwen3-Coder`, `Qwen/Qwen3-235B-A22B-Instruct-2507`, `deepseek-ai/DeepSeek-V3.1`, `moonshotai/Kimi-K2-Instruct-0905`, `Qwen/Qwen3-Next-80B-A3B-Instruct`, `Qwen/Qwen3-Next-80B-A3B-Thinking`, `Qwen/Qwen3-30B-A3B-Instruct-2507`
+- `deepseek-ai/DeepSeek-V3.1-Terminus`, `deepseek-ai/DeepSeek-V3.2-Exp`, `zai-org/GLM-4.6`, `MiniMaxAI/MiniMax-M2`, `Qwen/Qwen3-VL-235B-A22B-Instruct`, `moonshotai/Kimi-K2-Thinking`, `google/gemini-2.5-flash`, `google/gemini-2.5-flash-lite`, `openai/gpt-5.1`, `openai/gpt-5.1-chat`
+- `openai/gpt-4o`, `openai/gpt-4o-mini`, `openai/gpt-4.1`, `openai/gpt-4.1-mini`, `openai/gpt-4.1-nano`, `openai/o1`, `openai/o3`, `openai/o3-mini`, `openai/o4-mini`, `anthropic/claude-sonnet-4.5-20250929`
+- `deepseek-ai/deepseek-v3.2`, `openai/gpt-5`, `openai/gpt-5-chat`, `openai/gpt-5-mini`, `openai/gpt-5-nano`, `openai/gpt-5.2`, `openai/gpt-5.2-chat`, `google/gemini-2.5-pro`, `anthropic/claude-opus-4.5-20251101`, `google/gemini-3-flash-preview`
+- `zai-org/glm-4.7`, `minimaxai/minimax-m2.1`, `google/gemini-2.0-flash`, `qwen/qwen3-8b`, `qwen/qwen3-235b-a22b-thinking-2507`, `qwen/qwen3-vl-235b-a22b-thinking`, `qwen/qwen3-30b-a3b`, `qwen/qwen3-30b-a3b-thinking-2507`, `deepseek-ai/deepseek-ocr`, `xai/grok-4-0709`
 
 ## Usage
 

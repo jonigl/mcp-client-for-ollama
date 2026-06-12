@@ -1,10 +1,11 @@
 """Utility to test connectivity"""
 from typing import Any, Optional
 
-import ollama
 from rich.panel import Panel
 import urllib.request
 import urllib.error
+
+from ..providers import build_llm_client, get_provider_name_for_host, is_atlascloud_host
 
 def check_url_connectivity(url):
     """
@@ -30,7 +31,7 @@ def check_url_connectivity(url):
 
 
 async def preflight_ollama(client: Any, cli_host: Optional[str] = None) -> bool:
-    """Resolve preflight host and check Ollama availability.
+    """Resolve preflight host and check provider availability.
 
     Host resolution order:
     1) CLI host (`cli_host`) if provided
@@ -45,7 +46,7 @@ async def preflight_ollama(client: Any, cli_host: Optional[str] = None) -> bool:
         cli_host: Optional host provided from CLI args.
 
     Returns:
-        bool: True when Ollama is reachable, otherwise False.
+        bool: True when the configured provider is reachable, otherwise False.
     """
     preflight_host = cli_host if cli_host is not None else client.host
 
@@ -57,20 +58,25 @@ async def preflight_ollama(client: Any, cli_host: Optional[str] = None) -> bool:
 
     if preflight_host != client.host:
         client.host = preflight_host
-        client.ollama = ollama.AsyncClient(host=preflight_host)
+        client.ollama = build_llm_client(preflight_host)
         client.model_manager.ollama = client.ollama
 
     is_running = await client.model_manager.check_ollama_running()
     if not is_running:
+        provider_name = get_provider_name_for_host(client.host)
         client.console.print(Panel(
-            "[bold red]Error: Ollama is not running![/bold red]\n\n"
-            f"[yellow]Ollama current configured host: {client.host}[/yellow]\n\n"
-            "This client requires Ollama to be running to process queries.\n\n"
-            "Please start Ollama by running the 'ollama serve' command in a terminal.\n\n"
-            "💡 [bold magenta]Tip:[/bold magenta] If you configured a different host in a saved default configuration you can\n\n"
-            "   1. Use --host flag to override the configured host for example: ollmcp --host http://localhost:11434\n"
-            "   2. Once done, you can save a new default configuration to avoid needing to specify it each time.",
-            title="Ollama Not Running", border_style="red", expand=False
+            f"[bold red]Error: {provider_name} is unavailable![/bold red]\n\n"
+            f"[yellow]{provider_name} current configured host: {client.host}[/yellow]\n\n"
+            f"This client requires {provider_name} to be reachable to process queries.\n\n"
+            + (
+                "Please start Ollama by running the 'ollama serve' command in a terminal.\n\n"
+                if not is_atlascloud_host(client.host)
+                else "Please verify your Atlas Cloud API key, host URL, and network access.\n\n"
+            )
+            + "💡 [bold magenta]Tip:[/bold magenta] If you configured a different host in a saved default configuration you can\n\n"
+            + "   1. Use --host flag to override the configured host for example: ollmcp --host http://localhost:11434\n"
+            + "   2. Once done, you can save a new default configuration to avoid needing to specify it each time.",
+            title=f"{provider_name} Unavailable", border_style="red", expand=False
         ))
 
     return is_running
