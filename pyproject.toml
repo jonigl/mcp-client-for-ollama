@@ -33,5 +33,5 @@ include = ["mcp_client_for_ollama*"]
 
 [dependency-groups]
 dev = [
-    "pytest~=9.0.0",
+    "pytest>=9.0,<9.2",
 ]
