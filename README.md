@@ -30,6 +30,7 @@
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
+  - ✨**NEW** [Managing MCP Servers via CLI](#managing-mcp-servers-via-cli)
   - [Command-line Arguments](#command-line-arguments)
   - [Usage Examples](#usage-examples)
   - [How Tool Calls Work](#how-tool-calls-work)
@@ -134,7 +135,63 @@ Run with default settings:
 ollmcp
 ```
 
-> If you don't provide any options, the client will use `auto-discovery` mode to find MCP servers from Claude's configuration.
+## Managing MCP Servers via CLI
+
+ollmcp can manage its own MCP server configurations directly from the command line, similar to `claude mcp`:
+
+```bash
+# Remote servers (Streamable HTTP or SSE)
+ollmcp mcp add --transport http <name> <url>
+ollmcp mcp add --transport sse <name> <url>
+
+# Local stdio servers - everything after `--` is the command to run
+ollmcp mcp add [options] <name> -- <command> [args...]
+
+# List configured servers
+ollmcp mcp list
+
+# Remove a server
+ollmcp mcp remove <name>
+
+# For more details on options and usage, run:
+ollmcp mcp --help
+ollmcp mcp add --help
+```
+
+**Examples:**
+
+> [!TIP]
+> Once you have added some servers, simply running `ollmcp` will connect to them automatically.
+
+```bash
+ollmcp mcp add --transport http github https://api.githubcopilot.com/mcp/ --header "Authorization: Bearer $YOUR_GITHUB_PAT"
+ollmcp mcp add --transport stdio playwright npx @playwright/mcp@latest
+ollmcp mcp add filesystem -- npx -y @modelcontextprotocol/server-filesystem /allowed-dir1 ~/allowed-dir2 # stdio transport by default
+ollmcp mcp add --env API_KEY=YOUR_KEY --transport sse my-sse-server http://localhost:8000/sse
+```
+
+
+### mcp add options
+
+- `--transport`, `-t`: `stdio` (default), `sse`, or `http`.
+- `--header`, `-H`: HTTP header as `"Name: Value"` for `sse`/`http` servers. Repeatable.
+- `--env`, `-e`: Environment variable as `KEY=value` for `stdio` servers. Repeatable.
+- `--scope`, `-s`: Where to store the server (see scopes below). Default: `local`.
+
+### Scopes
+
+| Scope     | Loads in              | Shared with team | Stored in |
+|-----------|-----------------------|-------------------|-----------|
+| `local`   | Current project only  | No                | `~/.config/ollmcp/mcp.local.json` (keyed by project path) |
+| `project` | Current project only  | Yes (via VCS)     | `.mcp.json` in the project root |
+| `user`    | All your projects     | No                | `~/.config/ollmcp/mcp.json` |
+
+The `project` scope writes a standard `.mcp.json` file at your project root, compatible with Claude Code and other MCP-aware tools. If the same server name exists in multiple scopes, precedence is `local` > `project` > `user`.
+
+> [!NOTE]
+> Servers added via `ollmcp mcp add` are always loaded as the base layer. Any flags (`--mcp-server`, `--mcp-server-url`, `--servers-json`, `--claude-desktop`) add on top. To include servers from Claude Desktop, pass `--claude-desktop` explicitly.
+>
+> If a server with the same name is also provided via one of those flags, both connections are currently opened, but only one is kept active under that name — avoid reusing a registry server's name in `--mcp-server`/`--mcp-server-url`/`--servers-json`/`--claude-desktop`.
 
 ### Command-line Arguments
 
@@ -152,11 +209,10 @@ ollmcp
 - `--mcp-server`, `-s`: Path to one or more MCP server scripts (.py or .js). Can be specified multiple times.
 - `--mcp-server-url`, `-u`: URL to one or more SSE or Streamable HTTP MCP servers. Can be specified multiple times. See [Common MCP endpoint paths](#common-mcp-endpoint-paths) for typical endpoints.
 - `--servers-json`, `-j`: Path to a JSON file with server configurations. See [Server Configuration Format](#server-configuration-format) for details.
-- `--auto-discovery`, `-a`: Auto-discover servers from Claude's default config file (default behavior if no other options provided).
+- `--claude-desktop`: Load servers from Claude Desktop's config file (`~/Library/Application Support/Claude/claude_desktop_config.json`). Merged with servers added via `ollmcp mcp add` and any other flags.
 
-> [!TIP]
-> Claude's configuration file is typically located at:
-> `~/Library/Application Support/Claude/claude_desktop_config.json`
+> [!IMPORTANT]
+> **Breaking change:** `--auto-discovery` / `-a` has been replaced by `--claude-desktop`. Additionally, servers added via `ollmcp mcp add` are now always loaded automatically — they are no longer a fallback that disappears when other flags are used. Claude Desktop servers are never loaded automatically; use `--claude-desktop` to include them.
 
 #### Ollama Configuration:
 
@@ -178,7 +234,7 @@ Simplest way to run the client:
 ollmcp
 ```
 > [!TIP]
-> This will automatically discover and connect to any MCP servers configured in Claude's settings and use the default model `qwen2.5:7b` or the model specified in your configuration file.
+> This connects to all servers registered via `ollmcp mcp add` and uses the default model `qwen2.5:7b` or the model from your configuration file. Pass `--claude-desktop` to also include servers from Claude Desktop's config.
 
 Connect to a single server:
 
@@ -196,7 +252,7 @@ ollmcp --mcp-server /path/to/weather.py --mcp-server /path/to/filesystem.js
 ollmcp -s /path/to/weather.py -s /path/to/filesystem.js
 ```
 
->[!TIP]
+> [!TIP]
 > If model is not specified, the default model `qwen2.5:7b` will be used or the model specified in your configuration file.
 
 Use a JSON configuration file:
@@ -207,15 +263,15 @@ ollmcp --servers-json /path/to/servers.json --model llama3.2:1b
 ollmcp -j /path/to/servers.json -m llama3.2:1b
 ```
 
->[!TIP]
+> [!TIP]
 > See the [Server Configuration Format](#server-configuration-format) section for details on how to structure the JSON file.
 
 Use a custom Ollama host:
 
 ```bash
-ollmcp --host http://localhost:22545 --servers-json /path/to/servers.json --auto-discovery
+ollmcp --host http://localhost:22545 --servers-json /path/to/servers.json
 # Or using short flags:
-ollmcp -H http://localhost:22545 -j /path/to/servers.json -a
+ollmcp -H http://localhost:22545 -j /path/to/servers.json
 ```
 
 Connect to SSE or Streamable HTTP servers by URL:
@@ -242,12 +298,12 @@ ollmcp --mcp-server /path/to/weather.py --mcp-server-url http://localhost:8000/m
 ollmcp -s /path/to/weather.py -u http://localhost:8000/mcp -m qwen3:1.7b
 ```
 
-Use auto-discovery with mixed server types:
+Include Claude Desktop servers alongside other sources:
 
 ```bash
-ollmcp --mcp-server /path/to/weather.py --mcp-server-url http://localhost:8000/mcp --auto-discovery
+ollmcp --mcp-server /path/to/weather.py --mcp-server-url http://localhost:8000/mcp --claude-desktop
 # Or using short flags:
-ollmcp -s /path/to/weather.py -u http://localhost:8000/mcp -a
+ollmcp -s /path/to/weather.py -u http://localhost:8000/mcp --claude-desktop
 ```
 
 ## Interactive Commands
@@ -420,7 +476,7 @@ The `reload-servers` command (`rs`) is particularly useful during MCP server dev
 
 Simply type `/reload-servers` or `/rs` in the chat interface, and the client will:
 1. Disconnect from all current MCP servers
-2. Reconnect using the same parameters (server paths, config files, auto-discovery)
+2. Reconnect using the same parameters (servers added via `ollmcp mcp add`, server paths, config files, `--claude-desktop`)
 3. Restore your previous tool enabled/disabled settings
 4. Display the updated server and tool status
 
@@ -819,7 +875,7 @@ A common point of confusion is where to store MCP server configuration files and
 You can then point `ollmcp` at that file at startup with `-j` / `--servers-json`.
 
 > [!IMPORTANT]
-> When using HTTP-based MCP servers, use the `streamable_http` type (not just `http`). Also check the [Common MCP endpoint paths](#common-mcp-endpoint-paths) section below for typical endpoints.
+> For HTTP-based MCP servers, `"type": "http"`, `"streamable-http"`, and `"streamable_http"` are all accepted and treated the same way. Also check the [Common MCP endpoint paths](#common-mcp-endpoint-paths) section below for typical endpoints.
 
 Here a minimal working example let's say this is your `~/.config/ollmcp/mcp-servers/config.json`:
 

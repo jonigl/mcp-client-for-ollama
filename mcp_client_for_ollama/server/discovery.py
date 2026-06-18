@@ -86,6 +86,59 @@ def process_server_urls(server_urls) -> List[Dict[str, Any]]:
 
     return all_servers
 
+# Aliases for the Streamable HTTP transport accepted in config "type" fields.
+# ollmcp uses "streamable_http" internally; the cross-tool .mcp.json standard and
+# Claude Code use "http" / "streamable-http". Normalize them all so externally
+# authored configs (and our own writes) parse correctly.
+_HTTP_TYPE_ALIASES = {"http", "streamable-http", "streamable_http"}
+
+
+def parse_server_config_mapping(server_configs: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Parse and validate a mapping of MCP server configurations.
+
+    Args:
+        server_configs: The ``mcpServers`` mapping ({name: entry, ...})
+
+    Returns:
+        List of valid server configurations ready to be connected to
+    """
+    all_servers = []
+
+    for name, config in server_configs.items():
+        # Skip disabled servers
+        if config.get('disabled', False):
+            continue
+
+        # Determine server type
+        server_type = "config"  # Default type for STDIO servers
+
+        # Check for URL-based server types (sse or streamable_http)
+        if "type" in config:
+            # Type is explicitly specified in config; normalize HTTP aliases
+            raw_type = config["type"]
+            server_type = "streamable_http" if raw_type in _HTTP_TYPE_ALIASES else raw_type
+        elif "url" in config:
+            # URL exists but no type, default to streamable_http
+            server_type = "streamable_http"
+
+        # Create server config object
+        server = {
+            "type": server_type,
+            "name": name,
+            "config": config
+        }
+
+        # For URL-based servers, add direct access to URL and headers
+        if server_type in ["sse", "streamable_http"]:
+            server["url"] = config.get("url")
+            if "headers" in config:
+                server["headers"] = config.get("headers")
+
+        all_servers.append(server)
+
+    return all_servers
+
+
 def parse_server_configs(config_path: str) -> List[Dict[str, Any]]:
     """Parse and validate server configurations from a file.
 
@@ -95,60 +148,22 @@ def parse_server_configs(config_path: str) -> List[Dict[str, Any]]:
     Returns:
         List of valid server configurations ready to be connected to
     """
-    all_servers = []
-
     if not config_path or not os.path.exists(config_path):
-        return all_servers
+        return []
 
     try:
         with open(config_path, 'r') as f:
             config = json.load(f)
-        server_configs = config.get('mcpServers', {})
+        return parse_server_config_mapping(config.get('mcpServers', {}))
 
-        for name, config in server_configs.items():
-            # Skip disabled servers
-            if config.get('disabled', False):
-                continue
-
-            # Determine server type
-            server_type = "config"  # Default type for STDIO servers
-
-            # Check for URL-based server types (sse or streamable_http)
-            if "type" in config:
-                # Type is explicitly specified in config
-                server_type = config["type"]
-            elif "url" in config:
-                # URL exists but no type, default to streamable_http
-                server_type = "streamable_http"
-
-            # Create server config object
-            server = {
-                "type": server_type,
-                "name": name,
-                "config": config
-            }
-
-            # For URL-based servers, add direct access to URL and headers
-            if server_type in ["sse", "streamable_http"]:
-                server["url"] = config.get("url")
-                if "headers" in config:
-                    server["headers"] = config.get("headers")
-
-            all_servers.append(server)
-
-        return all_servers
-
-    except Exception as e:
+    except Exception:
         # Return empty list on error
         return []
 
-def auto_discover_servers() -> List[Dict[str, Any]]:
-    """Automatically discover available server configurations.
-
-    Currently only discovers from Claude's config.
+def load_claude_desktop_servers() -> List[Dict[str, Any]]:
+    """Load server configurations from Claude Desktop's config file.
 
     Returns:
-        List of server configurations found automatically
+        List of server configurations found in Claude Desktop's config
     """
-    # Use parse_server_configs to process Claude's config
     return parse_server_configs(DEFAULT_CLAUDE_CONFIG)
