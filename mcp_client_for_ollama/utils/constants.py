@@ -13,6 +13,14 @@ if not os.path.exists(DEFAULT_CONFIG_DIR):
 
 DEFAULT_CONFIG_FILE = "config.json"
 
+# MCP server registry files managed by `ollmcp mcp add/list/remove`
+# User scope: global, available across all projects
+USER_MCP_FILE = os.path.join(DEFAULT_CONFIG_DIR, "mcp.json")
+# Local scope: private per-project, keyed by absolute working directory
+LOCAL_MCP_FILE = os.path.join(DEFAULT_CONFIG_DIR, "mcp.local.json")
+# Project scope: shareable file at the project root (current working directory)
+PROJECT_MCP_FILENAME = ".mcp.json"
+
 # Default model
 DEFAULT_MODEL = "qwen2.5:7b"
 

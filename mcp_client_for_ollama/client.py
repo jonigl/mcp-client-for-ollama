@@ -31,6 +31,8 @@ from .utils.version import check_for_updates
 from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART
 from .utils.connection import preflight_ollama
 from .server.connector import ServerConnector
+from .server import registry
+from .server.cli_commands import mcp_app
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
 from .tools.manager import ToolManager
@@ -124,7 +126,7 @@ class MCPClient:
         self.server_connection_params = {
             'server_paths': None,
             'config_path': None,
-            'auto_discovery': False
+            'claude_desktop': False
         }
 
     @contextmanager
@@ -373,21 +375,23 @@ class MCPClient:
         """Display available tools with their enabled/disabled status"""
         self.tool_manager.display_available_tools()
 
-    async def connect_to_servers(self, server_paths=None, server_urls=None, config_path=None, auto_discovery=False):
+    async def connect_to_servers(self, server_paths=None, server_urls=None, config_path=None, claude_desktop=False, server_configs=None):
         """Connect to one or more MCP servers using the ServerConnector
 
         Args:
             server_paths: List of paths to server scripts (.py or .js)
             server_urls: List of URLs for SSE or Streamable HTTP servers
             config_path: Path to JSON config file with server configurations
-            auto_discovery: Whether to automatically discover servers
+            claude_desktop: Whether to load servers from Claude Desktop's config
+            server_configs: Pre-built ``mcpServers`` mapping ({name: entry})
         """
         # Store connection parameters for potential reload
         self.server_connection_params = {
             'server_paths': server_paths,
             'server_urls': server_urls,
             'config_path': config_path,
-            'auto_discovery': auto_discovery
+            'claude_desktop': claude_desktop,
+            'server_configs': server_configs
         }
 
         # Connect to servers using the server connector
@@ -395,7 +399,8 @@ class MCPClient:
             server_paths=server_paths,
             server_urls=server_urls,
             config_path=config_path,
-            auto_discovery=auto_discovery
+            claude_desktop=claude_desktop,
+            server_configs=server_configs
         )
 
         # Store the results
@@ -1761,7 +1766,8 @@ class MCPClient:
                 server_paths=self.server_connection_params['server_paths'],
                 server_urls=self.server_connection_params['server_urls'],
                 config_path=self.server_connection_params['config_path'],
-                auto_discovery=self.server_connection_params['auto_discovery']
+                claude_desktop=self.server_connection_params['claude_desktop'],
+                server_configs=self.server_connection_params.get('server_configs')
             )
 
             # Restore enabled tool states for tools that still exist
@@ -1784,9 +1790,12 @@ class MCPClient:
             ))
 
 app = typer.Typer(help="MCP Client for Ollama", context_settings={"help_option_names": ["-h", "--help"]})
+app.add_typer(mcp_app, name="mcp")
 
-@app.command()
+@app.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
+
     # MCP Server Configuration
     mcp_server: Optional[List[str]] = typer.Option(
         None, "--mcp-server", "-s",
@@ -1803,9 +1812,9 @@ def main(
         help="Path to a JSON file with server configurations",
         rich_help_panel="MCP Server Configuration"
     ),
-    auto_discovery: bool = typer.Option(
-        False, "--auto-discovery", "-a",
-        help=f"Auto-discover servers from Claude's config at {DEFAULT_CLAUDE_CONFIG} - If no other options are provided, this will be enabled by default",
+    claude_desktop: bool = typer.Option(
+        False, "--claude-desktop",
+        help=f"Load servers from Claude Desktop's config at {DEFAULT_CLAUDE_CONFIG}. Merged with registry servers and any other flags.",
         rich_help_panel="MCP Server Configuration"
     ),
 
@@ -1829,20 +1838,19 @@ def main(
 ):
     """Run the MCP Client for Ollama with specified options."""
 
+    if ctx.invoked_subcommand is not None:
+        return
+
     if version:
         typer.echo(f"mcp-client-for-ollama {__version__}")
         raise typer.Exit()
-
-    # If none of the server arguments are provided, enable auto-discovery
-    if not (mcp_server or mcp_server_url or servers_json or auto_discovery):
-        auto_discovery = True
 
     # Run the async main function with proper cleanup
     # Use manual loop management to ensure subprocesses cleanup before loop closes
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host))
+        loop.run_until_complete(async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host))
     finally:
         try:
             # Ensure executor cleanup completes before closing loop
@@ -1851,7 +1859,7 @@ def main(
         finally:
             loop.close()
 
-async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, model, host):
+async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host):
     """Asynchronous main function to run the MCP Client for Ollama"""
 
     console = Console()
@@ -1866,32 +1874,28 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
     if not await preflight_ollama(client, host):
         return
 
-    # Handle server configuration options - only use one source to prevent duplicates
+    # Registry is always the base layer — merge with any flag-provided sources
     config_path = None
-    auto_discovery_final = auto_discovery
+    merged = registry.merge_scopes()
+    server_configs = merged if merged else None
+    if server_configs:
+        console.print(f"[cyan]Using {len(server_configs)} MCP server(s) from ollmcp registry (local/project/user scopes)[/cyan]")
 
     if servers_json:
-        # If --servers-json is provided, use that and disable auto-discovery
         if os.path.exists(servers_json):
             config_path = servers_json
         else:
             console.print(f"[bold red]Error: Specified JSON config file not found: {servers_json}[/bold red]")
             return
-    elif auto_discovery:
-        # If --auto-discovery is provided, use that and set config_path to None
-        auto_discovery_final = True
+
+    if claude_desktop:
         if os.path.exists(DEFAULT_CLAUDE_CONFIG):
-            console.print(f"[cyan]Auto-discovering servers from Claude's config at {DEFAULT_CLAUDE_CONFIG}[/cyan]")
+            console.print(f"[cyan]Loading servers from Claude Desktop config at {DEFAULT_CLAUDE_CONFIG}[/cyan]")
         else:
-            console.print(f"[yellow]Warning: Claude config not found at {DEFAULT_CLAUDE_CONFIG}[/yellow]")
-    else:
-        # If neither is provided, check if DEFAULT_CLAUDE_CONFIG exists and use auto_discovery
-        if not mcp_server and not mcp_server_url:
-            if os.path.exists(DEFAULT_CLAUDE_CONFIG):
-                console.print(f"[cyan]Auto-discovering servers from Claude's config at {DEFAULT_CLAUDE_CONFIG}[/cyan]")
-                auto_discovery_final = True
-            else:
-                console.print("[yellow]Warning: No servers specified and Claude config not found.[/yellow]")
+            console.print(f"[yellow]Warning: Claude Desktop config not found at {DEFAULT_CLAUDE_CONFIG}[/yellow]")
+
+    if not mcp_server and not mcp_server_url and not server_configs and not config_path and not claude_desktop:
+        console.print("[yellow]No servers configured. Use 'ollmcp mcp add' to register servers, or provide --mcp-server, --mcp-server-url, --servers-json, or --claude-desktop flags.[/yellow]")
 
     # Validate mcp-server paths exist
     if mcp_server:
@@ -1900,7 +1904,7 @@ async def async_main(mcp_server, mcp_server_url, servers_json, auto_discovery, m
                 console.print(f"[bold red]Error: Server script not found: {server_path}[/bold red]")
                 return
     try:
-        await client.connect_to_servers(mcp_server, mcp_server_url, config_path, auto_discovery_final)
+        await client.connect_to_servers(mcp_server, mcp_server_url, config_path, claude_desktop, server_configs)
         client.auto_load_default_config()
 
         if host != client.host and host is not None:
