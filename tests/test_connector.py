@@ -1,5 +1,6 @@
 """Test server connector functionality."""
 
+import os
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 from mcp_client_for_ollama.server.connector import ServerConnector
@@ -355,3 +356,38 @@ class TestCapabilityHandling(unittest.IsolatedAsyncioTestCase):
                 assert mock_session.list_tools.call_count == 1
                 assert mock_session.list_tools.call_count == 1
             assert mock_session.list_prompts.call_count == 1
+
+
+class TestConnectToServersMerging(unittest.IsolatedAsyncioTestCase):
+    """Test that connect_to_servers parses and merges the server_configs mapping
+    (the registry's merged scopes) together with other server sources."""
+
+    async def test_server_configs_mapping_connects_each_entry(self):
+        async with AsyncExitStack() as stack:
+            connector = ServerConnector(stack)
+
+            with patch.object(connector, '_connect_to_server', new=AsyncMock(return_value=True)) as mock_connect:
+                await connector.connect_to_servers(
+                    server_configs={
+                        "fs": {"command": "npx", "args": ["-y", "server-fs"]},
+                        "weather": {"command": "python", "args": ["weather.py"]},
+                    }
+                )
+
+            connected_names = {call.args[0]["name"] for call in mock_connect.call_args_list}
+            assert connected_names == {"fs", "weather"}
+
+    async def test_server_configs_merges_with_server_paths(self):
+        """A registry-provided server_configs entry and a --mcp-server path should
+        both be connected, not just one (sources are additive, not exclusive)."""
+        async with AsyncExitStack() as stack:
+            connector = ServerConnector(stack)
+
+            with patch.object(connector, '_connect_to_server', new=AsyncMock(return_value=True)) as mock_connect:
+                await connector.connect_to_servers(
+                    server_configs={"fs": {"command": "npx", "args": ["-y", "server-fs"]}},
+                    server_paths=[__file__],
+                )
+
+            connected_names = {call.args[0]["name"] for call in mock_connect.call_args_list}
+            assert connected_names == {"fs", os.path.basename(__file__).split('.')[0]}

@@ -1,6 +1,6 @@
 """Test server discovery functionality."""
 
-from mcp_client_for_ollama.server.discovery import process_server_urls
+from mcp_client_for_ollama.server.discovery import process_server_urls, parse_server_config_mapping
 
 
 def test_process_server_urls():
@@ -128,3 +128,33 @@ def test_server_type_detection():
     # Default to streamable_http for generic URLs
     result = process_server_urls("https://api.example.com")
     assert result[0]["type"] == "streamable_http"
+
+
+def test_parse_server_config_mapping_normalizes_http_type_aliases():
+    """The 'http' and 'streamable-http' type aliases should normalize to streamable_http."""
+    mapping = {
+        "a": {"type": "http", "url": "https://a.example.com/mcp"},
+        "b": {"type": "streamable-http", "url": "https://b.example.com/mcp"},
+        "c": {"type": "streamable_http", "url": "https://c.example.com/mcp"},
+        "d": {"type": "sse", "url": "https://d.example.com/sse"},
+    }
+    result = parse_server_config_mapping(mapping)
+    by_name = {s["name"]: s for s in result}
+
+    assert by_name["a"]["type"] == "streamable_http"
+    assert by_name["b"]["type"] == "streamable_http"
+    assert by_name["c"]["type"] == "streamable_http"
+    assert by_name["d"]["type"] == "sse"
+
+
+def test_parse_server_config_mapping_stdio_and_disabled():
+    """STDIO entries (no type) parse as 'config'; disabled entries are skipped."""
+    mapping = {
+        "fs": {"command": "npx", "args": ["-y", "server-filesystem", "."]},
+        "off": {"command": "npx", "args": ["-y", "other"], "disabled": True},
+    }
+    result = parse_server_config_mapping(mapping)
+
+    assert len(result) == 1
+    assert result[0]["name"] == "fs"
+    assert result[0]["type"] == "config"
