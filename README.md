@@ -29,7 +29,7 @@
 - [Features](#features)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
-- [Usage](#usage)
+- [Installation options](#installation-options)
   - ✨**NEW** [Managing MCP Servers via CLI](#managing-mcp-servers-via-cli)
   - [Command-line Arguments](#command-line-arguments)
   - [Usage Examples](#usage-examples)
@@ -104,6 +104,19 @@ MCP Client for Ollama (ollmcp) is a modern, interactive terminal application (TU
 
 ## Quick Start
 
+Install ollmcp via pip, add an MCP server, and run the client:
+
+```bash
+# Install ollmcp via pip
+pip install --upgrade ollmcp
+# Add an MCP server (example: playwright stdio server)
+ollmcp mcp add playwright -- npx @playwright/mcp@latest
+# Run the client
+ollmcp
+```
+
+## Installation Options
+
 **Option 1:** Install with pip and run
 
 ```bash
@@ -111,7 +124,7 @@ pip install --upgrade ollmcp
 ollmcp
 ```
 
-**Option 2:** One-step install and run
+**Option 2:** Only run without installing (requires `uv` package manager)
 
 ```bash
 uvx ollmcp
@@ -125,14 +138,6 @@ cd mcp-client-for-ollama
 uv venv && source .venv/bin/activate
 uv pip install .
 uv run -m mcp_client_for_ollama
-```
-
-## Usage
-
-Run with default settings:
-
-```bash
-ollmcp
 ```
 
 ## Managing MCP Servers via CLI
