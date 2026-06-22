@@ -41,6 +41,8 @@ class HumanInTheLoopManager:
         """Toggle HIL confirmations"""
         if self.is_enabled():
             self.set_enabled(False)
+            self.console.print("[yellow]🤖 HIL confirmations disabled[/yellow]")
+            self.console.print("[dim]Tool calls will proceed automatically without confirmation.[/dim]")
         else:
             self.set_enabled(True)
             self.console.print("[green]🧑‍💻 HIL confirmations enabled[/green]")
@@ -152,7 +154,6 @@ class HumanInTheLoopManager:
             should_execute = execute_current in ["y", "yes"]
             if should_execute:
                 self.toggle()  # Disable HIL
-                self.console.print("[yellow]🤖 HIL confirmations disabled[/yellow]")
             return should_execute
 
         elif choice in ["s", "session"]:
