@@ -336,7 +336,7 @@ During chat, use these commands:
 | `/import-history`| `/ih`            | Import chat history from a JSON file                |
 | `/human-in-the-loop` | `/hil`       | Toggle Human-in-the-Loop confirmations for tool execution |
 | `/load-config`   | `/lc`            | Load tool and model configuration from a file       |
-| `/loop-limit`    | `/ll`            | Set maximum iterative tool-loop iterations (Agent Mode). Default: 3 |
+| `/loop-limit`    | `/ll`            | Set maximum iterative tool-loop iterations (Agent Mode). Default: 7 |
 | `/model`         | `/m`             | List and select a different Ollama model            |
 | `/model-config`  | `/mc`            | Configure advanced model parameters and system prompt |
 | `/display-mode`  | `/dm`            | Choose Plain, Markdown, or Both answer display modes |
@@ -984,7 +984,7 @@ Some models may request multiple tool calls in a single conversation. The client
 - When the model requests a tool call, the client executes it and sends the result back to the model
 - This process repeats until the model provides a final answer or reaches the configured loop limit
 - You can set the maximum number of iterations using the `loop-limit` (`ll`) command
-- The default loop limit is `3` to prevent infinite loops
+- The default loop limit is `7` to prevent infinite loops
 
 > [!NOTE]
 > If you want to prevent using Agent Mode, simply set the loop limit to `1`.

@@ -114,7 +114,7 @@ class MCPClient:
         self.input_mode = "single"  # Keep chat input single-line by default
         self.multiline_key_bindings = self._build_multiline_key_bindings()
         # Agent mode settings
-        self.loop_limit = 3  # Maximum follow-up tool loops per query
+        self.loop_limit = 7  # Maximum follow-up tool loops per query
         self.default_configuration_status = False  # Track if default configuration was loaded successfully
         self.model_resolution_status = None  # "no-models" | "auto-selected" | None, set during startup
         self.abort_current_query = False  # Flag to abort the current query execution
@@ -1585,11 +1585,11 @@ class MCPClient:
                 try:
                     self.loop_limit = max(1, int(config_data["agentSettings"]["loopLimit"]))
                 except (TypeError, ValueError):
-                    self.loop_limit = 3
+                    self.loop_limit = 7
             else:
-                self.loop_limit = 3
+                self.loop_limit = 7
         else:
-            self.loop_limit = 3
+            self.loop_limit = 7
 
         # Reset display settings from the default configuration
         if "displaySettings" in config_data:
