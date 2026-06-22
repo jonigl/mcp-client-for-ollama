@@ -25,7 +25,7 @@ def default_config() -> dict:
             "showThinking": True
         },
         "agentSettings": {
-            "loopLimit": 3
+            "loopLimit": 7
         },
         "modelConfig": {
             "system_prompt": "",
