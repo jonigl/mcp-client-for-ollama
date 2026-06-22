@@ -199,7 +199,7 @@ class ModelManager:
             self.console.print(Panel(Text.from_markup("[bold]🧠 Select a Model[/bold]", justify="center"), expand=True, border_style="green"))
 
             # Sort models by name for easier reading
-            models.sort(key=lambda x: x.get("name", ""))
+            models.sort(key=lambda m: self.format_model_display_info(m)[0])
 
             # Display available models as a table
             table = Table(show_header=True, header_style="bold cyan", border_style="blue", expand=False)
@@ -281,3 +281,90 @@ class ModelManager:
                     clear_console_func()
                 result_message = "[red]Invalid input. Please enter a number.[/red]"
                 result_style = "red"
+
+    async def resolve_initial_model(self, explicit_model: Optional[str], saved_model: Optional[str]) -> Optional[Any]:
+        """Validate the model to use at startup against what's actually installed.
+
+        Precedence: explicit_model (--model flag) > saved_model (saved configuration)
+        > first available model (alphabetically). The highest-priority candidate that
+        is actually installed wins. If a higher-priority candidate isn't installed,
+        the next one down is used instead and the caller is told about it.
+
+        Args:
+            explicit_model: The model passed via --model, if the user passed one.
+            saved_model: The model loaded from a saved configuration, if one existed.
+
+        Returns:
+            None if the top-priority candidate (or no candidate at all) was used as
+            requested, "no-models" if Ollama has no models installed, "auto-selected"
+            if no candidate was requested and the first available model was picked,
+            or a (requested, used) tuple if a lower-priority candidate had to be
+            substituted for an unavailable higher-priority one.
+        """
+        models = await self.list_ollama_models()
+        if not models:
+            # Keep showing whatever the user actually asked for (even if not
+            # installed yet) rather than the constructor's placeholder default.
+            self.model = explicit_model or saved_model or ""
+            return "no-models"
+
+        installed_names = {self.format_model_display_info(m)[0] for m in models}
+
+        def first_available() -> str:
+            models.sort(key=lambda m: self.format_model_display_info(m)[0])
+            name, _, _ = self.format_model_display_info(models[0])
+            return name
+
+        if explicit_model:
+            if explicit_model in installed_names:
+                self.model = explicit_model
+                return None
+            self.model = saved_model if saved_model in installed_names else first_available()
+            return (explicit_model, self.model)
+
+        if saved_model:
+            if saved_model in installed_names:
+                self.model = saved_model
+                return None
+            self.model = first_available()
+            return (saved_model, self.model)
+
+        self.model = first_available()
+        return "auto-selected"
+
+    def print_resolution_status(self, status: Optional[Any]) -> None:
+        """Print the outcome of resolve_initial_model(), if any.
+
+        Args:
+            status: The value returned by resolve_initial_model().
+        """
+        if status is None:
+            return
+        if status == "no-models":
+            self.console.print(Panel(
+                "[bold yellow]No Ollama models found on this host.[/bold yellow]\n\n"
+                "Pull one in another terminal, for example:\n"
+                "[bold cyan]ollama pull qwen3:0.6b[/bold cyan]\n\n"
+                "Then restart ollmcp, or run [bold cyan]/model[/bold cyan] once a model is installed.",
+                title="No Models Available", border_style="yellow", expand=False
+            ))
+            self.console.print()
+        elif status == "auto-selected":
+            self.console.print(Panel(
+                f"No saved model preference found — using [bold green]{self.model}[/bold green] (first available model).\n\n"
+                "• Switch models: [bold cyan]/model[/bold cyan] or [bold cyan]/m[/bold cyan]\n"
+                "• Save this as your default: [bold cyan]/save-config[/bold cyan] or [bold cyan]/sc[/bold cyan]",
+                title="Model Auto-Selected", border_style="cyan", expand=False
+            ))
+            self.console.print()
+        else:
+            requested, used = status
+            self.console.print(Panel(
+                f"Requested model [bold yellow]{requested}[/bold yellow] is not installed — "
+                f"using [bold green]{used}[/bold green] instead.\n\n"
+                f"Pull it with [bold cyan]ollama pull {requested}[/bold cyan] to use it, or:\n"
+                "• Switch models: [bold cyan]/model[/bold cyan] or [bold cyan]/m[/bold cyan]\n"
+                "• Save this as your default: [bold cyan]/save-config[/bold cyan] or [bold cyan]/sc[/bold cyan]",
+                title="Requested Model Unavailable", border_style="yellow", expand=False
+            ))
+            self.console.print()
