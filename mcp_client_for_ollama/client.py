@@ -116,6 +116,7 @@ class MCPClient:
         # Agent mode settings
         self.loop_limit = 3  # Maximum follow-up tool loops per query
         self.default_configuration_status = False  # Track if default configuration was loaded successfully
+        self.model_resolution_status = None  # "no-models" | "auto-selected" | None, set during startup
         self.abort_current_query = False  # Flag to abort the current query execution
         self.monitor_paused = False  # Flag to pause cancellation monitoring
         self.monitor_paused_ack = asyncio.Event()  # Event to acknowledge pause
@@ -469,6 +470,15 @@ class MCPClient:
 
     async def process_query(self, query: str, images=None) -> str:
         """Process a query using Ollama and available tools"""
+        if not self.model_manager.get_current_model():
+            self.console.print(Panel(
+                "[bold yellow]No model selected.[/bold yellow]\n\n"
+                "Pull one in another terminal with [bold cyan]ollama pull <model>[/bold cyan], then choose it with "
+                "[bold cyan]/model[/bold cyan] or [bold cyan]/m[/bold cyan].",
+                title="No Model Available", border_style="yellow", expand=False
+            ))
+            return ""
+
         # Create base message with current query
         current_message = {
             "role": "user",
@@ -774,6 +784,7 @@ class MCPClient:
             current_model = self.model_manager.get_current_model()
             tool_count = len(self.tool_manager.get_enabled_tool_objects())
             history_count = len(self.chat_history)
+            self.console.print()  # Add spacing before the panel
             self.console.print(Panel(
                 f"[yellow]The model produced no response or tool calls.[/yellow]\n\n"
                 f"Current model: [cyan]{current_model}[/cyan] · "
@@ -947,10 +958,12 @@ class MCPClient:
         self.clear_console()
         self.console.print(Panel(Text.from_markup("[bold green]Welcome to the MCP Client for Ollama 🦙[/bold green]", justify="center"), expand=True, border_style="green"))
         self.display_available_tools()
-        await self.model_manager.fetch_capabilities(self.model_manager.get_current_model())
-        self.display_current_model()
+        if self.model_resolution_status != "no-models":
+            await self.model_manager.fetch_capabilities(self.model_manager.get_current_model())
+            self.display_current_model()
         self.print_startup_help()
         self.print_auto_load_default_config_status()
+        self.model_manager.print_resolution_status(self.model_resolution_status)
         await self.display_check_for_updates()
 
         while True:
@@ -1819,9 +1832,9 @@ def main(
     ),
 
     # Ollama Configuration
-    model: str = typer.Option(
-        DEFAULT_MODEL, "--model", "-m",
-        help="Ollama model to use",
+    model: Optional[str] = typer.Option(
+        None, "--model", "-m",
+        help="Ollama model to use. Defaults to your saved configuration's model, or the first available model.",
         rich_help_panel="Ollama Configuration"
     ),
     host: str = typer.Option(
@@ -1866,7 +1879,7 @@ async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, m
 
     # Create a temporary client to check if Ollama is running
     initial_host = host if host is not None else DEFAULT_OLLAMA_HOST
-    client = MCPClient(model=model, host=initial_host)
+    client = MCPClient(model=model or DEFAULT_MODEL, host=initial_host)
 
     # Show startup banner before server discovery messages.
     client.print_welcome_ascii()
@@ -1912,9 +1925,13 @@ async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, m
             client.ollama = ollama.AsyncClient(host=host)
             client.model_manager.ollama = client.ollama
 
-        # If model was explicitly provided via CLI flag (not default), override any loaded config
-        if model != DEFAULT_MODEL:
-            client.model_manager.set_model(model)
+        # Resolve the model to use: --model flag > saved config > first available
+        # model, validated against what's actually installed (auto_load_default_config()
+        # above already applied any saved model to model_manager when a config existed).
+        # `model` is None unless --model was actually passed, so this is unambiguous
+        # (unlike comparing against the DEFAULT_MODEL sentinel).
+        saved_model = client.model_manager.get_current_model() if client.default_configuration_status else None
+        client.model_resolution_status = await client.model_manager.resolve_initial_model(model, saved_model)
 
         await client.chat_loop()
     finally:

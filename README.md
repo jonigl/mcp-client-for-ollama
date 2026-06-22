@@ -221,7 +221,7 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 
 #### Ollama Configuration:
 
-- `--model`, `-m` MODEL: Ollama model to use. Default: `qwen2.5:7b`
+- `--model`, `-m` MODEL: Ollama model to use. Default: your saved configuration's model if set, otherwise the first model available in Ollama
 - `--host`, `-H` HOST: Ollama host URL. Default: `http://localhost:11434`
 
 #### General Options:
@@ -239,7 +239,7 @@ Simplest way to run the client:
 ollmcp
 ```
 > [!TIP]
-> This connects to all servers registered via `ollmcp mcp add` and uses the default model `qwen2.5:7b` or the model from your configuration file. Pass `--claude-desktop` to also include servers from Claude Desktop's config.
+> This connects to all servers registered via `ollmcp mcp add` and uses the model from your saved configuration file, or the first available model in Ollama if none is saved. Pass `--claude-desktop` to also include servers from Claude Desktop's config.
 
 Connect to a single server:
 
@@ -258,7 +258,7 @@ ollmcp -s /path/to/weather.py -s /path/to/filesystem.js
 ```
 
 > [!TIP]
-> If model is not specified, the default model `qwen2.5:7b` will be used or the model specified in your configuration file.
+> If `--model` is not specified, the model from your saved configuration file is used; otherwise the first available model in Ollama is selected automatically (you'll be told how to pull one if none are installed).
 
 Use a JSON configuration file:
 

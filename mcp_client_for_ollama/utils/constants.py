@@ -21,8 +21,8 @@ LOCAL_MCP_FILE = os.path.join(DEFAULT_CONFIG_DIR, "mcp.local.json")
 # Project scope: shareable file at the project root (current working directory)
 PROJECT_MCP_FILENAME = ".mcp.json"
 
-# Default model
-DEFAULT_MODEL = "qwen2.5:7b"
+# Default model - Just a placeholder now, the actual default is determined by the user's saved configuration or the first available model in Ollama
+DEFAULT_MODEL = "qwen3:0.6b"
 
 # Default ollama lcoal url for API requests
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
