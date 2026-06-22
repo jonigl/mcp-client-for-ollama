@@ -100,11 +100,12 @@ MCP Client for Ollama (ollmcp) is a modern, interactive terminal application (TU
 
 - **Python 3.10+** ([Installation guide](https://www.python.org/downloads/))
 - **Ollama** running locally ([Installation guide](https://ollama.com/download))
+  - After installation, run `ollama list` to see available models. If no models are installed, you can pull one using `ollama pull <model_name>`. For example, `ollama pull gemma4:latest`.
 - **UV package manager** ([Installation guide](https://github.com/astral-sh/uv))
 
 ## Quick Start
 
-Install ollmcp via pip, add an MCP server, and run the client:
+Install `ollmcp` via pip, add an MCP server, and run the client:
 
 ```bash
 # Install ollmcp via pip
