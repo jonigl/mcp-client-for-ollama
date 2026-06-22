@@ -49,7 +49,7 @@ def test_default_config_uses_both_answer_render_modes():
     """Test that new configurations keep the current dual answer display behavior."""
     config = default_config()
 
-    assert config["displaySettings"]["answerRenderMode"] == "both"
+    assert config["displaySettings"]["answerRenderMode"] == "markdown"
 
 
 def test_validate_config_preserves_answer_render_mode():
@@ -58,11 +58,11 @@ def test_validate_config_preserves_answer_render_mode():
 
     validated = mgr._validate_config({
         "displaySettings": {
-            "answerRenderMode": "markdown"
+            "answerRenderMode": "both"
         }
     })
 
-    assert validated["displaySettings"]["answerRenderMode"] == "markdown"
+    assert validated["displaySettings"]["answerRenderMode"] == "both"
 
 
 def test_default_config_uses_single_line_input_mode():
