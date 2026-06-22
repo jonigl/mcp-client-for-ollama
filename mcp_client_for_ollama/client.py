@@ -110,7 +110,7 @@ class MCPClient:
         self.show_tool_execution = True  # By default, show tool execution displays
         # Metrics display settings
         self.show_metrics = False  # By default, don't show metrics after each query
-        self.answer_render_mode = "markdown"  # Show plain streaming output and final markdown by default
+        self.answer_render_mode = "markdown"  # Show answers in markdown format by default (options: plain, markdown, or both)
         self.input_mode = "single"  # Keep chat input single-line by default
         self.multiline_key_bindings = self._build_multiline_key_bindings()
         # Agent mode settings
