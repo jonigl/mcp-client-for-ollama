@@ -30,6 +30,7 @@ from .config.manager import ConfigManager
 from .utils.version import check_for_updates
 from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_PROVIDER, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART
 from any_llm import AnyLLM
+from any_llm.exceptions import MissingApiKeyError
 from .utils.connection import preflight_ollama
 from .utils.images import apply_images
 from .server.connector import ServerConnector
@@ -1053,6 +1054,14 @@ class MCPClient:
                             title="Tools Not Supported",
                             border_style="red", expand=False
                         ))
+                    elif "401" in error_msg or "403" in error_msg or "unauthorized" in error_msg.lower():
+                        self.console.print(Panel(
+                            f"[bold red]Authentication Error:[/bold red] The [bold blue]{self.provider}[/bold blue] provider rejected the request.\n\n"
+                            + ("No API key is set. " if not self.api_key else "The API key may be invalid or lack access to this model. ")
+                            + "Set a valid key with [bold cyan]--api-key[/bold cyan] or [bold cyan]$OLLMCP_API_KEY[/bold cyan].\n\n"
+                            f"[dim]Provider response: {error_msg}[/dim]",
+                            title="Authentication Failed", border_style="red", expand=False
+                        ))
                     else:
                         self.console.print(Panel(f"[bold red]LLM Error:[/bold red] {error_msg}",
                                                  border_style="red", expand=False))
@@ -1893,7 +1902,18 @@ async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, m
 
     # Create a temporary client to check if Ollama is running
     initial_host = host if host is not None else DEFAULT_OLLAMA_HOST
-    client = MCPClient(model=model or DEFAULT_MODEL, host=initial_host, provider=provider, api_key=api_key)
+    try:
+        client = MCPClient(model=model or DEFAULT_MODEL, host=initial_host, provider=provider, api_key=api_key)
+    except MissingApiKeyError as e:
+        console.print(Panel(
+            f"[bold red]API key required:[/bold red] The [bold blue]{provider}[/bold blue] provider needs an API key.\n\n"
+            f"Provide one with [bold cyan]--api-key[/bold cyan] / [bold cyan]-k[/bold cyan], "
+            f"or set [bold cyan]$OLLMCP_API_KEY[/bold cyan] or [bold cyan]${e.env_var_name}[/bold cyan].\n\n"
+            "[dim]Tip: if you pass a shell variable, quote it (e.g. [/dim][bold cyan]--api-key \"$MY_KEY\"[/bold cyan][dim]) "
+            "so an unset value isn't silently dropped.[/dim]",
+            title="Missing API Key", border_style="red", expand=False
+        ))
+        return
 
     # Show startup banner before server discovery messages.
     client.print_welcome_ascii()
