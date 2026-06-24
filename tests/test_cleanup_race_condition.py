@@ -4,18 +4,25 @@ This test suite verifies that the client can gracefully handle cleanup
 even when MCP servers send notifications during the shutdown process.
 """
 
+import sys
 import unittest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch, Mock
 from contextlib import AsyncExitStack
 from mcp_client_for_ollama.client import MCPClient
+import pytest
 
 
 class TestCleanupRaceCondition(unittest.IsolatedAsyncioTestCase):
     """Test suite for stdio server cleanup race conditions."""
 
+    @pytest.mark.skipif(sys.platform == 'win32' and os.getenv('CI') == 'true',
+                        reason="No interactive console in Windows GitHub Actions")
     async def test_cleanup_handles_broken_resource_error(self):
         """Test that cleanup gracefully handles BrokenResourceError during exit."""
+        # Note: This fails under Windows-12 via Github Actions:
+        #    prompt_toolkit.output.win32.NoConsoleScreenBufferError: No Windows console found.
+        #    Are you running cmd.exe?
         client = MCPClient()
 
         # Mock the exit stack to raise BrokenResourceError on aclose()
