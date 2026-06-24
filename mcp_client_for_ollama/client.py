@@ -24,13 +24,13 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
 import httpx
+from any_llm import AnyLLM
+from any_llm.exceptions import MissingApiKeyError
 
 from . import __version__
 from .config.manager import ConfigManager
 from .utils.version import check_for_updates
 from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_PROVIDER, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART
-from any_llm import AnyLLM
-from any_llm.exceptions import MissingApiKeyError
 from .utils.connection import preflight_ollama
 from .utils.images import apply_images
 from .server.connector import ServerConnector
