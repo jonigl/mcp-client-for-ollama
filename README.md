@@ -220,10 +220,15 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 > [!IMPORTANT]
 > **Breaking change:** `--auto-discovery` / `-a` has been replaced by `--claude-desktop`. Additionally, servers added via `ollmcp mcp add` are now always loaded automatically — they are no longer a fallback that disappears when other flags are used. Claude Desktop servers are never loaded automatically; use `--claude-desktop` to include them.
 
-#### Ollama Configuration:
+#### LLM Provider Configuration:
 
-- `--model`, `-m` MODEL: Ollama model to use. Default: your saved configuration's model if set, otherwise the first model available in Ollama
-- `--host`, `-H` HOST: Ollama host URL. Default: `http://localhost:11434`
+- `--model`, `-m` MODEL: Model to use. Default: your saved configuration's model if set, otherwise the first model available in Ollama
+- `--provider`, `-p` PROVIDER: LLM provider to use (e.g. `ollama`, `openai`, `openrouter`, `deepseek`). Default: `ollama`
+- `--host`, `-H` HOST: LLM host / API base URL. Defaults to Ollama's `http://localhost:11434` for the `ollama` provider, or the provider's own default endpoint otherwise.
+- `--api-key`, `-k` KEY: API key for the LLM provider (also read from the `$OLLMCP_API_KEY` environment variable). Not needed for `ollama`.
+
+> [!NOTE]
+> Currently supported providers: `ollama`, `openai`, and any OpenAI-compatible provider (`openrouter`, `deepseek`, `perplexity`, etc.). More providers coming soon.
 
 #### General Options:
 

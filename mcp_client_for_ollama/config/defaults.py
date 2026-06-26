@@ -6,6 +6,25 @@ This module provides default settings and paths used throughout the application.
 import os
 from ..utils.constants import DEFAULT_MODEL, DEFAULT_CONFIG_FILE, DEFAULT_CONFIG_DIR, DEFAULT_OLLAMA_HOST
 
+def default_provider_profile(provider: str = "ollama") -> dict:
+    """Get the default connection profile for a provider.
+
+    Args:
+        provider: Provider name (e.g., "ollama", "openai")
+
+    Returns:
+        dict: Default per-provider connection identity (host, model, apiKey).
+              An empty host means "use the provider's own default endpoint";
+              for ollama we seed the local default. An empty model means
+              "resolve to the first available model at startup".
+    """
+    return {
+        "host": DEFAULT_OLLAMA_HOST if provider == "ollama" else "",
+        "model": DEFAULT_MODEL if provider == "ollama" else "",
+        "apiKey": "",
+    }
+
+
 def default_config() -> dict:
     """Get default configuration settings.
 
@@ -14,10 +33,10 @@ def default_config() -> dict:
     """
 
     return {
-        "host": DEFAULT_OLLAMA_HOST,
-        "model": DEFAULT_MODEL,
-        "provider": "ollama",
-        "apiKey": "",
+        "defaultProvider": "ollama",
+        "providers": {
+            "ollama": default_provider_profile("ollama"),
+        },
         "enabledTools": {},  # Will be populated with available tools
         "contextSettings": {
             "retainContext": True

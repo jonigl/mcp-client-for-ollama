@@ -29,9 +29,10 @@ from any_llm.exceptions import MissingApiKeyError
 
 from . import __version__
 from .config.manager import ConfigManager
+from .config.defaults import default_config, default_provider_profile
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_PROVIDER, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART
-from .utils.connection import preflight_ollama
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_PROVIDER, SUPPORTED_PROVIDERS, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART
+from .utils.connection import preflight_ollama, validate_provider
 from .utils.images import apply_images
 from .server.connector import ServerConnector
 from .server import registry
@@ -587,6 +588,7 @@ class MCPClient:
                 break
 
             if loop_count >= self.loop_limit:
+                self.console.print()  # Add spacing before the panel
                 self.console.print(Panel(
                     f"[yellow]Your current loop limit is set to [bold]{self.loop_limit}[/bold] and has been reached. Skipping additional tool calls.[/yellow]\n"
                     f"You will probably want to increase this limit if your model requires more tool interactions to complete tasks.\n"
@@ -1063,6 +1065,7 @@ class MCPClient:
                             title="Authentication Failed", border_style="red", expand=False
                         ))
                     else:
+                        self.console.print() # Add spacing before the panel
                         self.console.print(Panel(f"[bold red]LLM Error:[/bold red] {error_msg}",
                                                  border_style="red", expand=False))
 
@@ -1409,7 +1412,9 @@ class MCPClient:
         """Automatically load the default configuration if it exists."""
         if self.config_manager.config_exists("default"):
             # self.console.print("[cyan]Default configuration found, loading...[/cyan]")
-            self.default_configuration_status = self.load_configuration("default")
+            # Connection identity (host/model/apiKey) is already resolved in
+            # async_main before the client was built, so only apply shared settings.
+            self.default_configuration_status = self.load_configuration("default", apply_connection=False)
 
     def print_auto_load_default_config_status(self):
         """Print the status of the auto-load default configuration."""
@@ -1423,12 +1428,24 @@ class MCPClient:
         Args:
             config_name: Optional name for the config (defaults to 'default')
         """
-        # Build config data
-        config_data = {
-            "host": self.host,
+        # Start from the existing config so other providers' profiles are kept,
+        # then update this provider's connection profile and the shared settings.
+        if self.config_manager.config_exists(config_name):
+            config_data = self.config_manager.load_configuration(config_name)
+        else:
+            config_data = default_config()
+
+        config_data.setdefault("providers", {})
+        config_data["providers"][self.provider] = {
+            "host": self.host or "",
             "model": self.model_manager.get_current_model(),
-            "provider": self.provider,
-            "apiKey": self.api_key,
+            "apiKey": self.api_key or "",
+        }
+        # Remember the last saved provider as the default for plain `ollmcp`.
+        config_data["defaultProvider"] = self.provider
+
+        # Shared settings (apply across all providers)
+        config_data.update({
             "enabledTools": self.tool_manager.get_enabled_tools(),
             "contextSettings": {
                 "retainContext": self.retain_context
@@ -1452,16 +1469,20 @@ class MCPClient:
             "hilSettings": {
                 "enabled": self.hil_manager.is_enabled()
             }
-        }
+        })
 
         # Use the ConfigManager to save the configuration
         return self.config_manager.save_configuration(config_data, config_name)
 
-    def load_configuration(self, config_name=None):
+    def load_configuration(self, config_name=None, apply_connection=True):
         """Load tool configuration and model settings from a file
 
         Args:
             config_name: Optional name of the config to load (defaults to 'default')
+            apply_connection: When True, apply the active provider's saved
+                connection profile (host/model/apiKey). At startup this is set
+                to False because the connection identity is already resolved in
+                async_main (with CLI flags taking precedence over the profile).
 
         Returns:
             bool: True if loaded successfully, False otherwise
@@ -1472,22 +1493,23 @@ class MCPClient:
         if not config_data:
             return False
 
-        # Apply the loaded configuration
-        if "provider" in config_data:
-            self.provider = config_data["provider"]
-        if "apiKey" in config_data:
-            self.api_key = config_data["apiKey"]
-
-        if "host" in config_data:
-            new_host = config_data["host"]
-            if new_host != self.host:
-                self.host = new_host
-                self.llm = AnyLLM.create(self.provider, api_key=self.api_key, api_base=new_host)
-                self.model_manager.llm = self.llm
-                self.model_manager.api_base = new_host
-
-        if "model" in config_data:
-            self.model_manager.set_model(config_data["model"])
+        # Apply the active provider's saved connection profile. The provider
+        # itself is fixed for the session (chosen at startup), so we only update
+        # host/model/apiKey for self.provider.
+        if apply_connection:
+            profile = (config_data.get("providers") or {}).get(self.provider)
+            if profile:
+                new_host = profile.get("host") or self.host
+                new_key = profile.get("apiKey") or self.api_key
+                if new_host != self.host or new_key != self.api_key:
+                    self.host = new_host
+                    self.api_key = new_key
+                    self.llm = AnyLLM.create(self.provider, api_key=self.api_key, api_base=new_host)
+                    self.model_manager.llm = self.llm
+                    self.model_manager.api_base = new_host
+                    self.model_manager.api_key = self.api_key
+                if profile.get("model"):
+                    self.model_manager.set_model(profile["model"])
 
         # Load enabled tools if specified
         if "enabledTools" in config_data:
@@ -1560,19 +1582,19 @@ class MCPClient:
         # Enable all tools in the server connector
         self.server_connector.enable_all_tools()
 
-        # Reset host from the default configuration
-        if "provider" in config_data:
-            self.provider = config_data.get("provider", DEFAULT_PROVIDER)
-        if "apiKey" in config_data:
-            self.api_key = config_data.get("apiKey", "")
-
-        if "host" in config_data:
-            new_host = config_data["host"]
-            if new_host != self.host:
-                self.host = new_host
-                self.llm = AnyLLM.create(self.provider, api_key=self.api_key, api_base=new_host)
-                self.model_manager.llm = self.llm
-                self.model_manager.api_base = new_host
+        # Reset the active provider's connection profile to its defaults.
+        # The provider itself stays fixed for the session.
+        profile = (config_data.get("providers") or {}).get(self.provider) or default_provider_profile(self.provider)
+        self.api_key = profile.get("apiKey", "")
+        new_host = profile.get("host") or None
+        if new_host != self.host:
+            self.host = new_host
+            self.llm = AnyLLM.create(self.provider, api_key=self.api_key, api_base=new_host)
+            self.model_manager.llm = self.llm
+            self.model_manager.api_base = new_host
+            self.model_manager.api_key = self.api_key
+        if profile.get("model"):
+            self.model_manager.set_model(profile["model"])
 
         # Reset context settings from the default configuration
         if "contextSettings" in config_data:
@@ -1851,12 +1873,12 @@ def main(
     ),
     host: str = typer.Option(
         None, "--host", "-H",
-        help="LLM host URL (Ollama host or API base URL for other providers)",
+        help="LLM host / API base URL. Defaults to Ollama's localhost:11434 for the ollama provider, or the provider's own default endpoint otherwise.",
         rich_help_panel="LLM Configuration"
     ),
-    provider: str = typer.Option(
-        DEFAULT_PROVIDER, "--provider", "-p",
-        help="LLM provider (e.g., ollama, openai, anthropic, mistral, groq, deepseek, together, openrouter, etc.)",
+    provider: Optional[str] = typer.Option(
+        None, "--provider", "-p",
+        help="LLM provider (e.g., ollama, openai, deepseek, openrouter). Defaults to your saved configuration's provider, or ollama.",
         rich_help_panel="LLM Configuration"
     ),
     api_key: Optional[str] = typer.Option(
@@ -1900,13 +1922,38 @@ async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, m
 
     console = Console()
 
-    # Create a temporary client to check if Ollama is running
-    initial_host = host if host is not None else DEFAULT_OLLAMA_HOST
+    # Resolve the provider and its saved connection profile before building the
+    # client, so the preflight check targets the right endpoint on the first try.
+    # `provider`/`model`/`host`/`api_key` are None unless the flag was actually
+    # passed, so CLI values cleanly take precedence over the saved profile
+    # (and `--provider` picks the provider; plain `ollmcp` resumes the last saved).
+    config_mgr = ConfigManager(console)
+    saved = config_mgr.load_configuration("default") if config_mgr.config_exists("default") else {}
+
+    effective_provider = provider or saved.get("defaultProvider") or DEFAULT_PROVIDER
+    if not validate_provider(effective_provider, console):
+        return
+
+    profile = (saved.get("providers") or {}).get(effective_provider) or default_provider_profile(effective_provider)
+
+    # Host: CLI flag > saved profile host > ollama local default / provider default.
+    if host is not None:
+        resolved_host = host
+    elif profile.get("host"):
+        resolved_host = profile["host"]
+    elif effective_provider == "ollama":
+        resolved_host = DEFAULT_OLLAMA_HOST
+    else:
+        resolved_host = None
+
+    resolved_api_key = api_key or profile.get("apiKey") or None
+    resolved_model = model or profile.get("model") or DEFAULT_MODEL
+
     try:
-        client = MCPClient(model=model or DEFAULT_MODEL, host=initial_host, provider=provider, api_key=api_key)
+        client = MCPClient(model=resolved_model, host=resolved_host, provider=effective_provider, api_key=resolved_api_key)
     except MissingApiKeyError as e:
         console.print(Panel(
-            f"[bold red]API key required:[/bold red] The [bold blue]{provider}[/bold blue] provider needs an API key.\n\n"
+            f"[bold red]API key required:[/bold red] The [bold blue]{effective_provider}[/bold blue] provider needs an API key.\n\n"
             f"Provide one with [bold cyan]--api-key[/bold cyan] / [bold cyan]-k[/bold cyan], "
             f"or set [bold cyan]$OLLMCP_API_KEY[/bold cyan] or [bold cyan]${e.env_var_name}[/bold cyan].\n\n"
             "[dim]Tip: if you pass a shell variable, quote it (e.g. [/dim][bold cyan]--api-key \"$MY_KEY\"[/bold cyan][dim]) "
@@ -1918,7 +1965,7 @@ async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, m
     # Show startup banner before server discovery messages.
     client.print_welcome_ascii()
 
-    if not await preflight_ollama(client, host):
+    if not await preflight_ollama(client):
         return
 
     # Registry is always the base layer — merge with any flag-provided sources
@@ -1952,32 +1999,14 @@ async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, m
                 return
     try:
         await client.connect_to_servers(mcp_server, mcp_server_url, config_path, claude_desktop, server_configs)
+        # Connection identity (provider/host/model/apiKey) was already resolved
+        # above; this only applies the shared settings from the saved config.
         client.auto_load_default_config()
 
-        # CLI args take precedence over loaded config
-        cli_changed = False
-        if provider != DEFAULT_PROVIDER:
-            client.provider = provider
-            cli_changed = True
-        if api_key:
-            client.api_key = api_key
-            cli_changed = True
-        if host is not None and host != client.host:
-            client.host = host
-            cli_changed = True
-
-        if cli_changed:
-            client.llm = AnyLLM.create(client.provider, api_key=client.api_key, api_base=client.host)
-            client.model_manager.llm = client.llm
-            client.model_manager.provider = client.provider
-            client.model_manager.api_base = client.host
-            client.model_manager.api_key = client.api_key
-
-        # Resolve the model to use: --model flag > saved config > first available
-        # model, validated against what's actually installed (auto_load_default_config()
-        # above already applied any saved model to model_manager when a config existed).
-        # `model` is None unless --model was actually passed, so this is unambiguous
-        # (unlike comparing against the DEFAULT_MODEL sentinel).
+        # Resolve the model to use: --model flag > saved profile model > first
+        # available model, validated against what's actually installed. The model
+        # resolved before construction is already in model_manager as its current
+        # model, so use it as the saved candidate.
         saved_model = client.model_manager.get_current_model() if client.default_configuration_status else None
         client.model_resolution_status = await client.model_manager.resolve_initial_model(model, saved_model)
 
