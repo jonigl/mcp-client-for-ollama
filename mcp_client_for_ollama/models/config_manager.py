@@ -210,6 +210,40 @@ class ModelConfigManager:
             options["num_batch"] = self.num_batch
         return options
 
+    def get_completion_kwargs(self, provider: str = "ollama") -> Dict[str, Any]:
+        """Get model options as kwargs for AnyLLM.acompletion().
+
+        For ollama: returns all 15 options using native names. They flow
+        through acompletion's **kwargs into the Ollama SDK's options dict.
+
+        For other providers: returns only the 7 standard OpenAI-compatible
+        options, remapping num_predict → max_tokens. Ollama-specific params
+        are omitted since they would cause errors on other SDKs.
+
+        Returns:
+            Dict containing only the configured options as keyword arguments
+        """
+        if provider == "ollama":
+            return self.get_ollama_options()
+
+        # Standard OpenAI-compatible options only
+        kwargs: Dict[str, Any] = {}
+        if self.temperature is not None:
+            kwargs["temperature"] = self.temperature
+        if self.top_p is not None:
+            kwargs["top_p"] = self.top_p
+        if self.num_predict is not None:
+            kwargs["max_tokens"] = self.num_predict
+        if self.stop is not None:
+            kwargs["stop"] = self.stop
+        if self.seed is not None:
+            kwargs["seed"] = self.seed
+        if self.presence_penalty is not None:
+            kwargs["presence_penalty"] = self.presence_penalty
+        if self.frequency_penalty is not None:
+            kwargs["frequency_penalty"] = self.frequency_penalty
+        return kwargs
+
     def get_system_prompt(self) -> str:
         """Get the current system prompt.
 

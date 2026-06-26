@@ -1,5 +1,6 @@
 """MCP Client for Ollama - A TUI client for interacting with Ollama models and MCP servers"""
 import asyncio
+import json
 import os
 import sys
 import select
@@ -22,14 +23,17 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
-import ollama
 import httpx
+from any_llm import AnyLLM
+from any_llm.exceptions import MissingApiKeyError
 
 from . import __version__
 from .config.manager import ConfigManager
+from .config.defaults import default_config, default_provider_profile
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART
-from .utils.connection import preflight_ollama
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_PROVIDER, SUPPORTED_PROVIDERS, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART
+from .utils.connection import preflight_ollama, validate_provider
+from .utils.images import apply_images
 from .server.connector import ServerConnector
 from .server import registry
 from .server.cli_commands import mcp_app
@@ -64,17 +68,22 @@ class MCPClient:
         "multiline": "Multiline",
     }
 
-    def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST):
+    def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST, provider: str = DEFAULT_PROVIDER, api_key: str = None, persist_api_key: bool = True):
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
         self.host = host
-        self.ollama = ollama.AsyncClient(host=host)
+        self.provider = provider
+        self.api_key = api_key or ""
+        # Whether this key may be written to the config file. Keys coming from the
+        # OLLMCP_API_KEY env var (or a provider's native env var) are never persisted.
+        self.persist_api_key = persist_api_key
+        self.llm = AnyLLM.create(provider, api_key=api_key, api_base=host)
         self.console = Console()
         self.config_manager = ConfigManager(self.console)
         # Initialize the server connector
         self.server_connector = ServerConnector(self.exit_stack, self.console)
         # Initialize the model manager
-        self.model_manager = ModelManager(console=self.console, default_model=model, ollama=self.ollama)
+        self.model_manager = ModelManager(console=self.console, default_model=model, llm=self.llm, provider=provider, api_base=host, api_key=api_key or "")
         # Initialize the model config manager
         self.model_config_manager = ModelConfigManager(console=self.console)
         # Initialize the tool manager with server connector reference
@@ -306,15 +315,9 @@ class MCPClient:
         try:
             current_model = self.model_manager.get_current_model()
             # Query the model's capabilities using ollama.show()
-            model_info = await self.ollama.show(current_model)
-
-            # Check if the model has 'thinking' capability
-            if 'capabilities' in model_info and model_info['capabilities']:
-                return 'thinking' in model_info['capabilities']
-
-            return False
+            caps = await self.model_manager.fetch_capabilities(current_model)
+            return 'thinking' in caps
         except Exception:
-            # If we can't determine capabilities, assume no thinking support
             return False
 
     async def supports_vision(self) -> bool:
@@ -325,12 +328,8 @@ class MCPClient:
         """
         try:
             current_model = self.model_manager.get_current_model()
-            model_info = await self.ollama.show(current_model)
-
-            if 'capabilities' in model_info and model_info['capabilities']:
-                return 'vision' in model_info['capabilities']
-
-            return False
+            caps = await self.model_manager.fetch_capabilities(current_model)
+            return 'vision' in caps
         except Exception:
             return False
 
@@ -535,28 +534,24 @@ class MCPClient:
         # Get current model from the model manager
         model = self.model_manager.get_current_model()
 
-        # Get model options in Ollama format
-        model_options = self.model_config_manager.get_ollama_options()
-
-        # Prepare chat parameters
-        chat_params = {
-            "model": model,
-            "messages": messages,
-            "stream": True,
-            "tools": available_tools,
-            "options": model_options
-        }
-
         # Add thinking parameter if thinking mode is enabled and model supports it
         supports_thinking = await self.supports_thinking_mode()
-        if supports_thinking:
-            chat_params["think"] = self.thinking_mode
 
         # Check vision capability once for the entire query
         has_vision = await self.supports_vision()
 
-        # Initial Ollama API call with the query and available tools
-        stream = await self.ollama.chat(**chat_params)
+        # Initial LLM API call with the query and available tools
+        stream = await self.llm.acompletion(
+            model=model,
+            messages=apply_images(messages),
+            stream=True,
+            stream_options={"include_usage": True},
+            tools=available_tools or None,
+            **({
+                "reasoning_effort": "high"
+            } if supports_thinking and self.thinking_mode else {}),
+            **self.model_config_manager.get_completion_kwargs(self.provider),
+        )
 
         # Process the streaming response with thinking mode support
         response_text = ""
@@ -582,8 +577,8 @@ class MCPClient:
         })
 
         # Update actual token count from metrics if available
-        if metrics and metrics.get('eval_count'):
-            self.actual_token_count += metrics['eval_count']
+        if metrics and metrics.get('completion_tokens'):
+            self.actual_token_count += metrics['completion_tokens']
 
         enabled_tools = self.tool_manager.get_enabled_tool_objects()
 
@@ -596,6 +591,7 @@ class MCPClient:
                 break
 
             if loop_count >= self.loop_limit:
+                self.console.print()  # Add spacing before the panel
                 self.console.print(Panel(
                     f"[yellow]Your current loop limit is set to [bold]{self.loop_limit}[/bold] and has been reached. Skipping additional tool calls.[/yellow]\n"
                     f"You will probably want to increase this limit if your model requires more tool interactions to complete tasks.\n"
@@ -607,8 +603,9 @@ class MCPClient:
             loop_count += 1
 
             for tool in pending_tool_calls:
-                tool_name = tool.function.name
-                tool_args = tool.function.arguments
+                tool_name = tool["function"]["name"]
+                tool_call_id = tool["id"]
+                tool_args = json.loads(tool["function"]["arguments"]) if tool["function"]["arguments"] else {}
 
                 # Parse server name and actual tool name from the qualified name
                 server_name, actual_tool_name = tool_name.split('.', 1) if '.' in tool_name else (None, tool_name)
@@ -647,7 +644,7 @@ class MCPClient:
                     messages.append({
                         "role": "tool",
                         "content": tool_response,
-                        "tool_name": tool_name
+                        "tool_call_id": tool_call_id
                     })
                     continue
 
@@ -663,7 +660,7 @@ class MCPClient:
                         messages.append({
                             "role": "tool",
                             "content": error_msg,
-                            "tool_name": tool_name
+                            "tool_call_id": tool_call_id
                         })
                         # Continue with next tool call if any
                         continue
@@ -719,7 +716,7 @@ class MCPClient:
                 tool_message = {
                     "role": "tool",
                     "content": tool_response,
-                    "tool_name": tool_name
+                    "tool_call_id": tool_call_id
                 }
 
                 messages.append(tool_message)
@@ -737,20 +734,18 @@ class MCPClient:
                     self._warn_vision_not_supported(len(tool_images), f"The tool '{tool_name}'")
 
 
-            # Get stream response from Ollama with the tool results
-            chat_params_followup = {
-                "model": model,
-                "messages": messages,
-                "stream": True,
-                "tools": available_tools,
-                "options": model_options
-            }
-
-            # Add thinking parameter if thinking mode is enabled and model supports it
-            if supports_thinking:
-                chat_params_followup["think"] = self.thinking_mode
-
-            stream = await self.ollama.chat(**chat_params_followup)
+            # Get stream response from LLM with the tool results
+            stream = await self.llm.acompletion(
+                model=model,
+                messages=apply_images(messages),
+                stream=True,
+                stream_options={"include_usage": True},
+                tools=available_tools or None,
+                **({
+                    "reasoning_effort": "high"
+                } if supports_thinking and self.thinking_mode else {}),
+                **self.model_config_manager.get_completion_kwargs(self.provider),
+            )
 
             # Process the streaming response with thinking mode support
             followup_response, pending_tool_calls, followup_metrics = await self.streaming_manager.process_streaming_response(
@@ -772,8 +767,8 @@ class MCPClient:
             })
 
             # Update actual token count from followup metrics if available
-            if followup_metrics and followup_metrics.get('eval_count'):
-                self.actual_token_count += followup_metrics['eval_count']
+            if followup_metrics and followup_metrics.get('completion_tokens'):
+                self.actual_token_count += followup_metrics['completion_tokens']
 
             if followup_response:
                 response_text = followup_response
@@ -1052,7 +1047,7 @@ class MCPClient:
                         border_style="red", expand=False
                     ))
 
-                except ollama.ResponseError as e:
+                except Exception as e:
                     # Extract error message without the traceback
                     error_msg = str(e)
                     if "does not support tools" in error_msg.lower():
@@ -1064,8 +1059,17 @@ class MCPClient:
                             title="Tools Not Supported",
                             border_style="red", expand=False
                         ))
+                    elif "401" in error_msg or "403" in error_msg or "unauthorized" in error_msg.lower():
+                        self.console.print(Panel(
+                            f"[bold red]Authentication Error:[/bold red] The [bold blue]{self.provider}[/bold blue] provider rejected the request.\n\n"
+                            + ("No API key is set. " if not self.api_key else "The API key may be invalid or lack access to this model. ")
+                            + "Set a valid key with [bold cyan]--api-key[/bold cyan] or [bold cyan]$OLLMCP_API_KEY[/bold cyan].\n\n"
+                            f"[dim]Provider response: {error_msg}[/dim]",
+                            title="Authentication Failed", border_style="red", expand=False
+                        ))
                     else:
-                        self.console.print(Panel(f"[bold red]Ollama Error:[/bold red] {error_msg}",
+                        self.console.print() # Add spacing before the panel
+                        self.console.print(Panel(f"[bold red]LLM Error:[/bold red] {error_msg}",
                                                  border_style="red", expand=False))
 
                     # If it's a "model not found" error, suggest how to fix it
@@ -1411,7 +1415,9 @@ class MCPClient:
         """Automatically load the default configuration if it exists."""
         if self.config_manager.config_exists("default"):
             # self.console.print("[cyan]Default configuration found, loading...[/cyan]")
-            self.default_configuration_status = self.load_configuration("default")
+            # Connection identity (host/model/apiKey) is already resolved in
+            # async_main before the client was built, so only apply shared settings.
+            self.default_configuration_status = self.load_configuration("default", apply_connection=False)
 
     def print_auto_load_default_config_status(self):
         """Print the status of the auto-load default configuration."""
@@ -1425,10 +1431,26 @@ class MCPClient:
         Args:
             config_name: Optional name for the config (defaults to 'default')
         """
-        # Build config data
-        config_data = {
-            "host": self.host,
+        # Start from the existing config so other providers' profiles are kept,
+        # then update this provider's connection profile and the shared settings.
+        if self.config_manager.config_exists(config_name):
+            config_data = self.config_manager.load_configuration(config_name)
+        else:
+            config_data = default_config()
+
+        # Don't write env-var-sourced keys to disk; keep any previously saved key.
+        existing_profile = (config_data.get("providers") or {}).get(self.provider, {})
+        config_data.setdefault("providers", {})
+        config_data["providers"][self.provider] = {
+            "host": self.host or "",
             "model": self.model_manager.get_current_model(),
+            "apiKey": (self.api_key or "") if self.persist_api_key else existing_profile.get("apiKey", ""),
+        }
+        # Remember the last saved provider as the default for plain `ollmcp`.
+        config_data["defaultProvider"] = self.provider
+
+        # Shared settings (apply across all providers)
+        config_data.update({
             "enabledTools": self.tool_manager.get_enabled_tools(),
             "contextSettings": {
                 "retainContext": self.retain_context
@@ -1452,16 +1474,20 @@ class MCPClient:
             "hilSettings": {
                 "enabled": self.hil_manager.is_enabled()
             }
-        }
+        })
 
         # Use the ConfigManager to save the configuration
         return self.config_manager.save_configuration(config_data, config_name)
 
-    def load_configuration(self, config_name=None):
+    def load_configuration(self, config_name=None, apply_connection=True):
         """Load tool configuration and model settings from a file
 
         Args:
             config_name: Optional name of the config to load (defaults to 'default')
+            apply_connection: When True, apply the active provider's saved
+                connection profile (host/model/apiKey). At startup this is set
+                to False because the connection identity is already resolved in
+                async_main (with CLI flags taking precedence over the profile).
 
         Returns:
             bool: True if loaded successfully, False otherwise
@@ -1472,16 +1498,23 @@ class MCPClient:
         if not config_data:
             return False
 
-        # Apply the loaded configuration
-        if "host" in config_data:
-            new_host = config_data["host"]
-            if new_host != self.host:
-                self.host = new_host
-                self.ollama = ollama.AsyncClient(host=new_host)
-                self.model_manager.ollama = self.ollama
-
-        if "model" in config_data:
-            self.model_manager.set_model(config_data["model"])
+        # Apply the active provider's saved connection profile. The provider
+        # itself is fixed for the session (chosen at startup), so we only update
+        # host/model/apiKey for self.provider.
+        if apply_connection:
+            profile = (config_data.get("providers") or {}).get(self.provider)
+            if profile:
+                new_host = profile.get("host") or self.host
+                new_key = profile.get("apiKey") or self.api_key
+                if new_host != self.host or new_key != self.api_key:
+                    self.host = new_host
+                    self.api_key = new_key
+                    self.llm = AnyLLM.create(self.provider, api_key=self.api_key, api_base=new_host)
+                    self.model_manager.llm = self.llm
+                    self.model_manager.api_base = new_host
+                    self.model_manager.api_key = self.api_key
+                if profile.get("model"):
+                    self.model_manager.set_model(profile["model"])
 
         # Load enabled tools if specified
         if "enabledTools" in config_data:
@@ -1554,13 +1587,19 @@ class MCPClient:
         # Enable all tools in the server connector
         self.server_connector.enable_all_tools()
 
-        # Reset host from the default configuration
-        if "host" in config_data:
-            new_host = config_data["host"]
-            if new_host != self.host:
-                self.host = new_host
-                self.ollama = ollama.AsyncClient(host=new_host)
-                self.model_manager.ollama = self.ollama
+        # Reset the active provider's connection profile to its defaults.
+        # The provider itself stays fixed for the session.
+        profile = (config_data.get("providers") or {}).get(self.provider) or default_provider_profile(self.provider)
+        self.api_key = profile.get("apiKey", "")
+        new_host = profile.get("host") or None
+        if new_host != self.host:
+            self.host = new_host
+            self.llm = AnyLLM.create(self.provider, api_key=self.api_key, api_base=new_host)
+            self.model_manager.llm = self.llm
+            self.model_manager.api_base = new_host
+            self.model_manager.api_key = self.api_key
+        if profile.get("model"):
+            self.model_manager.set_model(profile["model"])
 
         # Reset context settings from the default configuration
         if "contextSettings" in config_data:
@@ -1839,8 +1878,18 @@ def main(
     ),
     host: str = typer.Option(
         None, "--host", "-H",
-        help="Ollama host URL",
-        rich_help_panel="Ollama Configuration"
+        help="LLM host / API base URL. Defaults to Ollama's localhost:11434 for the ollama provider, or the provider's own default endpoint otherwise.",
+        rich_help_panel="LLM Configuration"
+    ),
+    provider: Optional[str] = typer.Option(
+        None, "--provider", "-p",
+        help="LLM provider (e.g., ollama, openai, deepseek, openrouter). Defaults to your saved configuration's provider, or ollama.",
+        rich_help_panel="LLM Configuration"
+    ),
+    api_key: Optional[str] = typer.Option(
+        None, "--api-key", "-k",
+        help="API key for the LLM provider. Also read from $OLLMCP_API_KEY (works with any --provider; not written to config). Not needed for ollama.",
+        rich_help_panel="LLM Configuration",
     ),
 
     # General Options
@@ -1863,7 +1912,7 @@ def main(
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host))
+        loop.run_until_complete(async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host, provider, api_key))
     finally:
         try:
             # Ensure executor cleanup completes before closing loop
@@ -1872,19 +1921,66 @@ def main(
         finally:
             loop.close()
 
-async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host):
+async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host, provider, api_key):
     """Asynchronous main function to run the MCP Client for Ollama"""
 
     console = Console()
 
-    # Create a temporary client to check if Ollama is running
-    initial_host = host if host is not None else DEFAULT_OLLAMA_HOST
-    client = MCPClient(model=model or DEFAULT_MODEL, host=initial_host)
+    # Resolve the provider and its saved connection profile before building the
+    # client, so the preflight check targets the right endpoint on the first try.
+    # `provider`/`model`/`host`/`api_key` are None unless the flag was actually
+    # passed, so CLI values cleanly take precedence over the saved profile
+    # (and `--provider` picks the provider; plain `ollmcp` resumes the last saved).
+    config_mgr = ConfigManager(console)
+    saved = config_mgr.load_configuration("default") if config_mgr.config_exists("default") else {}
+
+    effective_provider = provider or saved.get("defaultProvider") or DEFAULT_PROVIDER
+    if not validate_provider(effective_provider, console):
+        return
+
+    profile = (saved.get("providers") or {}).get(effective_provider) or default_provider_profile(effective_provider)
+
+    # Host: CLI flag > saved profile host > ollama local default / provider default.
+    if host is not None:
+        resolved_host = host
+    elif profile.get("host"):
+        resolved_host = profile["host"]
+    elif effective_provider == "ollama":
+        resolved_host = DEFAULT_OLLAMA_HOST
+    else:
+        resolved_host = None
+
+    # API key precedence: --api-key flag > OLLMCP_API_KEY env var > saved profile.
+    # Keys from the env var are never written back to the config file.
+    env_api_key = os.environ.get("OLLMCP_API_KEY")
+    if api_key:
+        resolved_api_key = api_key
+        persist_api_key = True
+    elif env_api_key:
+        resolved_api_key = env_api_key
+        persist_api_key = False
+    else:
+        resolved_api_key = profile.get("apiKey") or None
+        persist_api_key = True
+    resolved_model = model or profile.get("model") or DEFAULT_MODEL
+
+    try:
+        client = MCPClient(model=resolved_model, host=resolved_host, provider=effective_provider, api_key=resolved_api_key, persist_api_key=persist_api_key)
+    except MissingApiKeyError as e:
+        console.print(Panel(
+            f"[bold red]API key required:[/bold red] The [bold blue]{effective_provider}[/bold blue] provider needs an API key.\n\n"
+            f"Provide one with [bold cyan]--api-key[/bold cyan] / [bold cyan]-k[/bold cyan], "
+            f"or set [bold cyan]$OLLMCP_API_KEY[/bold cyan] or [bold cyan]${e.env_var_name}[/bold cyan].\n\n"
+            "[dim]Tip: if you pass a shell variable, quote it (e.g. [/dim][bold cyan]--api-key \"$MY_KEY\"[/bold cyan][dim]) "
+            "so an unset value isn't silently dropped.[/dim]",
+            title="Missing API Key", border_style="red", expand=False
+        ))
+        return
 
     # Show startup banner before server discovery messages.
     client.print_welcome_ascii()
 
-    if not await preflight_ollama(client, host):
+    if not await preflight_ollama(client):
         return
 
     # Registry is always the base layer — merge with any flag-provided sources
@@ -1918,18 +2014,14 @@ async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, m
                 return
     try:
         await client.connect_to_servers(mcp_server, mcp_server_url, config_path, claude_desktop, server_configs)
+        # Connection identity (provider/host/model/apiKey) was already resolved
+        # above; this only applies the shared settings from the saved config.
         client.auto_load_default_config()
 
-        if host != client.host and host is not None:
-            client.host = host
-            client.ollama = ollama.AsyncClient(host=host)
-            client.model_manager.ollama = client.ollama
-
-        # Resolve the model to use: --model flag > saved config > first available
-        # model, validated against what's actually installed (auto_load_default_config()
-        # above already applied any saved model to model_manager when a config existed).
-        # `model` is None unless --model was actually passed, so this is unambiguous
-        # (unlike comparing against the DEFAULT_MODEL sentinel).
+        # Resolve the model to use: --model flag > saved profile model > first
+        # available model, validated against what's actually installed. The model
+        # resolved before construction is already in model_manager as its current
+        # model, so use it as the saved candidate.
         saved_model = client.model_manager.get_current_model() if client.default_configuration_status else None
         client.model_resolution_status = await client.model_manager.resolve_initial_model(model, saved_model)
 

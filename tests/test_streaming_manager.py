@@ -8,19 +8,28 @@ from mcp_client_for_ollama.utils.streaming import ProgressiveMarkdownRenderer, S
 
 
 @dataclass
-class DummyMessage:
-    """Minimal message double for streaming tests."""
+class DummyDelta:
+    """Minimal delta double for streaming tests."""
 
     content: str = ""
-    thinking: str = ""
+    reasoning: str = None
     tool_calls: list = None
+
+
+@dataclass
+class DummyChoice:
+    """Minimal choice double for streaming tests."""
+
+    delta: DummyDelta
+    finish_reason: str = None
 
 
 @dataclass
 class DummyChunk:
     """Minimal chunk double for streaming tests."""
 
-    message: DummyMessage
+    choices: list
+    usage: object = None
 
 
 async def _stream_chunks(*chunks):
@@ -83,7 +92,7 @@ class TestStreamingManager(unittest.IsolatedAsyncioTestCase):
             return_value=None,
         ):
             response_text, tool_calls, metrics = await manager.process_streaming_response(
-                _stream_chunks(DummyChunk(DummyMessage(content="hello **world**"))),
+                _stream_chunks(DummyChunk(choices=[DummyChoice(DummyDelta(content="hello **world**"))])),
                 answer_render_mode="plain",
             )
 
@@ -104,7 +113,7 @@ class TestStreamingManager(unittest.IsolatedAsyncioTestCase):
             return_value=None,
         ):
             response_text, _, _ = await manager.process_streaming_response(
-                _stream_chunks(DummyChunk(DummyMessage(content="hello **world**"))),
+                _stream_chunks(DummyChunk(choices=[DummyChoice(DummyDelta(content="hello **world**"))])),
                 answer_render_mode="both",
             )
 
@@ -133,8 +142,8 @@ class TestStreamingManager(unittest.IsolatedAsyncioTestCase):
         ):
             response_text, _, _ = await manager.process_streaming_response(
                 _stream_chunks(
-                    DummyChunk(DummyMessage(content="hello ")),
-                    DummyChunk(DummyMessage(content="**world**")),
+                    DummyChunk(choices=[DummyChoice(DummyDelta(content="hello "))]),
+                    DummyChunk(choices=[DummyChoice(DummyDelta(content="**world**"))]),
                 ),
                 answer_render_mode="markdown",
             )
@@ -167,8 +176,8 @@ class TestStreamingManager(unittest.IsolatedAsyncioTestCase):
         ):
             response_text, _, _ = await manager.process_streaming_response(
                 _stream_chunks(
-                    DummyChunk(DummyMessage(thinking="planning")),
-                    DummyChunk(DummyMessage(content="answer")),
+                    DummyChunk(choices=[DummyChoice(DummyDelta(reasoning="planning"))]),
+                    DummyChunk(choices=[DummyChoice(DummyDelta(content="answer"))]),
                 ),
                 thinking_mode=True,
                 show_thinking=True,

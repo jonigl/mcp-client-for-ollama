@@ -1,87 +1,61 @@
 """
-Metrics display utilities for the MCP client for Ollama.
+Metrics display utilities for the MCP client.
 
-This module provides functions for extracting and displaying performance metrics from Ollama responses.
+This module provides functions for extracting and displaying token usage
+from streaming LLM responses.
 """
 from rich.panel import Panel
 
+
 def extract_metrics(chunk):
-    """Extract metrics from an Ollama response chunk
+    """Extract token usage from a streaming chunk.
 
     Args:
-        chunk: Response chunk from Ollama that may contain metrics
+        chunk: A ChatCompletionChunk that may carry a usage field.
 
     Returns:
-        dict: Dictionary containing extracted metrics, or None if no metrics available
+        dict: Token usage counts, or None if the chunk has no usage data.
     """
-    if not (hasattr(chunk, 'done') and chunk.done):
+    usage = getattr(chunk, "usage", None)
+    if usage is None:
         return None
-
     return {
-        'total_duration': getattr(chunk, 'total_duration', None),
-        'load_duration': getattr(chunk, 'load_duration', None),
-        'prompt_eval_count': getattr(chunk, 'prompt_eval_count', None),
-        'prompt_eval_duration': getattr(chunk, 'prompt_eval_duration', None),
-        'eval_count': getattr(chunk, 'eval_count', None),
-        'eval_duration': getattr(chunk, 'eval_duration', None)
+        "prompt_tokens": getattr(usage, "prompt_tokens", None),
+        "completion_tokens": getattr(usage, "completion_tokens", None),
+        "total_tokens": getattr(usage, "total_tokens", None),
     }
 
+
 def display_metrics(console, metrics):
-    """Display performance metrics in a formatted way
+    """Display token usage in a formatted panel.
 
     Args:
         console: Rich console for output
-        metrics: Dictionary containing metrics from Ollama response
+        metrics: Dictionary containing token usage from the response
     """
     if not metrics:
         return
 
-    # Convert nanoseconds to seconds for durations
-    def ns_to_seconds(ns_value):
-        return ns_value / 1_000_000_000 if ns_value else 0
+    prompt_tokens = metrics.get("prompt_tokens") or 0
+    completion_tokens = metrics.get("completion_tokens") or 0
+    total_tokens = metrics.get("total_tokens") or 0
 
-    total_duration = ns_to_seconds(metrics.get('total_duration'))
-    load_duration = ns_to_seconds(metrics.get('load_duration'))
-    prompt_eval_duration = ns_to_seconds(metrics.get('prompt_eval_duration'))
-    eval_duration = ns_to_seconds(metrics.get('eval_duration'))
+    if not any([prompt_tokens, completion_tokens, total_tokens]):
+        return
 
-    prompt_eval_count = metrics.get('prompt_eval_count', 0)
-    eval_count = metrics.get('eval_count', 0)
+    lines = []
+    if prompt_tokens:
+        lines.append(f"[cyan]prompt tokens:[/cyan]     {prompt_tokens}")
+    if completion_tokens:
+        lines.append(f"[cyan]completion tokens:[/cyan] {completion_tokens}")
+    if total_tokens:
+        lines.append(f"[cyan]total tokens:[/cyan]      {total_tokens}")
 
-    # Build metrics content
-    metrics_lines = []
-
-    # Display basic metrics
-    if total_duration > 0:
-        metrics_lines.append(f"[cyan]total duration:[/cyan]       {total_duration:.9f}s")
-    if load_duration > 0:
-        metrics_lines.append(f"[cyan]load duration:[/cyan]        {load_duration * 1000:.6f}ms")
-    if prompt_eval_count:
-        metrics_lines.append(f"[cyan]prompt eval count:[/cyan]    {prompt_eval_count} token(s)")
-    if prompt_eval_duration > 0:
-        metrics_lines.append(f"[cyan]prompt eval duration:[/cyan] {prompt_eval_duration * 1000:.6f}ms")
-    if eval_count:
-        metrics_lines.append(f"[cyan]eval count:[/cyan]           {eval_count} token(s)")
-    if eval_duration > 0:
-        metrics_lines.append(f"[cyan]eval duration:[/cyan]        {eval_duration:.9f}s")
-
-    # Calculate and display rates
-    if prompt_eval_count and prompt_eval_duration > 0:
-        prompt_eval_rate = prompt_eval_count / prompt_eval_duration
-        metrics_lines.append(f"[green]prompt eval rate:[/green]     {prompt_eval_rate:.2f} tokens/s")
-
-    if eval_count and eval_duration > 0:
-        eval_rate = eval_count / eval_duration
-        metrics_lines.append(f"[green]eval rate:[/green]            {eval_rate:.2f} tokens/s")
-
-    # Display metrics in a panel
-    if metrics_lines:
-        console.print()  # Add spacing before panel
-        metrics_content = "\n".join(metrics_lines)
-        console.print(Panel(
-            metrics_content,
-            title="📊 Performance Metrics",
-            border_style="violet",
-            expand=False
-        ))
-        console.print()  # Add spacing after panel
+    console.print()
+    console.print(Panel(
+        "\n".join(lines),
+        title="📊 Token Usage",
+        border_style="violet",
+        expand=False,
+    ))
+    console.print()

@@ -5,37 +5,82 @@ from mcp_client_for_ollama.config.defaults import default_config
 from rich.console import Console
 
 
-def test_validate_config_preserves_host():
-    """Test that _validate_config preserves the host field from loaded config."""
+def test_validate_config_preserves_providers_map():
+    """A new-format config keeps its per-provider profiles and defaultProvider."""
     mgr = ConfigManager(Console())
 
-    config_data = {
-        "host": "http://remote-server:11434",
-        "model": "test-model"
-    }
+    validated = mgr._validate_config({
+        "defaultProvider": "openai",
+        "providers": {
+            "ollama": {"host": "http://localhost:11434", "model": "qwen3:0.6b", "apiKey": ""},
+            "openai": {"host": "", "model": "gpt-4o", "apiKey": "sk-test"},
+        },
+    })
 
-    validated = mgr._validate_config(config_data)
+    assert validated["defaultProvider"] == "openai"
+    assert validated["providers"]["openai"] == {"host": "", "model": "gpt-4o", "apiKey": "sk-test"}
+    assert validated["providers"]["ollama"]["model"] == "qwen3:0.6b"
 
-    assert validated["host"] == "http://remote-server:11434"
 
-
-def test_validate_config_omits_host_when_missing():
-    """Test that _validate_config omits host when not in config file.
-
-    This allows CLI arguments to take precedence over defaults when
-    the config file doesn't have a host field (e.g., older config files).
-    """
+def test_validate_config_migrates_legacy_flat_config():
+    """A legacy flat config is migrated into a single provider profile."""
     mgr = ConfigManager(Console())
 
-    config_data = {
-        "model": "test-model"
+    validated = mgr._validate_config({
+        "host": "https://api.atlascloud.ai/v1",
+        "model": "deepseek",
+        "provider": "openai",
+        "apiKey": "sk-legacy",
+    })
+
+    assert validated["defaultProvider"] == "openai"
+    assert validated["providers"]["openai"] == {
+        "host": "https://api.atlascloud.ai/v1",
+        "model": "deepseek",
+        "apiKey": "sk-legacy",
     }
 
-    validated = mgr._validate_config(config_data)
 
-    # Host should NOT be in the validated config when not in original
-    # This allows CLI arguments to take precedence
-    assert "host" not in validated
+def test_validate_config_legacy_without_provider_defaults_to_ollama():
+    """A legacy config lacking a provider migrates under ollama."""
+    mgr = ConfigManager(Console())
+
+    validated = mgr._validate_config({"model": "test-model"})
+
+    assert validated["defaultProvider"] == "ollama"
+    assert validated["providers"]["ollama"]["model"] == "test-model"
+
+
+def test_validate_config_seeds_default_provider_when_absent():
+    """A config with neither providers nor connection fields still seeds ollama."""
+    mgr = ConfigManager(Console())
+
+    validated = mgr._validate_config({"displaySettings": {"answerRenderMode": "both"}})
+
+    assert validated["defaultProvider"] == "ollama"
+    assert "ollama" in validated["providers"]
+
+
+def test_save_load_round_trip_preserves_all_providers(monkeypatch, tmp_path):
+    """Saving and reloading keeps every provider profile and the default."""
+    import mcp_client_for_ollama.config.manager as manager_module
+
+    monkeypatch.setattr(manager_module, "DEFAULT_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(manager_module, "DEFAULT_CONFIG_FILE", "config.json")
+
+    mgr = ConfigManager(Console())
+    cfg = default_config()
+    cfg["providers"]["openai"] = {"host": "", "model": "gpt-4o", "apiKey": "sk-test"}
+    cfg["defaultProvider"] = "openai"
+
+    assert mgr.save_configuration(cfg, "default") is True
+
+    loaded = mgr.load_configuration("default")
+    assert loaded["defaultProvider"] == "openai"
+    assert loaded["providers"]["openai"]["model"] == "gpt-4o"
+    assert loaded["providers"]["openai"]["apiKey"] == "sk-test"
+    # The pre-existing ollama profile is not dropped.
+    assert "ollama" in loaded["providers"]
 
 
 def test_default_config_shows_thinking_text():
