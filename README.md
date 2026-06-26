@@ -235,7 +235,7 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 - `--model`, `-m` MODEL: Model to use. Default: your saved configuration's model if set, otherwise the first model available in Ollama
 - `--provider`, `-p` PROVIDER: LLM provider to use (e.g. `ollama`, `openai`, `openrouter`, `deepseek`). Default: `ollama`
 - `--host`, `-H` HOST: LLM host / API base URL. Defaults to Ollama's `http://localhost:11434` for the `ollama` provider, or the provider's own default endpoint otherwise.
-- `--api-key`, `-k` KEY: API key for the LLM provider (also read from the `$OLLMCP_API_KEY` environment variable). Not needed for `ollama`.
+- `--api-key`, `-k` KEY: API key for the LLM provider. Also read from the `$OLLMCP_API_KEY` environment variable, which is **provider-agnostic** (it applies to whichever provider you select with `--provider`). Keys passed via `$OLLMCP_API_KEY` are never written to the config file; only keys passed with `--api-key` are saved. Not needed for `ollama`.
 
 > [!NOTE]
 > Currently supported providers: `ollama`, `openai`, and any OpenAI-compatible provider (`openrouter`, `deepseek`, `perplexity`, etc.). More providers coming soon.
@@ -252,7 +252,7 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 > [!WARNING]
 > **Non-Ollama providers are experimental.** Support for providers other than Ollama was added recently and is still being stabilized, not everything may work correctly yet.
 
-ollmcp works with **Ollama** plus any **OpenAI-compatible** provider that [any-llm](https://github.com/mozilla-ai/any-llm) exposes. Select one with `--provider`. Provide the key with `--api-key` / `$OLLMCP_API_KEY`, or via the provider's own environment variable shown below.
+ollmcp works with **Ollama** plus any **OpenAI-compatible** provider that [any-llm](https://github.com/mozilla-ai/any-llm) exposes. Select one with `--provider`. Provide the key with `--api-key` or `$OLLMCP_API_KEY` — both work for **any** selected provider — or via the provider's own environment variable shown below. `$OLLMCP_API_KEY` and the provider-native env vars are never written to disk; only a key passed with `--api-key` is saved to the config.
 
 | Provider (`--provider`) | API key env var |
 |---|---|
@@ -287,6 +287,19 @@ ollmcp works with **Ollama** plus any **OpenAI-compatible** provider that [any-l
 
 > [!WARNING]
 > **Capability detection limitation:** ollmcp only reads real per-model capabilities (`tools`, `vision`, `thinking`) from Ollama. For every non-Ollama provider, all three capabilities are currently assumed available and shown as such in the model list and badges, so a model may be reported as supporting tools, vision, or thinking even when it doesn't. If a model lacks a capability, the provider's API will return an error when you try to use it.
+
+#### API key resolution order
+
+For the selected provider, ollmcp resolves the API key in this order, from **highest** to **lowest** precedence:
+
+1. The `--api-key` / `-k` flag.
+2. The `$OLLMCP_API_KEY` environment variable (provider-agnostic — applies to whichever provider you selected with `--provider`).
+3. The per-provider key saved in `~/.config/ollmcp/config.json` (present only if it was once passed via `--api-key`).
+4. The provider's own native environment variable, detected by [any-llm](https://github.com/mozilla-ai/any-llm) (e.g. `OPENAI_API_KEY`, `OPENROUTER_API_KEY`).
+
+> [!WARNING]
+> A saved per-provider key (3) takes precedence over the provider's native environment variable (4). So if you previously saved a **wrong or expired** key, setting `OPENAI_API_KEY` (or the equivalent) alone will **not** override it. To fix it, either pass the correct key with `--api-key`, or remove the stale `apiKey` from that provider's profile in `~/.config/ollmcp/config.json`.
+
 
 ### Usage Examples
 
@@ -895,7 +908,7 @@ Connection settings are stored **per provider**, so switching providers never re
 The configuration also records a `defaultProvider`. When you run `ollmcp` with no `--provider` flag, it loads that provider's profile; a fresh install starts on `ollama`. Each time you `/save-config`, the provider you're currently using *becomes the new default*, so running plain `ollmcp` resumes wherever you left off. Pass `--provider <name>` at any time to switch to (and load) a different provider's profile, and `--model` / `--host` / `--api-key` override the saved values for that run.
 
 > [!NOTE]
-> API keys are stored in plain text in `~/.config/ollmcp/config.json`. Prefer the `$OLLMCP_API_KEY` environment variable or the default provider environment variable (for example `OPENROUTER_API_KEY`) if you don't want keys written to disk.
+> Only a key passed with `--api-key` is stored, in plain text, in `~/.config/ollmcp/config.json`. Keys provided through the `$OLLMCP_API_KEY` environment variable or a provider's native environment variable (for example `OPENROUTER_API_KEY`) are **never** written to disk — use one of those if you don't want your key persisted.
 
 The following settings are **shared** across all providers:
 

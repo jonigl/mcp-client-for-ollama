@@ -68,12 +68,15 @@ class MCPClient:
         "multiline": "Multiline",
     }
 
-    def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST, provider: str = DEFAULT_PROVIDER, api_key: str = None):
+    def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST, provider: str = DEFAULT_PROVIDER, api_key: str = None, persist_api_key: bool = True):
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
         self.host = host
         self.provider = provider
         self.api_key = api_key or ""
+        # Whether this key may be written to the config file. Keys coming from the
+        # OLLMCP_API_KEY env var (or a provider's native env var) are never persisted.
+        self.persist_api_key = persist_api_key
         self.llm = AnyLLM.create(provider, api_key=api_key, api_base=host)
         self.console = Console()
         self.config_manager = ConfigManager(self.console)
@@ -1435,11 +1438,13 @@ class MCPClient:
         else:
             config_data = default_config()
 
+        # Don't write env-var-sourced keys to disk; keep any previously saved key.
+        existing_profile = (config_data.get("providers") or {}).get(self.provider, {})
         config_data.setdefault("providers", {})
         config_data["providers"][self.provider] = {
             "host": self.host or "",
             "model": self.model_manager.get_current_model(),
-            "apiKey": self.api_key or "",
+            "apiKey": (self.api_key or "") if self.persist_api_key else existing_profile.get("apiKey", ""),
         }
         # Remember the last saved provider as the default for plain `ollmcp`.
         config_data["defaultProvider"] = self.provider
@@ -1883,9 +1888,8 @@ def main(
     ),
     api_key: Optional[str] = typer.Option(
         None, "--api-key", "-k",
-        help="API key for the LLM provider (also reads $OLLMCP_API_KEY env var)",
+        help="API key for the LLM provider. Also read from $OLLMCP_API_KEY (works with any --provider; not written to config). Not needed for ollama.",
         rich_help_panel="LLM Configuration",
-        envvar="OLLMCP_API_KEY"
     ),
 
     # General Options
@@ -1946,11 +1950,22 @@ async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, m
     else:
         resolved_host = None
 
-    resolved_api_key = api_key or profile.get("apiKey") or None
+    # API key precedence: --api-key flag > OLLMCP_API_KEY env var > saved profile.
+    # Keys from the env var are never written back to the config file.
+    env_api_key = os.environ.get("OLLMCP_API_KEY")
+    if api_key:
+        resolved_api_key = api_key
+        persist_api_key = True
+    elif env_api_key:
+        resolved_api_key = env_api_key
+        persist_api_key = False
+    else:
+        resolved_api_key = profile.get("apiKey") or None
+        persist_api_key = True
     resolved_model = model or profile.get("model") or DEFAULT_MODEL
 
     try:
-        client = MCPClient(model=resolved_model, host=resolved_host, provider=effective_provider, api_key=resolved_api_key)
+        client = MCPClient(model=resolved_model, host=resolved_host, provider=effective_provider, api_key=resolved_api_key, persist_api_key=persist_api_key)
     except MissingApiKeyError as e:
         console.print(Panel(
             f"[bold red]API key required:[/bold red] The [bold blue]{effective_provider}[/bold blue] provider needs an API key.\n\n"
