@@ -166,7 +166,10 @@ class ModelManager:
         """Display the currently selected model in the console."""
         capabilities = self._capabilities_cache.get(self.model, [])
         badges = self.format_capabilities_badges(capabilities)
-        content = f"[bold blue]Current model:[/bold blue] [bold green]{self.model}[/bold green]"
+        content = (
+            f"[bold blue]Current model:[/bold blue] [bold green]{self.model}[/bold green]"
+            f" [bold yellow]({self.provider})[/bold yellow]"
+        )
         if badges:
             content += f"\n[bold blue]Capabilities:[/bold blue] {badges}"
         self.console.print(Panel(content, border_style="blue", expand=False))
