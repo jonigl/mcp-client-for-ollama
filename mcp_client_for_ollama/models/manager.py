@@ -405,7 +405,7 @@ class ModelManager:
                 "[bold yellow]No Ollama models found on this host.[/bold yellow]\n\n"
                 "Pull one in another terminal, for example:\n"
                 "[bold cyan]ollama pull qwen3:0.6b[/bold cyan]\n\n"
-                "Then restart ollmcp, or run [bold cyan]/model[/bold cyan] once a model is installed.",
+                "Then restart ollmcp, or run [bold cyan]/model[/bold cyan] once a model is available.",
                 title="No Models Available", border_style="yellow", expand=False
             ))
             self.console.print()
@@ -420,7 +420,7 @@ class ModelManager:
         else:
             requested, used = status
             self.console.print(Panel(
-                f"Requested model [bold yellow]{requested}[/bold yellow] is not installed — "
+                f"Requested model [bold yellow]{requested}[/bold yellow] is not available — "
                 f"using [bold green]{used}[/bold green] instead.\n\n"
                 f"Pull it with [bold cyan]ollama pull {requested}[/bold cyan] to use it, or:\n"
                 "• Switch models: [bold cyan]/model[/bold cyan] or [bold cyan]/m[/bold cyan]\n"
