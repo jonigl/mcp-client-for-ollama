@@ -963,6 +963,7 @@ class MCPClient:
 
         while True:
             try:
+                self.console.print()  # Add spacing before the prompt
                 # Use await to call the async method
                 query = await self.get_user_input()
 
