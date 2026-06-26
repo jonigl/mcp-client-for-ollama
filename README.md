@@ -31,7 +31,10 @@
 - [Quick Start](#quick-start)
 - [Installation options](#installation-options)
   - ✨**NEW** [Managing MCP Servers via CLI](#managing-mcp-servers-via-cli)
+    - [mcp add options](#mcp-add-options)
+    - [Scopes](#scopes)
   - [Command-line Arguments](#command-line-arguments)
+  - ✨**NEW** [Supported Providers](#supported-providers)
   - [Usage Examples](#usage-examples)
   - [How Tool Calls Work](#how-tool-calls-work)
   - ✨**NEW** [Agent Mode](#agent-mode)
@@ -43,12 +46,18 @@
   - [Advanced Model Configuration](#advanced-model-configuration)
   - [Server Reloading for Development](#server-reloading-for-development)
   - [Human-in-the-Loop (HIL) Tool Execution](#human-in-the-loop-hil-tool-execution)
+    - [Human-in-the-Loop (HIL) Configuration](#human-in-the-loop-hil-configuration)
   - ✨**NEW** [MCP Prompts](#mcp-prompts)
   - ✨**NEW** [MCP Resources](#mcp-resources)
   - [Performance Metrics](#performance-metrics)
   - ✨**NEW** [History Management](#history-management)
 - [Autocomplete and Prompt Features](#autocomplete-and-prompt-features)
+  - [Typer Shell Autocompletion](#typer-shell-autocompletion)
+  - [FZF-style Autocomplete](#fzf-style-autocomplete)
+  - [MCP Prompts Autocomplete](#mcp-prompts-autocomplete)
+  - [Contextual Prompt](#contextual-prompt)
 - [Configuration Management](#configuration-management)
+  - ✨**NEW** [Per-provider profiles](#per-provider-profiles)
 - [Server Configuration Format](#server-configuration-format)
   - [Tips: Where to Put MCP Server Configs and a Working Example](#tips-where-to-put-mcp-server-configs-and-a-working-example)
 - [Compatible Models](#compatible-models)
@@ -70,6 +79,7 @@ MCP Client for Ollama (ollmcp) is a modern, interactive terminal application (TU
 - 📋 **MCP Prompts Support**: Browse, invoke, and manage prompts from MCP servers with argument collection, preview, and safe rollback
 - 📦 **MCP Resources Support**: Browse and read contextual data from MCP servers including files, documents, and structured data
 - ☁️ **Ollama Cloud Support**: Works seamlessly with Ollama Cloud models for tool calling, enabling access to powerful cloud-hosted models while using local MCP tools
+- 🌍 **Multiple LLM Providers**: Use Ollama (default) or OpenAI-compatible providers (OpenAI, OpenRouter, DeepSeek, etc.), with connection settings remembered per provider
 - 🎨 **Rich Terminal Interface**: Interactive console UI with modern styling
 - 🌊 **Streaming Responses**: View model outputs in real-time as they're generated
 - 📝 **Answer Display Modes**: Switch between Plain, Markdown, or Both response views while streaming
@@ -197,7 +207,7 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 > [!NOTE]
 > Servers added via `ollmcp mcp add` are always loaded as the base layer. Any flags (`--mcp-server`, `--mcp-server-url`, `--servers-json`, `--claude-desktop`) add on top. To include servers from Claude Desktop, pass `--claude-desktop` explicitly.
 >
-> If a server with the same name is also provided via one of those flags, both connections are currently opened, but only one is kept active under that name — avoid reusing a registry server's name in `--mcp-server`/`--mcp-server-url`/`--servers-json`/`--claude-desktop`.
+> If a server with the same name is also provided via one of those flags, both connections are currently opened, but only one is kept active under that name. Avoid reusing a registry server's name in `--mcp-server`/`--mcp-server-url`/`--servers-json`/`--claude-desktop`.
 
 ### Command-line Arguments
 
@@ -218,12 +228,17 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 - `--claude-desktop`: Load servers from Claude Desktop's config file (`~/Library/Application Support/Claude/claude_desktop_config.json`). Merged with servers added via `ollmcp mcp add` and any other flags.
 
 > [!IMPORTANT]
-> **Breaking change:** `--auto-discovery` / `-a` has been replaced by `--claude-desktop`. Additionally, servers added via `ollmcp mcp add` are now always loaded automatically — they are no longer a fallback that disappears when other flags are used. Claude Desktop servers are never loaded automatically; use `--claude-desktop` to include them.
+> **Breaking change:** `--auto-discovery` / `-a` has been replaced by `--claude-desktop`. Additionally, servers added via `ollmcp mcp add` are now always loaded automatically, they are no longer a fallback that disappears when other flags are used. Claude Desktop servers are never loaded automatically; use `--claude-desktop` to include them.
 
-#### Ollama Configuration:
+#### LLM Provider Configuration:
 
-- `--model`, `-m` MODEL: Ollama model to use. Default: your saved configuration's model if set, otherwise the first model available in Ollama
-- `--host`, `-H` HOST: Ollama host URL. Default: `http://localhost:11434`
+- `--model`, `-m` MODEL: Model to use. Default: your saved configuration's model if set, otherwise the first model available in Ollama
+- `--provider`, `-p` PROVIDER: LLM provider to use (e.g. `ollama`, `openai`, `openrouter`, `deepseek`). Default: `ollama`
+- `--host`, `-H` HOST: LLM host / API base URL. Defaults to Ollama's `http://localhost:11434` for the `ollama` provider, or the provider's own default endpoint otherwise.
+- `--api-key`, `-k` KEY: API key for the LLM provider. Also read from the `$OLLMCP_API_KEY` environment variable, which is **provider-agnostic** (it applies to whichever provider you select with `--provider`). Keys passed via `$OLLMCP_API_KEY` are never written to the config file; only keys passed with `--api-key` are saved. Not needed for `ollama`.
+
+> [!NOTE]
+> Currently supported providers: `ollama`, `openai`, and any OpenAI-compatible provider (`openrouter`, `deepseek`, `perplexity`, etc.). More providers coming soon.
 
 #### General Options:
 
@@ -231,6 +246,60 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 - `--help`, `-h`: Show help message and exit
 - `--install-completion`: Install shell autocompletion scripts for the client
 - `--show-completion`: Show available shell completion options
+
+### Supported Providers
+
+> [!WARNING]
+> **Non-Ollama providers are experimental.** Support for providers other than Ollama was added recently and is still being stabilized, not everything may work correctly yet.
+
+ollmcp works with **Ollama** plus any **OpenAI-compatible** provider that [any-llm](https://github.com/mozilla-ai/any-llm) exposes. Select one with `--provider`. Provide the key with `--api-key` or `$OLLMCP_API_KEY` — both work for **any** selected provider — or via the provider's own environment variable shown below. `$OLLMCP_API_KEY` and the provider-native env vars are never written to disk; only a key passed with `--api-key` is saved to the config.
+
+| Provider (`--provider`) | API key env var |
+|---|---|
+| [`ollama`](https://github.com/ollama/ollama) (default) | - (local) |
+| [`azureopenai`](https://learn.microsoft.com/en-us/azure/ai-foundry/) | `AZURE_OPENAI_API_KEY` |
+| [`dashscope`](https://bailian.console.aliyun.com/cn-beijing/?tab=api#/api) | `DASHSCOPE_API_KEY` |
+| [`databricks`](https://docs.databricks.com/) | `DATABRICKS_TOKEN` |
+| [`deepinfra`](https://deepinfra.com/docs/openai_api) | `DEEPINFRA_API_KEY` |
+| [`deepseek`](https://platform.deepseek.com/) | `DEEPSEEK_API_KEY` |
+| [`fireworks`](https://fireworks.ai/api) | `FIREWORKS_API_KEY` |
+| [`gateway`](https://github.com/mozilla-ai/any-llm) | `GATEWAY_API_KEY` |
+| [`inception`](https://inceptionlabs.ai/) | `INCEPTION_API_KEY` |
+| [`llama`](https://www.llama.com/products/llama-api/) | `LLAMA_API_KEY` |
+| [`llamacpp`](https://github.com/ggml-org/llama.cpp) | - (local) |
+| [`llamafile`](https://github.com/Mozilla-Ocho/llamafile) | - (local) |
+| [`lmstudio`](https://lmstudio.ai/) | `LM_STUDIO_API_KEY` |
+| [`minimax`](https://www.minimax.io/platform_overview) | `MINIMAX_API_KEY` |
+| [`moonshot`](https://platform.moonshot.ai/) | `MOONSHOT_API_KEY` |
+| [`mzai`](https://any-llm.ai) | `ANY_LLM_KEY` |
+| [`nebius`](https://studio.nebius.ai/) | `NEBIUS_API_KEY` |
+| [`openai`](https://platform.openai.com/docs/api-reference) | `OPENAI_API_KEY` |
+| [`openrouter`](https://openrouter.ai/docs) | `OPENROUTER_API_KEY` |
+| [`perplexity`](https://docs.perplexity.ai/) | `PERPLEXITY_API_KEY` |
+| [`portkey`](https://portkey.ai/docs) | `PORTKEY_API_KEY` |
+| [`qiniu`](https://developer.qiniu.com/aitokenapi) | `QINIU_API_KEY` |
+| [`sambanova`](https://sambanova.ai/) | `SAMBANOVA_API_KEY` |
+| [`vllm`](https://docs.vllm.ai/) | `VLLM_API_KEY` |
+| [`zai`](https://docs.z.ai/guides/develop/python/introduction) | `ZAI_API_KEY` |
+
+> [!NOTE]
+> Local OpenAI-compatible servers (`ollama`, `llamacpp`, `llamafile`, `lmstudio`, `vllm`) typically run without an API key, point ollmcp at them with `--host`. Providers any-llm offers that are **not** OpenAI-compatible (e.g. `anthropic`, `gemini`, `mistral`, `groq`, `cohere`) are not supported yet.
+
+> [!WARNING]
+> **Capability detection limitation:** ollmcp only reads real per-model capabilities (`tools`, `vision`, `thinking`) from Ollama. For every non-Ollama provider, all three capabilities are currently assumed available and shown as such in the model list and badges, so a model may be reported as supporting tools, vision, or thinking even when it doesn't. If a model lacks a capability, the provider's API will return an error when you try to use it.
+
+#### API key resolution order
+
+For the selected provider, ollmcp resolves the API key in this order, from **highest** to **lowest** precedence:
+
+1. The `--api-key` / `-k` flag.
+2. The `$OLLMCP_API_KEY` environment variable (provider-agnostic — applies to whichever provider you selected with `--provider`).
+3. The per-provider key saved in `~/.config/ollmcp/config.json` (present only if it was once passed via `--api-key`).
+4. The provider's own native environment variable, detected by [any-llm](https://github.com/mozilla-ai/any-llm) (e.g. `OPENAI_API_KEY`, `OPENROUTER_API_KEY`).
+
+> [!WARNING]
+> A saved per-provider key (3) takes precedence over the provider's native environment variable (4). So if you previously saved a **wrong or expired** key, setting `OPENAI_API_KEY` (or the equivalent) alone will **not** override it. To fix it, either pass the correct key with `--api-key`, or remove the stale `apiKey` from that provider's profile in `~/.config/ollmcp/config.json`.
+
 
 ### Usage Examples
 
@@ -279,6 +348,17 @@ ollmcp --host http://localhost:22545 --servers-json /path/to/servers.json
 # Or using short flags:
 ollmcp -H http://localhost:22545 -j /path/to/servers.json
 ```
+
+Use a different LLM provider (OpenAI or any OpenAI-compatible API):
+
+```bash
+ollmcp --provider openai --api-key $OPENAI_API_KEY --model gpt-5.5
+# OpenAI-compatible providers (e.g. OpenRouter, DeepSeek); override the endpoint with --host if needed:
+ollmcp --provider openrouter --api-key $OPENROUTER_API_KEY -m openrouter/free
+```
+
+> [!TIP]
+> Provider settings (model, host, API key) are remembered **per provider**. Once saved with `/save-config`, plain `ollmcp` resumes your last-used provider. See [Configuration Management](#configuration-management) for details.
 
 Connect to SSE or Streamable HTTP servers by URL:
 
@@ -808,18 +888,30 @@ This makes it easy to see your current context before entering a query.
 ## Configuration Management
 
 > [!TIP]
-> It will automatically load the default configuration from `~/.config/ollmcp/config.json` if it exists.
+> Running `ollmcp` with no flags automatically loads the default configuration from `~/.config/ollmcp/config.json` if it exists.
 
-The client supports saving and loading tool configurations between sessions:
+The client saves and loads your preferences between sessions:
 
-- When using `save-config`, you can provide a name for the configuration or use the default
-- Configurations are stored in `~/.config/ollmcp/` directory
+- When using `/save-config`, you can provide a name for the configuration or use the default
+- Configurations are stored in the `~/.config/ollmcp/` directory
 - The default configuration is saved as `~/.config/ollmcp/config.json`
 - Named configurations are saved as `~/.config/ollmcp/{name}.json`
 
-The configuration saves:
+### Per-provider profiles
 
-- Current model selection
+Connection settings are stored **per provider**, so switching providers never reuses another provider's model, host, or API key. Each provider keeps its own:
+
+- **Model** selection
+- **Host** / API base URL
+- **API key**
+
+The configuration also records a `defaultProvider`. When you run `ollmcp` with no `--provider` flag, it loads that provider's profile; a fresh install starts on `ollama`. Each time you `/save-config`, the provider you're currently using *becomes the new default*, so running plain `ollmcp` resumes wherever you left off. Pass `--provider <name>` at any time to switch to (and load) a different provider's profile, and `--model` / `--host` / `--api-key` override the saved values for that run.
+
+> [!NOTE]
+> Only a key passed with `--api-key` is stored, in plain text, in `~/.config/ollmcp/config.json`. Keys provided through the `$OLLMCP_API_KEY` environment variable or a provider's native environment variable (for example `OPENROUTER_API_KEY`) are **never** written to disk — use one of those if you don't want your key persisted.
+
+The following settings are **shared** across all providers:
+
 - Advanced model parameters (system prompt, temperature, sampling settings, etc.)
 - Enabled/disabled status of all tools
 - Context retention settings
@@ -828,6 +920,24 @@ The configuration saves:
 - Tool execution display preferences
 - Performance metrics display preferences
 - Human-in-the-Loop confirmation settings
+
+**Example `~/.config/ollmcp/config.json`:**
+
+```json
+{
+  "defaultProvider": "openai",
+  "providers": {
+    "ollama": { "host": "http://localhost:11434", "model": "qwen3:1.7b", "apiKey": "" },
+    "openai": { "host": "", "model": "gpt-5.5", "apiKey": "sk-..." }
+  },
+  "enabledTools": {},
+  "modelConfig": {},
+  "...": "shared settings"
+}
+```
+
+> [!TIP]
+> Older flat config files (with top-level `host`/`model`/`provider`/`apiKey`) are migrated automatically the first time you run this version, and rewritten in the per-provider format on your next `/save-config`.
 
 ## Server Configuration Format
 

@@ -27,6 +27,16 @@ DEFAULT_MODEL = "qwen3:0.6b"
 # Default ollama lcoal url for API requests
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 
+# Default LLM provider
+DEFAULT_PROVIDER = "ollama"
+
+# Providers ollmcp currently supports: Ollama (native) plus OpenAI and any
+# OpenAI-compatible provider (they all use the bundled openai package).
+SUPPORTED_PROVIDERS = (
+    "ollama, openai, and OpenAI-compatible providers "
+    "(openrouter, deepseek, perplexity, etc.)"
+)
+
 # Default number of history entries to display when returning from menus
 DEFAULT_HISTORY_DISPLAY_LIMIT = 5
 

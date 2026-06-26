@@ -1,10 +1,50 @@
-"""Utility to test connectivity"""
-from typing import Any, Optional
+"""Utility to test connectivity and provider validation"""
+from typing import Any
 
-import ollama
+from rich.console import Console
 from rich.panel import Panel
 import urllib.request
 import urllib.error
+
+from any_llm import AnyLLM
+from any_llm.exceptions import UnsupportedProviderError
+from any_llm.providers.openai.base import BaseOpenAIProvider
+
+from .constants import SUPPORTED_PROVIDERS
+
+
+def validate_provider(provider: str, console: Console) -> bool:
+    """Validate that a provider is known and supported by ollmcp.
+
+    Returns True if the provider is usable, False otherwise (after printing
+    a user-facing error panel).
+    """
+    try:
+        provider_class = AnyLLM.get_provider_class(provider)
+    except UnsupportedProviderError:
+        console.print() # newline for spacing
+        console.print(Panel(
+            f"[bold red]Unknown provider:[/bold red] [bold blue]{provider}[/bold blue] is not a valid provider name.\n\n"
+            f"Currently supported: {SUPPORTED_PROVIDERS}.\n\n"
+            f"[dim]More providers coming soon.[/dim]",
+            title="Unknown Provider", border_style="red", expand=False
+        ))
+        return False
+    except ImportError:
+        provider_class = None
+
+    if provider_class is None or (provider != "ollama" and not issubclass(provider_class, BaseOpenAIProvider)):
+        console.print() # newline for spacing
+        console.print(Panel(
+            f"[bold yellow]Provider not available yet:[/bold yellow] [bold blue]{provider}[/bold blue] isn't supported by ollmcp yet.\n\n"
+            f"Currently supported: {SUPPORTED_PROVIDERS}.\n\n"
+            f"[dim]More providers coming soon.[/dim]",
+            title="Provider Not Supported", border_style="yellow", expand=False
+        ))
+        return False
+
+    return True
+
 
 def check_url_connectivity(url):
     """
@@ -29,48 +69,48 @@ def check_url_connectivity(url):
         return False
 
 
-async def preflight_ollama(client: Any, cli_host: Optional[str] = None) -> bool:
-    """Resolve preflight host and check Ollama availability.
+async def preflight_ollama(client: Any) -> bool:
+    """Check that the client's configured LLM provider is reachable.
 
-    Host resolution order:
-    1) CLI host (`cli_host`) if provided
-    2) default saved config host (if present)
-    3) current client host
-
-    This function mutates `client.host`, `client.ollama`, and
-    `client.model_manager.ollama` when host resolution changes.
+    The provider, host, and API key are already resolved on the client before
+    this runs, so this only performs the reachability check and renders a
+    provider-appropriate error panel when it fails.
 
     Args:
-        client: MCPClient-like object with config/model manager members.
-        cli_host: Optional host provided from CLI args.
+        client: MCPClient-like object with a `model_manager` member.
 
     Returns:
-        bool: True when Ollama is reachable, otherwise False.
+        bool: True when the provider is reachable, otherwise False.
     """
-    preflight_host = cli_host if cli_host is not None else client.host
-
-    if cli_host is None and client.config_manager.config_exists("default"):
-        default_config = client.config_manager.load_configuration("default")
-        config_host = default_config.get("host")
-        if config_host:
-            preflight_host = config_host
-
-    if preflight_host != client.host:
-        client.host = preflight_host
-        client.ollama = ollama.AsyncClient(host=preflight_host)
-        client.model_manager.ollama = client.ollama
-
     is_running = await client.model_manager.check_ollama_running()
     if not is_running:
-        client.console.print(Panel(
-            "[bold red]Error: Ollama is not running![/bold red]\n\n"
-            f"[yellow]Ollama current configured host: {client.host}[/yellow]\n\n"
-            "This client requires Ollama to be running to process queries.\n\n"
-            "Please start Ollama by running the 'ollama serve' command in a terminal.\n\n"
-            "💡 [bold magenta]Tip:[/bold magenta] If you configured a different host in a saved default configuration you can\n\n"
-            "   1. Use --host flag to override the configured host for example: ollmcp --host http://localhost:11434\n"
-            "   2. Once done, you can save a new default configuration to avoid needing to specify it each time.",
-            title="Ollama Not Running", border_style="red", expand=False
-        ))
+        if client.provider == "ollama":
+            client.console.print(Panel(
+                "[bold red]Error: Cannot connect to Ollama![/bold red]\n\n"
+                f"[yellow]Configured host: {client.host}[/yellow]\n\n"
+                "Possible causes:\n"
+                "• Ollama is not running or unreachable\n"
+                "• Incorrect host/port configuration\n\n"
+                "Solutions:\n"
+                "• Start it with [bold cyan]ollama serve[/bold cyan]\n"
+                "• Use [bold cyan]--host[/bold cyan] to point at a different Ollama host\n"
+                "• Use [bold cyan]--provider[/bold cyan] and [bold cyan]--api-key[/bold cyan] for a remote provider",
+                title="Ollama Not Available", border_style="red", expand=False
+            ))
+        else:
+            host_line = f"[yellow]API base URL: {client.host}[/yellow]\n\n" if client.host else ""
+            client.console.print(Panel(
+                f"[bold red]Error: Cannot reach the {client.provider} provider![/bold red]\n\n"
+                f"{host_line}"
+                "Possible causes:\n"
+                "• Invalid or missing API key\n"
+                "• Network/connectivity issue\n"
+                "• Wrong API base URL\n\n"
+                "Solutions:\n"
+                "• Check your [bold cyan]--api-key[/bold cyan] / [bold cyan]$OLLMCP_API_KEY[/bold cyan]\n"
+                "• Use [bold cyan]--host[/bold cyan] to override the API base URL if needed\n"
+                "• Verify the provider name and that its package is installed",
+                title="LLM Provider Not Available", border_style="red", expand=False
+            ))
 
     return is_running
