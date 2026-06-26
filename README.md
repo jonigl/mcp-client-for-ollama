@@ -11,7 +11,7 @@
 # MCP Client for Ollama (ollmcp)
 
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/mcp-client-for-ollama?cacheSeconds=1)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI - Python Version](https://img.shields.io/pypi/v/ollmcp?label=ollmcp)](https://pypi.org/project/ollmcp/)
 [![PyPI - Python Version](https://img.shields.io/pypi/v/mcp-client-for-ollama?label=mcp-client-for-ollama)](https://pypi.org/project/mcp-client-for-ollama/)
 [![CI](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml/badge.svg)](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml)
@@ -108,7 +108,7 @@ MCP Client for Ollama (ollmcp) is a modern, interactive terminal application (TU
 
 ## Requirements
 
-- **Python 3.10+** ([Installation guide](https://www.python.org/downloads/))
+- **Python 3.11+** ([Installation guide](https://www.python.org/downloads/))
 - **Ollama** running locally ([Installation guide](https://ollama.com/download))
   - After installation, run `ollama list` to see available models. If no models are installed, you can pull one using `ollama pull <model_name>`. For example, `ollama pull gemma4:latest`.
 - **UV package manager** ([Installation guide](https://github.com/astral-sh/uv))
