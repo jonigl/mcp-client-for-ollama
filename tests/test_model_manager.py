@@ -10,10 +10,10 @@ from mcp_client_for_ollama.models.manager import ModelManager
 
 
 def _make_manager(models):
-    """Build a ModelManager with a fake ollama client returning the given models."""
-    fake_ollama = AsyncMock()
-    fake_ollama.list = AsyncMock(return_value={"models": models})
-    return ModelManager(console=Console(), default_model="placeholder:1b", ollama=fake_ollama)
+    """Build a ModelManager whose provider reports the given installed models."""
+    mgr = ModelManager(console=Console(), default_model="placeholder:1b")
+    mgr._list_models = AsyncMock(return_value=models)
+    return mgr
 
 
 class TestResolveInitialModel(unittest.IsolatedAsyncioTestCase):
@@ -79,15 +79,15 @@ class TestResolveInitialModel(unittest.IsolatedAsyncioTestCase):
 
 
 class TestProcessQueryWithNoModel(unittest.IsolatedAsyncioTestCase):
-    async def test_returns_early_without_calling_ollama(self):
+    async def test_returns_early_without_calling_llm(self):
         client = MCPClient()
         client.model_manager.set_model("")
-        client.ollama.chat = AsyncMock(side_effect=AssertionError("ollama.chat should not be called"))
+        client.llm.acompletion = AsyncMock(side_effect=AssertionError("llm.acompletion should not be called"))
 
         response = await client.process_query("hi")
 
         self.assertEqual(response, "")
-        client.ollama.chat.assert_not_called()
+        client.llm.acompletion.assert_not_called()
 
 
 class TestPrintResolutionStatus(unittest.TestCase):
