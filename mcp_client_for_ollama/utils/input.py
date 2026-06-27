@@ -82,3 +82,4 @@ async def get_input_no_autocomplete(prompt_text: str) -> str:
 
     except (KeyboardInterrupt, EOFError):
         return "quit"
+        
