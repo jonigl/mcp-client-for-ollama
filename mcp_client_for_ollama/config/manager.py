@@ -291,7 +291,7 @@ class ConfigManager:
                 validated["displaySettings"]["showMetrics"] = bool(config_data["displaySettings"]["showMetrics"])
             if "answerRenderMode" in config_data["displaySettings"]:
                 answer_render_mode = str(config_data["displaySettings"]["answerRenderMode"]).lower()
-                if answer_render_mode in {"plain", "markdown", "both"}:
+                if answer_render_mode in {"plain", "markdown", "both", "blocks"}:
                     validated["displaySettings"]["answerRenderMode"] = answer_render_mode
 
         if "inputSettings" in config_data and isinstance(config_data["inputSettings"], dict):

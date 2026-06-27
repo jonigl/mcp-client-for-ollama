@@ -61,6 +61,7 @@ class MCPClient:
         "plain": "Plain",
         "markdown": "Markdown",
         "both": "Both",
+        "blocks": "Markdown (blocks)",
     }
 
     INPUT_MODE_LABELS = {
@@ -119,7 +120,7 @@ class MCPClient:
         self.show_tool_execution = True  # By default, show tool execution displays
         # Metrics display settings
         self.show_metrics = False  # By default, don't show metrics after each query
-        self.answer_render_mode = "markdown"  # Show answers in markdown format by default (options: plain, markdown, or both)
+        self.answer_render_mode = "both"  # Default to the safest mode (options: plain, markdown, both, blocks)
         self.input_mode = "single"  # Keep chat input single-line by default
         self.multiline_key_bindings = self._build_multiline_key_bindings()
         # Agent mode settings
@@ -1266,18 +1267,21 @@ class MCPClient:
             "1": ("plain", "Plain"),
             "2": ("markdown", "Markdown"),
             "3": ("both", "Both"),
+            "4": ("blocks", "Markdown (blocks)"),
             "plain": ("plain", "Plain"),
             "markdown": ("markdown", "Markdown"),
             "both": ("both", "Both"),
+            "blocks": ("blocks", "Markdown (blocks)"),
         }
 
         while True:
             self.console.print(Panel(
                 "\n"
-                "1. [bold]Plain[/bold] only\n"
-                "2. [bold]Markdown[/bold] only\n"
-                "3. [bold]Both[/bold] plain streaming and final markdown\n\n"
-                "[dim]Type 1, 2, 3, plain, markdown, both, or q to cancel.[/dim]",
+                "1. [bold]Plain only[/bold] [green](most stable)[/green]\n"
+                "2. [bold]Markdown only[/bold] [yellow](live; can flicker/duplicate lines with emojis or on resize)[/yellow]\n"
+                "3. [bold]Both[/bold] plain streaming and final markdown [green](more stable)[/green]\n"
+                "4. [bold]Markdown (blocks)[/bold] [cyan](stable; renders each block once it completes)[/cyan]\n\n"
+                "[dim]Type 1, 2, 3, 4, plain, markdown, both, blocks, or q to cancel.[/dim]",
                 title="[bold]📝 Answer Display Mode[/bold]",
                 border_style="cyan",
                 expand=False,
@@ -1301,11 +1305,13 @@ class MCPClient:
                     self.console.print("[cyan]Responses will stream once without the final markdown re-render.[/cyan]")
                 elif self.answer_render_mode == "markdown":
                     self.console.print("[cyan]Responses will render as markdown during streaming with throttled redraws.[/cyan]")
+                elif self.answer_render_mode == "blocks":
+                    self.console.print("[cyan]Responses will render as markdown one block at a time, append-only (no redraws).[/cyan]")
                 else:
                     self.console.print("[cyan]Responses will stream as plain text first, then re-render as markdown.[/cyan]")
                 return
 
-            self.console.print("[red]Invalid selection. Choose 1, 2, 3, plain, markdown, both, or q.[/red]")
+            self.console.print("[red]Invalid selection. Choose 1, 2, 3, 4, plain, markdown, both, blocks, or q.[/red]")
 
     async def select_input_mode(self):
         """Select how chat input should be entered."""
@@ -1562,7 +1568,7 @@ class MCPClient:
                 self.show_metrics = config_data["displaySettings"]["showMetrics"]
             if "answerRenderMode" in config_data["displaySettings"]:
                 answer_render_mode = str(config_data["displaySettings"]["answerRenderMode"]).lower()
-                if answer_render_mode in {"plain", "markdown", "both"}:
+                if answer_render_mode in {"plain", "markdown", "both", "blocks"}:
                     self.answer_render_mode = answer_render_mode
 
         if "inputSettings" in config_data:
@@ -1645,7 +1651,7 @@ class MCPClient:
                 self.show_metrics = False
             if "answerRenderMode" in config_data["displaySettings"]:
                 answer_render_mode = str(config_data["displaySettings"]["answerRenderMode"]).lower()
-                if answer_render_mode in {"plain", "markdown", "both"}:
+                if answer_render_mode in {"plain", "markdown", "both", "blocks"}:
                     self.answer_render_mode = answer_render_mode
                 else:
                     self.answer_render_mode = "both"
