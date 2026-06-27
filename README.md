@@ -31,11 +31,15 @@
 - [Quick Start](#quick-start)
 - [Installation options](#installation-options)
   - [Troubleshooting](#troubleshooting)
-  - ✨**NEW** [Managing MCP Servers via CLI](#managing-mcp-servers-via-cli)
+- ✨**NEW** [Managing MCP Servers via CLI](#managing-mcp-servers-via-cli)
     - [mcp add options](#mcp-add-options)
     - [Scopes](#scopes)
   - [Command-line Arguments](#command-line-arguments)
-  - ✨**NEW** [Supported Providers](#supported-providers)
+    - [MCP Server Configuration](#mcp-server-configuration)
+    - ✨**NEW** [Inference Provider Configuration](#inference-provider-configuration)
+    - [General Options](#general-options)
+  - ✨**NEW** [Supported Inference Providers](#supported-inference-providers)
+    - [API key resolution order](#api-key-resolution-order)
   - [Usage Examples](#usage-examples)
   - [How Tool Calls Work](#how-tool-calls-work)
   - ✨**NEW** [Agent Mode](#agent-mode)
@@ -279,7 +283,7 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 > [!IMPORTANT]
 > **Breaking change:** `--auto-discovery` / `-a` has been replaced by `--claude-desktop`. Additionally, servers added via `ollmcp mcp add` are now always loaded automatically, they are no longer a fallback that disappears when other flags are used. Claude Desktop servers are never loaded automatically; use `--claude-desktop` to include them.
 
-#### LLM Provider Configuration:
+#### Inference Provider Configuration:
 
 - `--model`, `-m` MODEL: Model to use. Default: your saved configuration's model if set, otherwise the first model available in Ollama
 - `--provider`, `-p` PROVIDER: LLM provider to use (e.g. `ollama`, `openai`, `openrouter`, `deepseek`). Default: `ollama`
@@ -296,7 +300,7 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 - `--install-completion`: Install shell autocompletion scripts for the client
 - `--show-completion`: Show available shell completion options
 
-### Supported Providers
+### Supported Inference Providers
 
 > [!WARNING]
 > **Non-Ollama providers are experimental.** Support for providers other than Ollama was added recently and is still being stabilized, not everything may work correctly yet.
