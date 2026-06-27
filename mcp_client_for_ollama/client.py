@@ -942,7 +942,8 @@ class MCPClient:
                     f"[bold yellow]New version available![/bold yellow]\n\n"
                     f"Current version: [cyan]{current_version}[/cyan]\n"
                     f"Latest version: [green]{latest_version}[/green]\n\n"
-                    f"Upgrade with: [bold white]pip install --upgrade mcp-client-for-ollama[/bold white]",
+                    f"Upgrade with: [bold white]uv tool install --upgrade ollmcp[/bold white]\n"
+                    f"Or if you prefer: [bold white]pip install --upgrade ollmcp[/bold white]",
                     title="Update Available", border_style="yellow", expand=False
                 ))
         except Exception:
@@ -1911,7 +1912,7 @@ def main(
         return
 
     if version:
-        typer.echo(f"mcp-client-for-ollama {__version__}")
+        typer.echo(f"ollmcp {__version__}")
         raise typer.Exit()
 
     # Run the async main function with proper cleanup
