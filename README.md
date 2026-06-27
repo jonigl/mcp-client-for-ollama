@@ -867,6 +867,31 @@ The JSON configuration file supports STDIO, SSE, and Streamable HTTP server type
 > [!NOTE]
 > **MCP 1.10.1 Transport Support**: The client now supports the latest Streamable HTTP transport with improved performance and reliability. If you specify a URL without a type, the client will default to using Streamable HTTP transport.
 
+For local STDIO servers, you can add prompt-injection, credential, exfiltration,
+and risky tool-call checks by wrapping the server command with
+[Armorer Guard](https://github.com/ArmorerLabs/Armorer-Guard):
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "armorer-guard",
+      "args": [
+        "mcp-proxy",
+        "--",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/tmp"
+      ],
+      "disabled": false
+    }
+  }
+}
+```
+
+Armorer Guard runs locally and forwards safe MCP tool calls unchanged.
+
 ### Tips: where to put MCP server configs and a working example
 
 A common point of confusion is where to store MCP server configuration files and how the TUI's save/load feature is used. Here's a short, practical guide that has helped other users:
