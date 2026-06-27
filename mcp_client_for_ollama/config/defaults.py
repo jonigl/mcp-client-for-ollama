@@ -69,7 +69,7 @@ def default_config() -> dict:
         "displaySettings": {
             "showToolExecution": True,
             "showMetrics": False,
-            "answerRenderMode": "markdown"
+            "answerRenderMode": "both"
         },
         "inputSettings": {
             "inputMode": "single"

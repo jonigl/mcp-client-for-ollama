@@ -92,6 +92,11 @@ class ProgressiveMarkdownRenderer:
 
         commit_point = self._find_safe_commit_point(uncommitted)
         if commit_point is None:
+            # No paragraph boundary, but the live zone is taller than the
+            # threshold. Fall back to the last single-newline boundary so the
+            # zone stays bounded and rich.Live can still erase prior frames.
+            commit_point = self._find_fallback_commit_point(uncommitted)
+        if commit_point is None:
             return
 
         text_to_commit = uncommitted[:commit_point]
@@ -161,10 +166,88 @@ class ProgressiveMarkdownRenderer:
 
         return last_safe_break
 
+    def _find_fallback_commit_point(self, text):
+        """Find the last single-newline boundary not inside a fenced code block.
+
+        Used when content is taller than the viewport but has no paragraph
+        boundary to commit at. Commits up to the last newline, leaving only the
+        final (in-progress) line in the Live zone. Returns the index or None if
+        no safe point exists (e.g. inside a code fence or a single long line).
+        """
+        in_code_block = False
+        last_safe_break = None
+        pos = 0
+
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("```"):
+                in_code_block = not in_code_block
+
+            pos += len(line) + 1  # Move past this line and its newline
+
+            # Safe to break after this line if we're outside a code block and
+            # there is a following line to keep in the Live zone.
+            if not in_code_block and i < len(lines) - 1 and pos < len(text):
+                last_safe_break = pos
+
+        return last_safe_break
+
+
+class BlockMarkdownRenderer(ProgressiveMarkdownRenderer):
+    """Append-only markdown renderer.
+
+    Prints each completed markdown block (paragraph/list/table/code fence) once
+    via console.print and never redraws it. Because nothing is ever erased, it
+    cannot exhibit the rich.Live cursor-miscount duplication that occurs with
+    wide glyphs (emoji) or terminal resizes.
+    """
+
+    def start(self):
+        """No live zone; just reset the refresh throttle."""
+        self._last_refresh = monotonic()
+
+    def update(self, new_chunk):
+        """Append a chunk and flush any completed blocks (throttled)."""
+        self.full_text += new_chunk
+        now = monotonic()
+        if now - self._last_refresh < self.REFRESH_INTERVAL:
+            return
+        self._last_refresh = now
+        self._commit_complete_blocks()
+
+    def finish(self):
+        """Flush whatever remains as a final markdown block."""
+        remaining = self.full_text[len(self.committed_text):]
+        if remaining:
+            self._print_markdown_preserving_trailing_newlines(remaining)
+            self.committed_text = self.full_text
+
+    def _commit_complete_blocks(self):
+        """Commit complete paragraphs; flush lines if a block grows too tall."""
+        uncommitted = self.full_text[len(self.committed_text):]
+        if not uncommitted:
+            return
+        commit_point = self._find_safe_commit_point(uncommitted)
+        if commit_point is None:
+            # No completed paragraph yet. If the in-progress block is already
+            # taller than the viewport, flush its completed lines so long prose
+            # keeps flowing; otherwise wait for more content.
+            terminal_size = shutil.get_terminal_size()
+            viewport_height = max(1, terminal_size.lines - 2)
+            threshold = int(viewport_height * self.VIEWPORT_COMMIT_THRESHOLD)
+            if self._estimate_height(uncommitted, terminal_size.columns) > threshold:
+                commit_point = self._find_fallback_commit_point(uncommitted)
+        if commit_point is None:
+            return
+        self._print_markdown_preserving_trailing_newlines(uncommitted[:commit_point])
+        self.committed_text += uncommitted[:commit_point]
+
+
 class StreamingManager:
     """Manages streaming responses for Ollama API calls"""
 
-    VALID_ANSWER_RENDER_MODES = {"plain", "markdown", "both"}
+    VALID_ANSWER_RENDER_MODES = {"plain", "markdown", "both", "blocks"}
 
     def __init__(self, console):
         """Initialize the streaming manager
@@ -297,10 +380,14 @@ class StreamingManager:
                         accumulated_text += content
                         if stream_plain_text:
                             self.console.print(content, end="")
-                        elif render_mode == "markdown":
+                        elif render_mode in {"markdown", "blocks"}:
                             if progressive_renderer is None:
                                 self._print_answer_transition_header(show_thinking, "markdown")
-                                progressive_renderer = ProgressiveMarkdownRenderer(self.console)
+                                renderer_cls = (
+                                    BlockMarkdownRenderer if render_mode == "blocks"
+                                    else ProgressiveMarkdownRenderer
+                                )
+                                progressive_renderer = renderer_cls(self.console)
                                 progressive_renderer.start()
                             progressive_renderer.update(content)
 
