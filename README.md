@@ -30,11 +30,16 @@
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
 - [Installation options](#installation-options)
-  - ✨**NEW** [Managing MCP Servers via CLI](#managing-mcp-servers-via-cli)
+  - [Troubleshooting](#troubleshooting)
+- ✨**NEW** [Managing MCP Servers via CLI](#managing-mcp-servers-via-cli)
     - [mcp add options](#mcp-add-options)
     - [Scopes](#scopes)
   - [Command-line Arguments](#command-line-arguments)
-  - ✨**NEW** [Supported Providers](#supported-providers)
+    - [MCP Server Configuration](#mcp-server-configuration)
+    - ✨**NEW** [Inference Provider Configuration](#inference-provider-configuration)
+    - [General Options](#general-options)
+  - ✨**NEW** [Supported Inference Providers](#supported-inference-providers)
+    - [API key resolution order](#api-key-resolution-order)
   - [Usage Examples](#usage-examples)
   - [How Tool Calls Work](#how-tool-calls-work)
   - ✨**NEW** [Agent Mode](#agent-mode)
@@ -118,17 +123,26 @@ MCP Client for Ollama (ollmcp) is a modern, interactive terminal application (TU
 Install `ollmcp` via pip, add an MCP server, and run the client:
 
 ```bash
-# Install ollmcp via pip
+# Install ollmcp via uv
+uv tool install --upgrade ollmcp
+# or via pip
 pip install --upgrade ollmcp
 # Add an MCP server (example: playwright stdio server)
 ollmcp mcp add playwright -- npx @playwright/mcp@latest
-# Run the client
-ollmcp
+# Run the client (check optional flags with `ollmcp --help`)
+ollmcp # once running, use /help for interactive commands
 ```
 
 ## Installation Options
 
-**Option 1:** Install with pip and run
+**Option 1:** Install with uv and run (recommended)
+
+```bash
+uv tool install --upgrade ollmcp
+ollmcp
+```
+
+**Option 2:** Install with pip and run
 
 ```bash
 pip install --upgrade ollmcp
@@ -146,10 +160,49 @@ uvx ollmcp
 ```bash
 git clone https://github.com/jonigl/mcp-client-for-ollama.git
 cd mcp-client-for-ollama
-uv venv && source .venv/bin/activate
-uv pip install .
 uv run -m mcp_client_for_ollama
 ```
+
+## Troubleshooting
+
+### `Could not find a version that satisfies the requirement ollmcp (from versions: none)`
+
+This almost always means the Python you are using is **older than the required 3.11+**. This is common on macOS, where the system Python (`/usr/bin/python3`) or the Xcode-bundled Python can be 3.9 or older. When no release matches `requires-python >= 3.11`, pip filters out every version and reports the misleading "from versions: none".
+
+First check your version:
+
+```bash
+python3 --version   # must be 3.11 or newer
+```
+
+Then install with a modern Python. The simplest option is `uv`, which fetches a suitable Python for you automatically:
+
+```bash
+uv tool install --upgrade ollmcp   # recommended, installs the CLI in an isolated environment
+# or, if you prefer pip, make sure to use a Python 3.11+ interpreter:
+python3.11 -m pip install --upgrade ollmcp
+# Then run the client:
+ollmcp
+```
+Take a look to the [Installation Options](#installation-options).
+
+### `error: externally-managed-environment` (PEP 668)
+
+On recent Debian/Ubuntu (Python 3.12+), the system `pip` is intentionally locked to protect OS-managed packages, so `pip install ollmcp` is blocked. This is a system policy ([PEP 668](https://peps.python.org/pep-0668/)), not an issue with ollmcp. Install it into an isolated environment instead:
+
+```bash
+uv tool install --upgrade ollmcp   # recommended, installs the CLI in an isolated environment
+# or, if you prefer pip, use a virtual environment:
+python3.11 -m venv ollmcp-env
+source ollmcp-env/bin/activate
+python3.11 -m pip install --upgrade ollmcp
+# Then run the client:
+ollmcp
+```
+Take a look to the [Installation Options](#installation-options).
+
+> [!WARNING]
+> Avoid `pip install --break-system-packages ollmcp`. It works, but it installs into the system Python and can break packages your OS depends on.
 
 ## Managing MCP Servers via CLI
 
@@ -230,7 +283,7 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 > [!IMPORTANT]
 > **Breaking change:** `--auto-discovery` / `-a` has been replaced by `--claude-desktop`. Additionally, servers added via `ollmcp mcp add` are now always loaded automatically, they are no longer a fallback that disappears when other flags are used. Claude Desktop servers are never loaded automatically; use `--claude-desktop` to include them.
 
-#### LLM Provider Configuration:
+#### Inference Provider Configuration:
 
 - `--model`, `-m` MODEL: Model to use. Default: your saved configuration's model if set, otherwise the first model available in Ollama
 - `--provider`, `-p` PROVIDER: LLM provider to use (e.g. `ollama`, `openai`, `openrouter`, `deepseek`). Default: `ollama`
@@ -247,7 +300,7 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 - `--install-completion`: Install shell autocompletion scripts for the client
 - `--show-completion`: Show available shell completion options
 
-### Supported Providers
+### Supported Inference Providers
 
 > [!WARNING]
 > **Non-Ollama providers are experimental.** Support for providers other than Ollama was added recently and is still being stabilized, not everything may work correctly yet.
