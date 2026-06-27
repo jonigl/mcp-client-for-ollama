@@ -30,6 +30,7 @@
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
 - [Installation options](#installation-options)
+  - [Troubleshooting](#troubleshooting)
   - ✨**NEW** [Managing MCP Servers via CLI](#managing-mcp-servers-via-cli)
     - [mcp add options](#mcp-add-options)
     - [Scopes](#scopes)
@@ -150,6 +151,47 @@ uv venv && source .venv/bin/activate
 uv pip install .
 uv run -m mcp_client_for_ollama
 ```
+
+## Troubleshooting
+
+### `Could not find a version that satisfies the requirement ollmcp (from versions: none)`
+
+This almost always means the Python you are using is **older than the required 3.11+**. This is common on macOS, where the system Python (`/usr/bin/python3`) or the Xcode-bundled Python can be 3.9 or older. When no release matches `requires-python >= 3.11`, pip filters out every version and reports the misleading "from versions: none".
+
+First check your version:
+
+```bash
+python3 --version   # must be 3.11 or newer
+```
+
+Then install with a modern Python. The simplest option is `uv`, which fetches a suitable Python for you automatically:
+
+```bash
+uv tool install --upgrade ollmcp   # recommended, installs the CLI in an isolated environment
+# or, if you prefer pip, make sure to use a Python 3.11+ interpreter:
+python3.11 -m pip install --upgrade ollmcp
+# Then run the client:
+ollmcp
+```
+Take a look to the [Installation Options](#installation-options).
+
+### `error: externally-managed-environment` (PEP 668)
+
+On recent Debian/Ubuntu (Python 3.12+), the system `pip` is intentionally locked to protect OS-managed packages, so `pip install ollmcp` is blocked. This is a system policy ([PEP 668](https://peps.python.org/pep-0668/)), not an issue with ollmcp. Install it into an isolated environment instead:
+
+```bash
+uv tool install --upgrade ollmcp   # recommended, installs the CLI in an isolated environment
+# or, if you prefer pip, use a virtual environment:
+python3.11 -m venv ollmcp-env
+source ollmcp-env/bin/activate
+python3.11 -m pip install --upgrade ollmcp
+# Then run the client:
+ollmcp
+```
+Take a look to the [Installation Options](#installation-options).
+
+> [!WARNING]
+> Avoid `pip install --break-system-packages ollmcp`. It works, but it installs into the system Python and can break packages your OS depends on.
 
 ## Managing MCP Servers via CLI
 
