@@ -87,7 +87,7 @@ MCP Client for Ollama (ollmcp) is a modern, interactive terminal application (TU
 - 🌍 **Multiple LLM Providers**: Use Ollama (default) or OpenAI-compatible providers (OpenAI, OpenRouter, DeepSeek, etc.), with connection settings remembered per provider
 - 🎨 **Rich Terminal Interface**: Interactive console UI with modern styling
 - 🌊 **Streaming Responses**: View model outputs in real-time as they're generated
-- 📝 **Answer Display Modes**: Switch between Plain, Markdown, or Both response views while streaming
+- 📝 **Answer Display Modes**: Switch between Plain, Markdown, Both, or Markdown (blocks) response views while streaming
 - 🛠️ **Tool Management**: Enable/disable specific tools or entire servers during chat sessions
 - 🧑‍💻 **Human-in-the-Loop (HIL)**: Review and approve tool executions before they run for enhanced control and safety
 - 🎮 **Advanced Model Configuration**: Fine-tune 15+ model parameters including context window size, temperature, sampling, repetition control, and more
@@ -305,7 +305,7 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 > [!WARNING]
 > **Non-Ollama providers are experimental.** Support for providers other than Ollama was added recently and is still being stabilized, not everything may work correctly yet.
 
-ollmcp works with **Ollama** plus any **OpenAI-compatible** provider that [any-llm](https://github.com/mozilla-ai/any-llm) exposes. Select one with `--provider`. Provide the key with `--api-key` or `$OLLMCP_API_KEY` — both work for **any** selected provider — or via the provider's own environment variable shown below. `$OLLMCP_API_KEY` and the provider-native env vars are never written to disk; only a key passed with `--api-key` is saved to the config.
+ollmcp works with **Ollama** plus any **OpenAI-compatible** provider that [any-llm](https://github.com/mozilla-ai/any-llm) exposes. Select one with `--provider`. Provide the key with `--api-key` or `$OLLMCP_API_KEY` (both work for **any** selected provider) or via the provider's own environment variable shown below. `$OLLMCP_API_KEY` and the provider-native env vars are never written to disk; only a key passed with `--api-key` is saved to the config.
 
 | Provider (`--provider`) | API key env var |
 |---|---|
@@ -346,7 +346,7 @@ ollmcp works with **Ollama** plus any **OpenAI-compatible** provider that [any-l
 For the selected provider, ollmcp resolves the API key in this order, from **highest** to **lowest** precedence:
 
 1. The `--api-key` / `-k` flag.
-2. The `$OLLMCP_API_KEY` environment variable (provider-agnostic — applies to whichever provider you selected with `--provider`).
+2. The `$OLLMCP_API_KEY` environment variable (provider-agnostic, applies to whichever provider you selected with `--provider`).
 3. The per-provider key saved in `~/.config/ollmcp/config.json` (present only if it was once passed via `--api-key`).
 4. The provider's own native environment variable, detected by [any-llm](https://github.com/mozilla-ai/any-llm) (e.g. `OPENAI_API_KEY`, `OPENROUTER_API_KEY`).
 
@@ -473,7 +473,7 @@ During chat, use these commands:
 | `/loop-limit`    | `/ll`            | Set maximum iterative tool-loop iterations (Agent Mode). Default: 7 |
 | `/model`         | `/m`             | List and select a different Ollama model            |
 | `/model-config`  | `/mc`            | Configure advanced model parameters and system prompt |
-| `/display-mode`  | `/dm`            | Choose Plain, Markdown, or Both answer display modes |
+| `/display-mode`  | `/dm`            | Choose Plain, Markdown, Both, or Markdown (blocks) answer display modes |
 | `/input-mode`    | `/im`            | Choose Single-line or Multiline chat input mode     |
 | `/prompts`       | `/pr`            | Browse and view all available MCP prompts             |
 | `/server:prompt_name`   | `/prompt_name`      | Invoke a prompt (qualified is recommended) |
@@ -495,16 +495,18 @@ During chat, use these commands:
 The `display-mode` (`dm`) command lets you choose how model answers are shown while they stream:
 
 - **Plain**: Streams the response once as plain text with no final markdown re-render
-- **Markdown**: Renders the response as markdown during streaming with throttled redraws
-- **Both**: Streams plain text first, then renders the completed response again as markdown
+- **Markdown**: Renders the response as markdown during streaming with throttled redraws (live; can flicker or duplicate lines with emojis or when you resize the terminal)
+- **Both** (default): Streams plain text first, then renders the completed response again as markdown
+- ✨**NEW** **Markdown (blocks)**: Renders the response as markdown one block at a time, append-only each paragraph/list/table/code block prints once when it completes and is never redrawn, so it cannot duplicate lines
 
 Use `/display-mode` or `/dm` during chat to open the interactive picker.
 
 **Why you might switch modes:**
 
 - **Plain** is the least noisy option if you want minimal redraw or flicker
-- **Markdown** is useful when formatting matters more than raw token-by-token output
+- **Markdown** shows live markdown formatting, but its in-place redraws can flicker or duplicate lines with emojis/resizes
 - **Both** gives you fast streaming feedback plus a clean final markdown rendering
+- **Markdown (blocks)** is the most stable way to see formatted markdown while streaming, at the cost of block-by-block (rather than token-by-token) updates
 
 > [!TIP]
 > Your selected display mode is saved with `save-config` and restored with `load-config`, so you can keep different viewing preferences for different workflows.
@@ -961,7 +963,7 @@ Connection settings are stored **per provider**, so switching providers never re
 The configuration also records a `defaultProvider`. When you run `ollmcp` with no `--provider` flag, it loads that provider's profile; a fresh install starts on `ollama`. Each time you `/save-config`, the provider you're currently using *becomes the new default*, so running plain `ollmcp` resumes wherever you left off. Pass `--provider <name>` at any time to switch to (and load) a different provider's profile, and `--model` / `--host` / `--api-key` override the saved values for that run.
 
 > [!NOTE]
-> Only a key passed with `--api-key` is stored, in plain text, in `~/.config/ollmcp/config.json`. Keys provided through the `$OLLMCP_API_KEY` environment variable or a provider's native environment variable (for example `OPENROUTER_API_KEY`) are **never** written to disk — use one of those if you don't want your key persisted.
+> Only a key passed with `--api-key` is stored, in plain text, in `~/.config/ollmcp/config.json`. Keys provided through the `$OLLMCP_API_KEY` environment variable or a provider's native environment variable (for example `OPENROUTER_API_KEY`) are **never** written to disk, use one of those if you don't want your key persisted.
 
 The following settings are **shared** across all providers:
 
