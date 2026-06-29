@@ -78,7 +78,7 @@ MCP Client for Ollama (ollmcp) is a modern, interactive terminal application (TU
 
 ## Features
 
-- 🤖 **Agent Mode**: Iterative tool execution when models request multiple tool calls, with a configurable loop limit to prevent infinite loops
+- 🤖 **Agent Mode**: Iterative tool execution when models request multiple tool calls, with a configurable loop limit and interactive choices when the limit is reached (continue, wrap up, or abort)
 - 🌐 **Multi-Server Support**: Connect to multiple MCP servers simultaneously
 - 🚀 **Multiple Transport Types**: Supports STDIO, SSE, and Streamable HTTP server connections
 - 📋 **MCP Prompts Support**: Browse, invoke, and manage prompts from MCP servers with argument collection, preview, and safe rollback
@@ -1151,6 +1151,18 @@ Some models may request multiple tool calls in a single conversation. The client
 - This process repeats until the model provides a final answer or reaches the configured loop limit
 - You can set the maximum number of iterations using the `loop-limit` (`ll`) command
 - The default loop limit is `7` to prevent infinite loops
+
+#### When the loop limit is reached
+
+Instead of silently stopping, the client pauses and asks you how to proceed:
+
+| Choice | Key | Description |
+|--------|-----|-------------|
+| **Continue** | `c` *(default)* | Grant another batch of iterations (same size as the current limit) |
+| **Number** | `n` | Choose exactly how many more iterations to allow |
+| **Unlimited** | `u` | Remove the cap and run until the model stops requesting tools |
+| **Wrap up** | `w` | Ask the model to summarise what it gathered so far and produce a final answer — preserves all tool results collected before the limit |
+| **Abort** | `a` | Discard the turn entirely (nothing saved to history) |
 
 > [!NOTE]
 > If you want to prevent using Agent Mode, simply set the loop limit to `1`.
