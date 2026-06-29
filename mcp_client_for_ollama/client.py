@@ -22,6 +22,7 @@ from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.prompt import Prompt
 from rich.text import Text
 import httpx
 from any_llm import AnyLLM
@@ -584,6 +585,8 @@ class MCPClient:
         enabled_tools = self.tool_manager.get_enabled_tool_objects()
 
         loop_count = 0
+        iteration_budget = self.loop_limit
+        loop_unlimited = False
         pending_tool_calls = tool_calls
 
         # Keep looping while the model requests tools and we have capacity
@@ -591,15 +594,22 @@ class MCPClient:
             if self.abort_current_query:
                 break
 
-            if loop_count >= self.loop_limit:
-                self.console.print()  # Add spacing before the panel
-                self.console.print(Panel(
-                    f"[yellow]Your current loop limit is set to [bold]{self.loop_limit}[/bold] and has been reached. Skipping additional tool calls.[/yellow]\n"
-                    f"You will probably want to increase this limit if your model requires more tool interactions to complete tasks.\n"
-                    f"You can change the loop limit with the [bold cyan]/loop-limit[/bold cyan] command.",
-                    title="[bold]Loop Limit Reached[/bold]", border_style="yellow", expand=False
-                ))
-                break
+            if not loop_unlimited and loop_count >= iteration_budget:
+                action, amount = await self._prompt_loop_limit_action(iteration_budget)
+                if action == "continue":
+                    iteration_budget += amount
+                elif action == "unlimited":
+                    loop_unlimited = True
+                elif action == "wrap":
+                    wrap_text = await self._wrap_up_final_answer(
+                        messages, model, pending_tool_calls, supports_thinking
+                    )
+                    if wrap_text:
+                        response_text = wrap_text
+                    break
+                elif action == "abort":
+                    self.abort_current_query = True
+                    raise AbortQueryException("Query aborted at loop limit")
 
             loop_count += 1
 
@@ -1362,6 +1372,120 @@ class MCPClient:
                 return
 
             self.console.print("[red]Invalid selection. Choose 1, 2, single, multiline, or q.[/red]")
+
+    async def _prompt_loop_limit_action(self, iteration_budget):
+        """Ask the user what to do when the agent loop limit is reached.
+
+        Returns (action, amount) where action is one of:
+          "continue"  — resume with iteration_budget increased by amount
+          "unlimited" — remove the cap for this query
+          "wrap"      — force a final tool-free answer
+          "abort"     — discard the turn
+        """
+        self.console.print()
+        self.console.print()
+        self.console.print(Panel(
+            f"[yellow]Loop limit of [bold]{iteration_budget}[/bold] reached after this batch.[/yellow]\n\n"
+            "[bold cyan]What would you like to do?[/bold cyan]\n"
+            f"  [green]c/continue[/green]  - Run another [bold]{self.loop_limit}[/bold] iterations (default)\n"
+            "  [cyan]n/number[/cyan]    - Choose how many more iterations to allow\n"
+            "  [magenta]u/unlimited[/magenta] - Remove the cap and run until the model stops\n"
+            "  [yellow]w/wrap[/yellow]      - Ask the model to summarise what it found so far\n"
+            "  [bold red]a/abort[/bold red]     - Discard this turn (nothing saved to history)",
+            title="[bold]Loop Limit Reached[/bold]", border_style="yellow", expand=False
+        ))
+
+        self.monitor_paused = True
+        if os.name != 'nt':
+            try:
+                await asyncio.wait_for(self.monitor_paused_ack.wait(), timeout=1.0)
+            except asyncio.TimeoutError:
+                pass
+        try:
+            choice = Prompt.ask(
+                "[bold]Choice[/bold]",
+                choices=["c", "continue", "n", "number", "u", "unlimited", "w", "wrap", "a", "abort"],
+                default="c",
+                show_choices=False,
+            ).lower()
+        finally:
+            self.monitor_paused = False
+
+        if choice in ("n", "number"):
+            raw = await get_input_no_autocomplete("How many more iterations?")
+            try:
+                extra = int((raw or "").strip())
+                if extra < 1:
+                    raise ValueError
+            except ValueError:
+                self.console.print(f"[yellow]Invalid number — granting {self.loop_limit} more iterations.[/yellow]")
+                extra = self.loop_limit
+            return ("continue", extra)
+
+        if choice in ("u", "unlimited"):
+            self.console.print("[magenta]🤖 Running without iteration cap for the rest of this query.[/magenta]")
+            return ("unlimited", 0)
+
+        if choice in ("w", "wrap"):
+            self.console.print("[cyan]🤖 Asking the model to wrap up with what it has gathered...[/cyan]")
+            return ("wrap", 0)
+
+        if choice in ("a", "abort"):
+            self.console.print("[bold red]🛑 Aborting query...[/bold red]")
+            return ("abort", 0)
+
+        # c / continue
+        self.console.print(f"[green]🤖 Granting {self.loop_limit} more iterations.[/green]")
+        return ("continue", self.loop_limit)
+
+    async def _wrap_up_final_answer(self, messages, model, pending_tool_calls, supports_thinking):
+        """Force one final tool-free completion so gathered context is not lost.
+
+        At the point this is called the last assistant message contains unanswered
+        tool_calls. Providers reject a follow-up call while those are dangling, so
+        we append synthetic skipped-tool responses first, then request a plain text
+        answer with tools=None.
+        """
+        for tool in pending_tool_calls:
+            messages.append({
+                "role": "tool",
+                "content": "Tool call skipped — loop limit reached.",
+                "tool_call_id": tool["id"],
+            })
+
+        messages.append({
+            "role": "user",
+            "content": (
+                "Stop calling tools. Based on the information gathered so far, "
+                "give your best final answer now."
+            ),
+        })
+
+        stream = await self.llm.acompletion(
+            model=model,
+            messages=apply_images(messages),
+            stream=True,
+            stream_options={"include_usage": True},
+            tools=None,
+            **({
+                "reasoning_effort": "high"
+            } if supports_thinking and self.thinking_mode else {}),
+            **self.model_config_manager.get_completion_kwargs(self.provider),
+        )
+
+        wrap_text, _, wrap_metrics = await self.streaming_manager.process_streaming_response(
+            stream,
+            thinking_mode=self.thinking_mode,
+            show_thinking=self.show_thinking,
+            show_metrics=self.show_metrics,
+            answer_render_mode=self.answer_render_mode,
+            cancellation_check=lambda: self.abort_current_query,
+        )
+
+        if wrap_metrics and wrap_metrics.get("completion_tokens"):
+            self.actual_token_count += wrap_metrics["completion_tokens"]
+
+        return wrap_text
 
     async def set_loop_limit(self):
         """Configure the maximum number of follow-up tool loops per query."""
