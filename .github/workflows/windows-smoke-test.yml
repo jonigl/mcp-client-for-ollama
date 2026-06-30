@@ -9,12 +9,8 @@ on:
   pull_request:
   workflow_dispatch:
 
-<<<<<<< HEAD
 permissions:
   contents: read
-
-=======
->>>>>>> 9c940da (feat(ci): add Windows smoke test workflow to verify CLI startup)
 jobs:
   smoke:
     runs-on: windows-latest
@@ -29,7 +25,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Install package
-        run: uv tool install --upgrade ollmcp
+        run: uv sync
 
       - name: Verify CLI starts
-        run: ollmcp --help
+        run: uv run ollmcp --help
