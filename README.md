@@ -42,21 +42,21 @@
     - [API key resolution order](#api-key-resolution-order)
   - [Usage Examples](#usage-examples)
   - [How Tool Calls Work](#how-tool-calls-work)
-  - ✨**NEW** [Agent Mode](#agent-mode)
+  - [Agent Mode](#agent-mode)
 - [Interactive Commands](#interactive-commands)
-  - ✨**NEW** [Answer Display Modes](#answer-display-modes)
-  - ✨**NEW** [Input Mode](#input-mode)
   - [MCP Tools](#mcp-tools)
+  - [MCP Prompts](#mcp-prompts)
+  - [MCP Resources](#mcp-resources)
+  - ✨**NEW** [Answer Display Modes](#answer-display-modes)
+  - [Input Mode](#input-mode)
   - [Model Selection](#model-selection)
   - [Advanced Model Configuration](#advanced-model-configuration)
   - ✨**NEW** [Thinking Mode and Reasoning Effort](#thinking-mode-and-reasoning-effort)
   - [Server Reloading for Development](#server-reloading-for-development)
   - [Human-in-the-Loop (HIL) Tool Execution](#human-in-the-loop-hil-tool-execution)
     - [Human-in-the-Loop (HIL) Configuration](#human-in-the-loop-hil-configuration)
-  - ✨**NEW** [MCP Prompts](#mcp-prompts)
-  - ✨**NEW** [MCP Resources](#mcp-resources)
   - [Performance Metrics](#performance-metrics)
-  - ✨**NEW** [History Management](#history-management)
+  - [History Management](#history-management)
 - [Autocomplete and Prompt Features](#autocomplete-and-prompt-features)
   - [Typer Shell Autocompletion](#typer-shell-autocompletion)
   - [FZF-style Autocomplete](#fzf-style-autocomplete)
@@ -493,6 +493,168 @@ During chat, use these commands:
 | `/tools`         | `/t`             | Open the tool selection interface                   |
 
 
+### MCP Tools
+
+The tool and server selection interface allows you to enable or disable specific tools:
+
+![ollmcp tool and server selection interface](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmpc-tool-and-server-selection.png?raw=true)
+
+- Enter **numbers** separated by commas (e.g. `1,3,5`) to toggle specific tools
+- Enter **ranges** of numbers (e.g. `5-8`) to toggle multiple consecutive tools
+- Enter **S + number** (e.g. `S1`) to toggle all tools in a specific server
+- `a` or `all` - Enable all tools
+- `n` or `none` - Disable all tools
+- `d` or `desc` - Show/hide tool descriptions
+- `j` or `json` - Show detailed tool JSON schemas on enabled tools for debugging purposes
+- `s` or `save` - Save changes and return to chat
+- `q` or `quit` - Cancel changes and return to chat
+
+
+### MCP Prompts
+
+MCP Prompts provide reusable, server-defined conversation starters and context templates. Servers can expose prompts with descriptions, required arguments, and pre-formatted messages that help you quickly start specific types of conversations or inject structured context into your chat.
+
+#### Features
+
+- 📋 **Browse Prompts**: View all available prompts from connected servers with descriptions and argument requirements
+- ⚡️ **Quick Invocation**: Use slash syntax to invoke prompts (`/server:prompt_name` recommended)
+- 🔤 **Autocomplete**: Type `/` to see prompt suggestions with fuzzy matching
+- 📝 **Argument Collection**: Interactive prompts guide you through required parameters
+- 👁️ **Preview**: Review prompt content before injection to ensure it fits your needs
+- 🎯 **Flexible Injection**: Choose to execute immediately or inject-only (add to history without triggering model)
+- 🧠 **Context-Aware**: Automatically adapts behavior based on whether prompt ends with user or assistant message
+- 🔄 **Safe Rollback**: Automatic history cleanup if you abort or encounter errors
+- 💬 **Text Content**: Supports text-based prompt messages (image/audio/resource support coming soon)
+
+#### How to Use MCP Prompts
+
+**Browse Available Prompts:**
+```
+/prompts  # or '/pr'
+```
+This displays all prompts grouped by server, showing their names, required arguments, and descriptions.
+
+**Invoke a Prompt:**
+```
+/server:prompt_name
+```
+For example, if a server named `docs` provides a "summarize" prompt:
+```
+/docs:summarize
+```
+
+If a prompt name is unique across connected servers, you can use the short form:
+```
+/summarize
+```
+
+If multiple servers expose the same prompt name, the client will ask you to use the qualified form and suggest valid `/server:prompt_name` options.
+
+**Autocomplete:**
+- Type `/` to see all available prompts with descriptions
+- Continue typing to filter prompts with fuzzy matching
+- Use arrow keys to navigate and press Enter to select
+
+> [!TIP]
+> Prompts are discovered automatically when you connect to MCP servers. If a server supports prompts, they'll be available immediately in the `prompts` list and autocomplete.
+
+**Workflow:**
+1. Type `/server:prompt_name` (recommended) or select from autocomplete
+2. If the prompt requires arguments, you'll be prompted to provide them
+3. Review the prompt preview showing what will be injected
+4. Choose how to use the prompt:
+   - **y/yes** (default): Send the prompt to the model and get a response
+     - For prompts ending with a **user message**: Uses that message as the query
+     - For prompts ending with an **assistant message**: Adds "Please respond based on the above context." as the query
+   - **i/inject**: Just add the prompt to conversation history without triggering the model (lets you type your own query afterward)
+   - **n/no**: Cancel and return to chat
+5. The prompt is injected based on your choice
+6. If you abort during model generation (press 'a'), changes are automatically rolled back
+
+**Example:**
+![ollmcp prompt feature screenshot](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-prompt-feature.png?raw=true)
+
+> [!WARNING]
+> **Content Type Limitations**: MCP Prompts currently support **text content only**. The following content types are not yet supported and will be automatically skipped:
+> - 🖼️ **Images** - Image content in prompts
+> - 🎵 **Audio** - Audio content in prompts
+> - 📦 **Resources** - Embedded resource content
+
+### MCP Resources
+
+MCP Resources provide access to contextual data exposed by MCP servers-files, documents, structured data, and more. Servers can expose resources with metadata (name, description, MIME type) that you can browse and read into your conversation context.
+
+#### Features
+
+- 📋 **Browse Resources**: View all available resources from connected servers with URIs, names, MIME types, and descriptions
+- 📖 **Read Resources**: Use `@uri` syntax to read resource content, standalone or inline within a query
+- 📝 **Text Content**: Full support for text-based resources (markdown, code, logs, etc.)
+- 🖼️ **Vision Image Support**: Image resources (`image/*`) are automatically forwarded as base64 images to vision-capable models
+- 🎯 **Context Injection**: Resource content is buffered and injected as context alongside your next query
+- 🔍 **Autocomplete**: Type `@` to see available resource and template suggestions with fuzzy matching
+- 🛡️ **Binary Safety**: Non-image binary content (audio, video, PDFs, archives) is detected and gracefully skipped with informative messages
+
+#### How to Use MCP Resources
+
+**Browse Available Resources:**
+```
+/resources  # or '/res'
+```
+This displays all resources and templates grouped by server, showing URIs, names, MIME types, and descriptions. Binary resources are marked with a `[binary]` tag and templates with a `[template]` tag.
+
+**Read a Resource:**
+```
+@<uri>
+```
+For example, to read a file resource:
+```
+@file:///path/to/document.md
+```
+
+There are two ways to use `@uri`:
+
+**1. Standalone (buffer then query):** Type `@uri` on its own. The resource is fetched and buffered. Then type your query on the next prompt. The resource content is injected as context automatically.
+
+**2. Inline (single turn):** Include `@uri` anywhere inside your query text. The resource is fetched and the query is processed immediately in one step.
+
+**Standalone example:**
+```
+qwen3/show-thinking/6-tools❯ @server://info
+✅ Read resource 'get_server_info' (197 chars)
+
+Preview:
+This is a simple MCP server with streamable HTTP transport. It supports tools for greeting, adding numbers, generating
+random numbers, and calculating BMI. It also provides a BMI calculator prompt.
+
+1 resource(s) buffered. Type your query, or include @another_uri inline.
+
+qwen3/show-thinking/6-tools❯ Next question here
+```
+
+**Inline example:**
+```
+qwen3/show-thinking/6-tools❯ summarize the key features from @server://info
+✅ Read resource 'get_server_info' (197 chars)
+
+Preview:
+This is a simple MCP server with streamable HTTP transport. It supports tools for greeting, adding numbers, generating
+random numbers, and calculating BMI. It also provides a BMI calculator prompt.
+[model response]
+```
+
+> [!TIP]
+> Resources are discovered automatically when you connect to MCP servers. If a server supports resources, they'll be available immediately in the `resources` list and `@` autocomplete.
+
+> [!NOTE]
+> 🖼️ **Images** (`image/*`) **are** supported, they are passed directly to vision-capable models as base64 data.
+> **Binary Content**: The following resource types are **not** supported as context and will be skipped with an informative message:
+> - 🎵 **Audio** - `audio/*` MIME types
+> - 📹 **Video** - `video/*` MIME types
+> - 📄 **PDFs** - `application/pdf`
+> - 🗜️ **Archives** - `application/zip`, `application/octet-stream`
+>
+
+
 ### Answer Display Modes
 
 The `display-mode` (`dm`) command lets you choose how model answers are shown while they stream:
@@ -527,22 +689,6 @@ Use `/input-mode` or `/im` during chat to open the interactive picker.
 > [!IMPORTANT]
 > Multiline send shortcuts can vary by terminal emulator and OS keyboard handling. This client relies on **Esc then Enter** as the portable submit shortcut in multiline mode. **Shift+Enter** and **Meta+Enter** may work in some terminals, but they are not guaranteed.
 
-
-### MCP Tools
-
-The tool and server selection interface allows you to enable or disable specific tools:
-
-![ollmcp tool and server selection interface](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmpc-tool-and-server-selection.png?raw=true)
-
-- Enter **numbers** separated by commas (e.g. `1,3,5`) to toggle specific tools
-- Enter **ranges** of numbers (e.g. `5-8`) to toggle multiple consecutive tools
-- Enter **S + number** (e.g. `S1`) to toggle all tools in a specific server
-- `a` or `all` - Enable all tools
-- `n` or `none` - Disable all tools
-- `d` or `desc` - Show/hide tool descriptions
-- `j` or `json` - Show detailed tool JSON schemas on enabled tools for debugging purposes
-- `s` or `save` - Save changes and return to chat
-- `q` or `quit` - Cancel changes and return to chat
 
 ### Model Selection
 
@@ -694,150 +840,6 @@ When prompted, you can choose from the following options:
 - **Flexible Workflow**: Session mode for efficient multi-tool queries, individual approval for sensitive operations
 - **Clean Abort**: Stop problematic queries immediately without polluting conversation history
 - **Peace of Mind**: Full visibility and control over automated actions
-
-### MCP Prompts
-
-MCP Prompts provide reusable, server-defined conversation starters and context templates. Servers can expose prompts with descriptions, required arguments, and pre-formatted messages that help you quickly start specific types of conversations or inject structured context into your chat.
-
-#### Features
-
-- 📋 **Browse Prompts**: View all available prompts from connected servers with descriptions and argument requirements
-- ⚡️ **Quick Invocation**: Use slash syntax to invoke prompts (`/server:prompt_name` recommended)
-- 🔤 **Autocomplete**: Type `/` to see prompt suggestions with fuzzy matching
-- 📝 **Argument Collection**: Interactive prompts guide you through required parameters
-- 👁️ **Preview**: Review prompt content before injection to ensure it fits your needs
-- 🎯 **Flexible Injection**: Choose to execute immediately or inject-only (add to history without triggering model)
-- 🧠 **Context-Aware**: Automatically adapts behavior based on whether prompt ends with user or assistant message
-- 🔄 **Safe Rollback**: Automatic history cleanup if you abort or encounter errors
-- 💬 **Text Content**: Supports text-based prompt messages (image/audio/resource support coming soon)
-
-#### How to Use MCP Prompts
-
-**Browse Available Prompts:**
-```
-/prompts  # or '/pr'
-```
-This displays all prompts grouped by server, showing their names, required arguments, and descriptions.
-
-**Invoke a Prompt:**
-```
-/server:prompt_name
-```
-For example, if a server named `docs` provides a "summarize" prompt:
-```
-/docs:summarize
-```
-
-If a prompt name is unique across connected servers, you can use the short form:
-```
-/summarize
-```
-
-If multiple servers expose the same prompt name, the client will ask you to use the qualified form and suggest valid `/server:prompt_name` options.
-
-**Autocomplete:**
-- Type `/` to see all available prompts with descriptions
-- Continue typing to filter prompts with fuzzy matching
-- Use arrow keys to navigate and press Enter to select
-
-> [!TIP]
-> Prompts are discovered automatically when you connect to MCP servers. If a server supports prompts, they'll be available immediately in the `prompts` list and autocomplete.
-
-**Workflow:**
-1. Type `/server:prompt_name` (recommended) or select from autocomplete
-2. If the prompt requires arguments, you'll be prompted to provide them
-3. Review the prompt preview showing what will be injected
-4. Choose how to use the prompt:
-   - **y/yes** (default): Send the prompt to the model and get a response
-     - For prompts ending with a **user message**: Uses that message as the query
-     - For prompts ending with an **assistant message**: Adds "Please respond based on the above context." as the query
-   - **i/inject**: Just add the prompt to conversation history without triggering the model (lets you type your own query afterward)
-   - **n/no**: Cancel and return to chat
-5. The prompt is injected based on your choice
-6. If you abort during model generation (press 'a'), changes are automatically rolled back
-
-**Example:**
-![ollmcp prompt feature screenshot](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-prompt-feature.png?raw=true)
-
-> [!WARNING]
-> **Content Type Limitations**: MCP Prompts currently support **text content only**. The following content types are not yet supported and will be automatically skipped:
-> - 🖼️ **Images** - Image content in prompts
-> - 🎵 **Audio** - Audio content in prompts
-> - 📦 **Resources** - Embedded resource content
-
-### MCP Resources
-
-MCP Resources provide access to contextual data exposed by MCP servers-files, documents, structured data, and more. Servers can expose resources with metadata (name, description, MIME type) that you can browse and read into your conversation context.
-
-#### Features
-
-- 📋 **Browse Resources**: View all available resources from connected servers with URIs, names, MIME types, and descriptions
-- 📖 **Read Resources**: Use `@uri` syntax to read resource content, standalone or inline within a query
-- 📝 **Text Content**: Full support for text-based resources (markdown, code, logs, etc.)
-- 🖼️ **Vision Image Support**: Image resources (`image/*`) are automatically forwarded as base64 images to vision-capable models
-- 🎯 **Context Injection**: Resource content is buffered and injected as context alongside your next query
-- 🔍 **Autocomplete**: Type `@` to see available resource and template suggestions with fuzzy matching
-- 🛡️ **Binary Safety**: Non-image binary content (audio, video, PDFs, archives) is detected and gracefully skipped with informative messages
-
-#### How to Use MCP Resources
-
-**Browse Available Resources:**
-```
-/resources  # or '/res'
-```
-This displays all resources and templates grouped by server, showing URIs, names, MIME types, and descriptions. Binary resources are marked with a `[binary]` tag and templates with a `[template]` tag.
-
-**Read a Resource:**
-```
-@<uri>
-```
-For example, to read a file resource:
-```
-@file:///path/to/document.md
-```
-
-There are two ways to use `@uri`:
-
-**1. Standalone (buffer then query):** Type `@uri` on its own. The resource is fetched and buffered. Then type your query on the next prompt. The resource content is injected as context automatically.
-
-**2. Inline (single turn):** Include `@uri` anywhere inside your query text. The resource is fetched and the query is processed immediately in one step.
-
-**Standalone example:**
-```
-qwen3/show-thinking/6-tools❯ @server://info
-✅ Read resource 'get_server_info' (197 chars)
-
-Preview:
-This is a simple MCP server with streamable HTTP transport. It supports tools for greeting, adding numbers, generating
-random numbers, and calculating BMI. It also provides a BMI calculator prompt.
-
-1 resource(s) buffered. Type your query, or include @another_uri inline.
-
-qwen3/show-thinking/6-tools❯ Next question here
-```
-
-**Inline example:**
-```
-qwen3/show-thinking/6-tools❯ summarize the key features from @server://info
-✅ Read resource 'get_server_info' (197 chars)
-
-Preview:
-This is a simple MCP server with streamable HTTP transport. It supports tools for greeting, adding numbers, generating
-random numbers, and calculating BMI. It also provides a BMI calculator prompt.
-[model response]
-```
-
-> [!TIP]
-> Resources are discovered automatically when you connect to MCP servers. If a server supports resources, they'll be available immediately in the `resources` list and `@` autocomplete.
-
-> [!NOTE]
-> 🖼️ **Images** (`image/*`) **are** supported, they are passed directly to vision-capable models as base64 data.
-> **Binary Content**: The following resource types are **not** supported as context and will be skipped with an informative message:
-> - 🎵 **Audio** - `audio/*` MIME types
-> - 📹 **Video** - `video/*` MIME types
-> - 📄 **PDFs** - `application/pdf`
-> - 🗜️ **Archives** - `application/zip`, `application/octet-stream`
->
 
 
 ### Performance Metrics
