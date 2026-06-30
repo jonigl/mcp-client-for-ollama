@@ -162,10 +162,18 @@ class ModelManager:
         badges = [badge for cap, badge in badge_map if cap in capabilities]
         return " [dim]│[/dim] ".join(badges)
 
-    def display_current_model(self) -> None:
+    def display_current_model(self, thinking_mode: bool = False, reasoning_effort: str = "") -> None:
         """Display the currently selected model in the console."""
         capabilities = self._capabilities_cache.get(self.model, [])
         badges = self.format_capabilities_badges(capabilities)
+
+        # Annotate the Thinking badge with the current effort level when thinking is active
+        if thinking_mode and reasoning_effort and "thinking" in capabilities:
+            badges = badges.replace(
+                "[bold magenta]💭 Thinking[/bold magenta]",
+                f"[bold magenta]💭 Thinking ({reasoning_effort})[/bold magenta]",
+            )
+
         content = (
             f"[bold blue]Current model:[/bold blue] [bold green]{self.model}[/bold green]"
             f" [bold yellow]({self.provider})[/bold yellow]"

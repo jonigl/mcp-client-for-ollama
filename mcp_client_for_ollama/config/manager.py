@@ -9,7 +9,7 @@ import os
 from typing import Dict, Any, Optional
 from rich.console import Console
 from rich.panel import Panel
-from ..utils.constants import DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE
+from ..utils.constants import DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE, REASONING_EFFORT_LEVELS
 from .defaults import default_config, default_provider_profile
 
 class ConfigManager:
@@ -151,6 +151,7 @@ class ConfigManager:
             "• Context retention enabled\n"
             "• Thinking mode enabled\n"
             "• Thinking text visible\n"
+            "• Reasoning effort reset to medium\n"
             "• Agent loop limit reset",
             title="Config Reset", border_style="green", expand=False
         ))
@@ -239,6 +240,10 @@ class ConfigManager:
                 validated["modelSettings"]["thinkingMode"] = bool(config_data["modelSettings"]["thinkingMode"])
             if "showThinking" in config_data["modelSettings"]:
                 validated["modelSettings"]["showThinking"] = bool(config_data["modelSettings"]["showThinking"])
+            if "reasoningEffort" in config_data["modelSettings"]:
+                effort = str(config_data["modelSettings"]["reasoningEffort"]).lower()
+                if effort in REASONING_EFFORT_LEVELS:
+                    validated["modelSettings"]["reasoningEffort"] = effort
 
         if "agentSettings" in config_data and isinstance(config_data["agentSettings"], dict):
             if "loopLimit" in config_data["agentSettings"]:
