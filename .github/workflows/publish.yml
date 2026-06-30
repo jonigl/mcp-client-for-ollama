@@ -115,6 +115,6 @@ jobs:
         with:
           tag_name: "v${{ needs.extract-version.outputs.version }}"
           name: "Release v${{ needs.extract-version.outputs.version }}"
-          draft: false
+          draft: true
           prerelease: ${{ steps.release-type.outputs.type == 'prerelease' }}
           generate_release_notes: true
