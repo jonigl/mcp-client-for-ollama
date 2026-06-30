@@ -9,9 +9,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+<<<<<<< HEAD
 permissions:
   contents: read
 
+=======
+>>>>>>> 9c940da (feat(ci): add Windows smoke test workflow to verify CLI startup)
 jobs:
   smoke:
     runs-on: windows-latest
