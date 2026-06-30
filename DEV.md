@@ -47,7 +47,7 @@ This project uses GitHub Actions for automated testing, building, publishing, an
    - Triggered by pushing a version tag (e.g., `v0.1.11`) or manually from GitHub
    - Extracts the version from project files
    - Builds and publishes both packages to PyPI
-   - Creates a GitHub release with informative release notes
+   - Creates a GitHub release draft with informative release notes
 
 To create a new release:
 
@@ -71,6 +71,8 @@ To create a new release:
 4. The GitHub Actions workflow will automatically:
    - Build both packages
    - Publish to PyPI
-   - Create a release on GitHub
+   - Create a release draft on GitHub
 
-Alternatively, you can manually trigger the release workflow from the GitHub Actions tab after pushing the version changes.
+5. Review the release draft:
+   - Check the release notes and make any necessary edits
+   - Publish the release on GitHub
