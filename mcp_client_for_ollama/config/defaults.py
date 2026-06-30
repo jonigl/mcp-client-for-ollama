@@ -4,7 +4,7 @@ This module provides default settings and paths used throughout the application.
 """
 
 import os
-from ..utils.constants import DEFAULT_MODEL, DEFAULT_CONFIG_FILE, DEFAULT_CONFIG_DIR, DEFAULT_OLLAMA_HOST
+from ..utils.constants import DEFAULT_MODEL, DEFAULT_CONFIG_FILE, DEFAULT_CONFIG_DIR, DEFAULT_OLLAMA_HOST, DEFAULT_REASONING_EFFORT
 
 def default_provider_profile(provider: str = "ollama") -> dict:
     """Get the default connection profile for a provider.
@@ -43,7 +43,8 @@ def default_config() -> dict:
         },
         "modelSettings": {
             "thinkingMode": True,
-            "showThinking": True
+            "showThinking": True,
+            "reasoningEffort": DEFAULT_REASONING_EFFORT
         },
         "agentSettings": {
             "loopLimit": 7

@@ -32,7 +32,7 @@ from . import __version__
 from .config.manager import ConfigManager
 from .config.defaults import default_config, default_provider_profile
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_PROVIDER, SUPPORTED_PROVIDERS, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_PROVIDER, SUPPORTED_PROVIDERS, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART, REASONING_EFFORT_LEVELS, DEFAULT_REASONING_EFFORT
 from .utils.connection import preflight_ollama, validate_provider
 from .utils.images import apply_images
 from .server.connector import ServerConnector
@@ -117,6 +117,7 @@ class MCPClient:
         # Thinking mode settings
         self.thinking_mode = True  # By default, thinking mode is enabled for models that support it
         self.show_thinking = True   # By default, thinking text is visible after completion
+        self.reasoning_effort = DEFAULT_REASONING_EFFORT  # Effort level sent when thinking mode is on
         # Tool display settings
         self.show_tool_execution = True  # By default, show tool execution displays
         # Metrics display settings
@@ -306,7 +307,10 @@ class MCPClient:
 
     def display_current_model(self):
         """Display the currently selected model"""
-        self.model_manager.display_current_model()
+        self.model_manager.display_current_model(
+            thinking_mode=self.thinking_mode,
+            reasoning_effort=self.reasoning_effort,
+        )
 
     async def supports_thinking_mode(self) -> bool:
         """Check if the current model supports thinking mode by checking its capabilities
@@ -334,6 +338,21 @@ class MCPClient:
             return 'vision' in caps
         except Exception:
             return False
+
+    def _reasoning_effort_kwargs(self, supports_thinking: bool) -> dict:
+        """Return the reasoning_effort kwarg for acompletion, or {} when thinking is off/unsupported.
+
+        For Ollama, any-llm maps concrete levels to think="low"/"medium"/"high" and treats
+        "auto" as no explicit think override (model default). Since thinking_mode=True means
+        the user wants thinking, we substitute "high" for Ollama+auto to guarantee think is set.
+        Cloud providers receive the level as-is including "auto" (provider's own default effort).
+        """
+        if not (supports_thinking and self.thinking_mode):
+            return {}
+        effort = self.reasoning_effort
+        if self.provider == "ollama" and effort == "auto":
+            effort = "high"
+        return {"reasoning_effort": effort}
 
     async def select_model(self):
         """Let the user select an Ollama model from the available ones"""
@@ -549,9 +568,7 @@ class MCPClient:
             stream=True,
             stream_options={"include_usage": True},
             tools=available_tools or None,
-            **({
-                "reasoning_effort": "high"
-            } if supports_thinking and self.thinking_mode else {}),
+            **self._reasoning_effort_kwargs(supports_thinking),
             **self.model_config_manager.get_completion_kwargs(self.provider),
         )
 
@@ -752,9 +769,7 @@ class MCPClient:
                 stream=True,
                 stream_options={"include_usage": True},
                 tools=available_tools or None,
-                **({
-                    "reasoning_effort": "high"
-                } if supports_thinking and self.thinking_mode else {}),
+                **self._reasoning_effort_kwargs(supports_thinking),
                 **self.model_config_manager.get_completion_kwargs(self.provider),
             )
 
@@ -1111,6 +1126,7 @@ class MCPClient:
             "• Type [bold]/model-config[/bold] or [bold]/mc[/bold] to configure system prompt and model parameters\n"
             "• Type [bold]/thinking-mode[/bold] or [bold]/tm[/bold] to toggle thinking mode\n"
             "• Type [bold]/show-thinking[/bold] or [bold]/st[/bold] to toggle thinking text visibility\n"
+            "• Type [bold]/reasoning-effort[/bold] or [bold]/re[/bold] to set reasoning effort level (auto/minimal/low/medium/high/xhigh)\n"
             "• Type [bold]/show-metrics[/bold] or [bold]/sm[/bold] to toggle performance metrics display\n\n"
 
             "[bold cyan]Agent Mode:[/bold cyan] \n"
@@ -1241,6 +1257,54 @@ class MCPClient:
             self.console.print("[cyan]💭 The reasoning process will remain visible in the final response.[/cyan]")
         else:
             self.console.print("[cyan]🧹 The reasoning process will be hidden, showing only the final answer.[/cyan]")
+
+    async def select_reasoning_effort(self):
+        """Select reasoning effort level used when thinking mode is active."""
+        level_labels = {
+            "auto": "Auto (provider default)",
+            "minimal": "Minimal",
+            "low": "Low",
+            "medium": "Medium",
+            "high": "High",
+            "xhigh": "Extreme (xhigh)",
+        }
+        numbered = list(REASONING_EFFORT_LEVELS)  # auto, minimal, low, medium, high, xhigh
+        options_map = {str(i + 1): lvl for i, lvl in enumerate(numbered)}
+        for lvl in numbered:
+            options_map[lvl] = lvl
+
+        while True:
+            menu_lines = "\n".join(
+                f"{i + 1}. [bold]{level_labels[lvl]}[/bold] [dim]({lvl})[/dim]"
+                for i, lvl in enumerate(numbered)
+            )
+            self.console.print(Panel(
+                f"\n{menu_lines}\n\n"
+                "[dim]Applies when thinking mode is on and the model supports thinking\n"
+                "Level support depends on the provider and model.\n"
+                "Type a number, a level name, or q to cancel.[/dim]",
+                title="[bold]🤔 Reasoning Effort[/bold]",
+                border_style="magenta",
+                expand=False,
+            ))
+            self.console.print(f"Current level: [bold magenta]{level_labels.get(self.reasoning_effort, self.reasoning_effort)}[/bold magenta]")
+            if not self.thinking_mode:
+                self.console.print("[yellow]Note: thinking mode is currently off — this preference will apply once enabled.[/yellow]")
+
+            selection = await get_input_no_autocomplete("Select reasoning effort")
+            normalized = selection.strip().lower()
+
+            if normalized in {"q", "quit"}:
+                self.console.print("[yellow]Reasoning effort unchanged.[/yellow]")
+                return
+
+            if normalized in options_map:
+                self.reasoning_effort = options_map[normalized]
+                label = level_labels.get(self.reasoning_effort, self.reasoning_effort)
+                self.console.print(f"[green]Reasoning effort set to {label}![/green]")
+                return
+
+            self.console.print(f"[red]Invalid selection. Choose 1–{len(numbered)}, a level name, or q.[/red]")
 
     def toggle_show_tool_execution(self):
         """Toggle whether tool execution displays are shown"""
@@ -1467,9 +1531,7 @@ class MCPClient:
             stream=True,
             stream_options={"include_usage": True},
             tools=None,
-            **({
-                "reasoning_effort": "high"
-            } if supports_thinking and self.thinking_mode else {}),
+            **self._reasoning_effort_kwargs(supports_thinking),
             **self.model_config_manager.get_completion_kwargs(self.provider),
         )
 
@@ -1526,6 +1588,7 @@ class MCPClient:
         if self.thinking_mode:
             thinking_status = f"Thinking mode: [green]Enabled[/green]\n"
             thinking_status += f"Show thinking text: [{'green' if self.show_thinking else 'red'}]{'Visible' if self.show_thinking else 'Hidden'}[/{'green' if self.show_thinking else 'red'}]\n"
+            thinking_status += f"Reasoning effort: [cyan]{self.reasoning_effort}[/cyan]\n"
         else:
             thinking_status = f"Thinking mode: [red]Disabled[/red]\n"
 
@@ -1589,7 +1652,8 @@ class MCPClient:
             },
             "modelSettings": {
                 "thinkingMode": self.thinking_mode,
-                "showThinking": self.show_thinking
+                "showThinking": self.show_thinking,
+                "reasoningEffort": self.reasoning_effort
             },
             "agentSettings": {
                 "loopLimit": self.loop_limit
@@ -1672,6 +1736,10 @@ class MCPClient:
                 self.thinking_mode = config_data["modelSettings"]["thinkingMode"]
             if "showThinking" in config_data["modelSettings"]:
                 self.show_thinking = config_data["modelSettings"]["showThinking"]
+            if "reasoningEffort" in config_data["modelSettings"]:
+                effort = str(config_data["modelSettings"]["reasoningEffort"]).lower()
+                if effort in REASONING_EFFORT_LEVELS:
+                    self.reasoning_effort = effort
 
         if "agentSettings" in config_data:
             if "loopLimit" in config_data["agentSettings"]:
@@ -1750,6 +1818,11 @@ class MCPClient:
             else:
                 # Default show thinking to True if not specified
                 self.show_thinking = True
+            if "reasoningEffort" in config_data["modelSettings"]:
+                effort = str(config_data["modelSettings"]["reasoningEffort"]).lower()
+                self.reasoning_effort = effort if effort in REASONING_EFFORT_LEVELS else DEFAULT_REASONING_EFFORT
+            else:
+                self.reasoning_effort = DEFAULT_REASONING_EFFORT
 
         if "agentSettings" in config_data:
             if "loopLimit" in config_data["agentSettings"]:

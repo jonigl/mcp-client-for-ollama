@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   smoke:
+    name: Smoke test on Windows
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6

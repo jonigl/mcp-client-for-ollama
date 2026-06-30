@@ -24,6 +24,8 @@ SLASH_COMMAND_ALIASES = {
     "st": "show-thinking",
     "loop-limit": "loop-limit",
     "ll": "loop-limit",
+    "reasoning-effort": "reasoning-effort",
+    "re": "reasoning-effort",
     "show-tool-execution": "show-tool-execution",
     "ste": "show-tool-execution",
     "show-metrics": "show-metrics",

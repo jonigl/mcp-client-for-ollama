@@ -141,3 +141,32 @@ def test_validate_config_ignores_invalid_input_mode():
     })
 
     assert validated["inputSettings"]["inputMode"] == "single"
+
+
+def test_default_config_has_reasoning_effort():
+    """New configurations include reasoningEffort = 'medium'."""
+    config = default_config()
+
+    assert config["modelSettings"]["reasoningEffort"] == "medium"
+
+
+def test_validate_config_preserves_valid_reasoning_effort():
+    """A valid reasoning effort level survives configuration validation."""
+    mgr = ConfigManager(Console())
+
+    for level in ("auto", "minimal", "low", "medium", "high", "xhigh"):
+        validated = mgr._validate_config({
+            "modelSettings": {"reasoningEffort": level}
+        })
+        assert validated["modelSettings"]["reasoningEffort"] == level
+
+
+def test_validate_config_ignores_invalid_reasoning_effort():
+    """An invalid reasoning effort falls back to the default 'medium'."""
+    mgr = ConfigManager(Console())
+
+    validated = mgr._validate_config({
+        "modelSettings": {"reasoningEffort": "turbo-max-extreme"}
+    })
+
+    assert validated["modelSettings"]["reasoningEffort"] == "medium"
