@@ -26,7 +26,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Install package
-        run: uv tool install --upgrade ollmcp
+        run: uv sync
 
       - name: Verify CLI starts
-        run: ollmcp --help
+        run: uv run ollmcp --help
