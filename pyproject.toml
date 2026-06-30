@@ -10,7 +10,7 @@ authors = [
 ]
 dependencies = [
     "any-llm-sdk[ollama,openai] ~=1.18.0",
-    "mcp>=1.25,<1.28",
+    "mcp>=1.25,<1.29",
     "prompt-toolkit~=3.0.52",
     "rich>=14.2.0,<14.3",
     "typer~=0.21.0",
