@@ -20,6 +20,7 @@ class DummyClient:
         self.toggle_context_retention = MagicMock()
         self.toggle_thinking_mode = AsyncMock()
         self.toggle_show_thinking = AsyncMock()
+        self.select_reasoning_effort = AsyncMock()
         self.set_loop_limit = AsyncMock()
         self.toggle_show_tool_execution = MagicMock()
         self.toggle_show_metrics = MagicMock()
@@ -123,6 +124,14 @@ class TestSlashCommandExecution(unittest.IsolatedAsyncioTestCase):
                     self.assertFalse(result)
                 else:
                     self.assertTrue(result)
+
+    async def test_run_reasoning_effort_command_awaits_selection(self):
+        client = DummyClient()
+
+        result = await run_slash_command(client, "reasoning-effort")
+
+        self.assertTrue(result)
+        client.select_reasoning_effort.assert_awaited_once_with()
 
     async def test_unknown_command_raises_assertion(self):
         client = DummyClient()

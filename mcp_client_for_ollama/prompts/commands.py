@@ -52,6 +52,10 @@ async def run_slash_command(client: Any, command_name: str) -> bool:
         await client.set_loop_limit()
         return True
 
+    if command_name == 'reasoning-effort':
+        await client.select_reasoning_effort()
+        return True
+
     if command_name == 'show-tool-execution':
         client.toggle_show_tool_execution()
         return True

@@ -30,6 +30,11 @@ DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 # Default LLM provider
 DEFAULT_PROVIDER = "ollama"
 
+# Reasoning effort levels exposed to the user (excludes "none" which conflicts with thinking-mode
+# being the master on/off switch, and any-llm's internal "auto" handling on Ollama is special-cased)
+REASONING_EFFORT_LEVELS = ("auto", "minimal", "low", "medium", "high", "xhigh")
+DEFAULT_REASONING_EFFORT = "medium"
+
 # Providers ollmcp currently supports: Ollama (native) plus OpenAI and any
 # OpenAI-compatible provider (they all use the bundled openai package).
 SUPPORTED_PROVIDERS = (
@@ -81,6 +86,7 @@ INTERACTIVE_COMMANDS = {
     'load-config': 'Load saved configuration',
     'loop-limit': 'Set agent max loop limit',
     'model-config': 'Configure model parameters',
+    'reasoning-effort': 'Set reasoning effort level',
     'model': 'Select Ollama model',
     'input-mode': 'Switch chat input between single-line and multiline',
     'prompts': 'Browse available MCP prompts',

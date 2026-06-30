@@ -49,6 +49,7 @@
   - [MCP Tools](#mcp-tools)
   - [Model Selection](#model-selection)
   - [Advanced Model Configuration](#advanced-model-configuration)
+  - ✨**NEW** [Thinking Mode and Reasoning Effort](#thinking-mode-and-reasoning-effort)
   - [Server Reloading for Development](#server-reloading-for-development)
   - [Human-in-the-Loop (HIL) Tool Execution](#human-in-the-loop-hil-tool-execution)
     - [Human-in-the-Loop (HIL) Configuration](#human-in-the-loop-hil-configuration)
@@ -96,6 +97,7 @@ MCP Client for Ollama (ollmcp) is a modern, interactive terminal application (TU
 - 🎨 **Enhanced Tool Display**: Beautiful, structured visualization of tool executions with JSON syntax highlighting
 - 🧠 **Context Management**: Control conversation memory with configurable retention settings
 - 🤔 **Thinking Mode**: Advanced reasoning capabilities with visible thought processes for supported models (e.g., gpt-oss, deepseek-r1, qwen3, etc.)
+- 💪 **Reasoning Effort Levels**: Set reasoning effort to auto, minimal, low, medium, high, or xhigh for supported models
 - 🖼️ **Vision Tool Support**: Images returned by tools are automatically forwarded to vision-capable models
  - 🗣️ **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
  - 📜 **History Management**: View full conversation history, export to JSON for backup/analysis, and import previous sessions for continuity
@@ -486,6 +488,7 @@ During chat, use these commands:
 | `/show-metrics`  | `/sm`            | Toggle performance metrics display                  |
 | `/show-thinking` | `/st`            | Toggle thinking text visibility (visible by default) |
 | `/thinking-mode` | `/tm`            | Toggle thinking mode on supported models            |
+| `/reasoning-effort` | `/re`         | Set reasoning effort level (auto/minimal/low/medium/high/xhigh) when thinking mode is on. Default: medium |
 | `/show-tool-execution` | `/ste`      | Toggle tool execution display visibility            |
 | `/tools`         | `/t`             | Open the tool selection interface                   |
 
@@ -596,6 +599,25 @@ The `model-config` (`mc`) command opens the advanced model settings interface, a
 
 > [!TIP]
 > All parameters default to unset, letting Ollama use its own optimized values. Use `help` in the config menu for details and recommendations. Changes are saved with your configuration.
+
+
+### Thinking Mode and Reasoning Effort
+
+Enable thinking mode with `/thinking-mode` (`/tm`) to activate extended reasoning on supported models (e.g., `qwen3`, `deepseek-r1`, Claude with extended thinking). Use `/show-thinking` (`/st`) to toggle whether the reasoning process is visible in the response.
+
+Use `/reasoning-effort` (`/re`) to control **how much reasoning effort** the model applies when thinking mode is on:
+
+| Level | Description |
+|-------|-------------|
+| `auto` | Provider's default effort (recommended for cloud) |
+| `minimal` | Fastest, least reasoning |
+| `low` | Light reasoning |
+| `medium` | Balanced — **default** |
+| `high` | More thorough reasoning |
+| `xhigh` | Maximum reasoning effort |
+
+> [!NOTE]
+> Some providers or models may ignore reasoning effort settings.
 
 
 ### Server Reloading for Development
