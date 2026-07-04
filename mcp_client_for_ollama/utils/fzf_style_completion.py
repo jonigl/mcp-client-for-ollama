@@ -4,6 +4,24 @@ from prompt_toolkit.completion import Completer, Completion, FuzzyCompleter, Wor
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import FormattedText
 from .constants import INTERACTIVE_COMMANDS
+from ..prompts.routing import SLASH_COMMAND_ALIASES
+
+
+def _build_command_shortcuts() -> dict:
+    """Map each canonical command to its shortest alias (e.g. clear -> cc)."""
+    shortcuts = {}
+    for alias, canonical in SLASH_COMMAND_ALIASES.items():
+        if alias == canonical:
+            continue
+        current = shortcuts.get(canonical)
+        if current is None or len(alias) < len(current):
+            shortcuts[canonical] = alias
+    return shortcuts
+
+
+COMMAND_SHORTCUTS = _build_command_shortcuts()
+# Column width for the shortcut segment: '/' + longest alias
+_SHORTCUT_COL_WIDTH = max((len(s) for s in COMMAND_SHORTCUTS.values()), default=0) + 2
 
 
 class FZFStyleCompleter(Completer):
@@ -28,7 +46,7 @@ class FZFStyleCompleter(Completer):
         """
         self.prompts = prompts
 
-    def _build_action_meta(self, action_type: str, description: str, mime_type: str = "") -> FormattedText:
+    def _build_action_meta(self, action_type: str, description: str, mime_type: str = "", shortcut: str = "") -> FormattedText:
         """Build action badge metadata for completion rows."""
         _BADGE_COLORS = {
             "prompt":   "#00bcd4",
@@ -36,12 +54,12 @@ class FZFStyleCompleter(Completer):
             "static":   "#4caf50",
             "template": "#9c27b0",
         }
+        parts = []
         badge_color = _BADGE_COLORS.get(action_type.lower(), "#ff8c00")
-
-        parts = [
-            (f"fg:#ffffff bg:{badge_color}", f" {action_type} "),
-            ("fg:#d6d6d6 bg:#1e1e1e", f" {description}" if description else ""),
-        ]
+        if shortcut:
+            parts.append(("fg:#00bcd4 bg:#1e1e1e bold", f" {('/' + shortcut).ljust(_SHORTCUT_COL_WIDTH)}"))
+        parts.append((f"fg:#ffffff bg:{badge_color}", f" {action_type} "))
+        parts.append(("fg:#d6d6d6 bg:#1e1e1e", f" {description}" if description else ""))
         if mime_type:
             parts += [
                 ("fg:#d6d6d6 bg:#1e1e1e", "  "),
@@ -220,12 +238,14 @@ class FZFStyleCompleter(Completer):
         for completion in self.command_completer.get_completions(query_document, complete_event):
             cmd = completion.text
             description = INTERACTIVE_COMMANDS.get(cmd, "")
+            canonical = SLASH_COMMAND_ALIASES.get(cmd, cmd)
+            shortcut = COMMAND_SHORTCUTS.get(canonical, "")
 
             yield Completion(
                 cmd,
                 start_position=completion.start_position,
                 display=f"/{cmd}",
-                display_meta=self._build_action_meta("command", description)
+                display_meta=self._build_action_meta("command", description, shortcut=shortcut)
             )
 
     def get_completions(self, document, complete_event):

@@ -43,6 +43,18 @@ class TestFZFStyleCompleter(unittest.TestCase):
         completions = self._complete("he")
         self.assertEqual(completions, [])
 
+    def test_command_meta_includes_shortcut_column(self):
+        completions = self._complete("/clear")
+        clear = next(c for c in completions if c.text == "clear")
+        meta_texts = [text for _, text in clear.display_meta]
+        self.assertTrue(any("/cc" in text for text in meta_texts))
+
+    def test_alias_commands_show_canonical_shortcut(self):
+        completions = self._complete("/exit")
+        exit_cmd = next(c for c in completions if c.text == "exit")
+        meta_texts = [text for _, text in exit_cmd.display_meta]
+        self.assertTrue(any("/q" in text for text in meta_texts))
+
     def test_uses_tmux_badge_white_text(self):
         with patch.dict("os.environ", {"TMUX": "1"}, clear=False):
             completions = self._complete("/he")
