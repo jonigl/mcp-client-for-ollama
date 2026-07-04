@@ -660,8 +660,8 @@ random numbers, and calculating BMI. It also provides a BMI calculator prompt.
 The `display-mode` (`dm`) command lets you choose how model answers are shown while they stream:
 
 - **Plain**: Streams the response once as plain text with no final markdown re-render
-- ✨**NEW** **Markdown**: Streams formatted markdown line by line — lines above a small live tail are printed once and never redrawn, so it stays reliable even with emojis or terminal resizes
-- **Both** (default): Streams plain text first, then renders the completed response again as markdown
+- ✨**NEW** **Markdown** (default): Streams formatted markdown line by line — lines above a small live tail are printed once and never redrawn, so it stays reliable even with emojis or terminal resizes
+- **Both**: Streams plain text first, then renders the completed response again as markdown
 - **Markdown (blocks)**: Renders the response as markdown one block at a time, append-only each paragraph/list/table/code block prints once when it completes and is never redrawn, so it cannot duplicate lines
 
 Use `/display-mode` or `/dm` during chat to open the interactive picker.

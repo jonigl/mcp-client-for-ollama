@@ -122,7 +122,7 @@ class MCPClient:
         self.show_tool_execution = True  # By default, show tool execution displays
         # Metrics display settings
         self.show_metrics = False  # By default, don't show metrics after each query
-        self.answer_render_mode = "both"  # Default to the safest mode (options: plain, markdown, both, blocks)
+        self.answer_render_mode = "markdown"  # Defaults the new markdown mode (options: plain, markdown, both, blocks)
         self.input_mode = "single"  # Keep chat input single-line by default
         self.multiline_key_bindings = self._build_multiline_key_bindings()
         # Agent mode settings
@@ -1852,9 +1852,9 @@ class MCPClient:
                 if answer_render_mode in {"plain", "markdown", "both", "blocks"}:
                     self.answer_render_mode = answer_render_mode
                 else:
-                    self.answer_render_mode = "both"
+                    self.answer_render_mode = "markdown"
             else:
-                self.answer_render_mode = "both"
+                self.answer_render_mode = "markdown"
 
         # Reset input settings from the default configuration
         if "inputSettings" in config_data:
