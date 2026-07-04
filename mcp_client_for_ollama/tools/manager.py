@@ -165,12 +165,18 @@ class ToolManager:
                 no_tools_text = (
                     "[bold yellow]No MCP tools found.[/bold yellow]\n\n"
                     "You can still chat normally — tools are optional.\n\n"
-                    "To add MCP tools, exit first then run:\n"
-                    "  [bold green]ollmcp mcp add <name> -- <command>[/bold green]\n\n"
-                    "For example:\n"
+                    "To add MCP servers, exit first then run:\n\n"
+                    "  [bold green]# Local stdio servers[/bold green]\n"
+                    "  ollmcp mcp add <name> -- <command> [args...]\n\n"
+                    "  [bold green]# Remote servers (Streamable HTTP or SSE)[/bold green]\n"
+                    "  ollmcp mcp add --transport http <name> <url>\n"
+                    "  ollmcp mcp add --transport sse <name> <url>\n\n"
+                    "  [bold green]# Manage servers[/bold green]\n"
+                    "  ollmcp mcp list\n"
+                    "  ollmcp mcp remove <name>\n\n"
+                    "Example:\n"
                     "  [dim]ollmcp mcp add playwright -- npx @playwright/mcp@latest[/dim]\n\n"
-                    "Learn more:\n"
-                    "  [bold cyan]ollmcp mcp --help[/bold cyan]\n\n"
+                    "For more details:  [bold cyan]ollmcp mcp --help[/bold cyan]\n\n"
                     "[dim]Exit with Ctrl+D or /q[/dim]"
                 )
                 self.console.print(Panel(no_tools_text, title="[bold]🔧 No Tools Available[/bold]", border_style="yellow", padding=(1, 2)))
