@@ -31,6 +31,7 @@ class ToolManager:
         self.available_tools = []
         self.enabled_tools = {}
         self.server_connector = server_connector
+        self._no_tools_shown = False
 
     def set_available_tools(self, tools: List[Tool]) -> None:
         """Set the available tools.
@@ -158,16 +159,22 @@ class ToolManager:
             subtitle = f"[bold]{enabled_count}/{len(self.available_tools)} tools enabled[/bold]"
             self.console.print(Panel(columns, title="[bold]🔧 Available Tools[/bold]", subtitle=subtitle, border_style="green"))
         else:
-            no_tools_text = (
-                "[bold yellow]No MCP tools found.[/bold yellow]\n\n"
-                "You can still chat normally — tools are optional.\n\n"
-                "To add MCP tools, exit first then run:\n"
-                "  [bold green]ollmcp mcp add playwright -- npx @playwright/mcp@latest[/bold green]\n\n"
-                "Learn more:\n"
-                "  [bold cyan]ollmcp mcp --help[/bold cyan]\n\n"
-                "[dim]Exit with Ctrl+D or /q[/dim]"
-            )
-            self.console.print(Panel(no_tools_text, title="[bold]🔧 No Tools Available[/bold]", border_style="yellow", padding=(1, 2)))
+            if self._no_tools_shown:
+                self.console.print("[yellow]No MCP tools found.[/yellow] You can still chat normally — tools are optional.")
+            else:
+                no_tools_text = (
+                    "[bold yellow]No MCP tools found.[/bold yellow]\n\n"
+                    "You can still chat normally — tools are optional.\n\n"
+                    "To add MCP tools, exit first then run:\n"
+                    "  [bold green]ollmcp mcp add <name> -- <command>[/bold green]\n\n"
+                    "For example:\n"
+                    "  [dim]ollmcp mcp add playwright -- npx @playwright/mcp@latest[/dim]\n\n"
+                    "Learn more:\n"
+                    "  [bold cyan]ollmcp mcp --help[/bold cyan]\n\n"
+                    "[dim]Exit with Ctrl+D or /q[/dim]"
+                )
+                self.console.print(Panel(no_tools_text, title="[bold]🔧 No Tools Available[/bold]", border_style="yellow", padding=(1, 2)))
+                self._no_tools_shown = True
 
     # These helper methods break down the select_tools method into more manageable pieces
     def _display_tool_selection_header(self) -> None:
