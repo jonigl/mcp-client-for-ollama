@@ -158,7 +158,16 @@ class ToolManager:
             subtitle = f"[bold]{enabled_count}/{len(self.available_tools)} tools enabled[/bold]"
             self.console.print(Panel(columns, title="[bold]🔧 Available Tools[/bold]", subtitle=subtitle, border_style="green"))
         else:
-            self.console.print("[yellow]No tools found. If you expected tools, verify the MCP server is running and configured correctly.[/yellow]")
+            no_tools_text = (
+                "[bold yellow]No MCP tools found.[/bold yellow]\n\n"
+                "You can still chat normally — tools are optional.\n\n"
+                "To add MCP tools, exit first then run:\n"
+                "  [bold green]ollmcp mcp add playwright -- npx @playwright/mcp@latest[/bold green]\n\n"
+                "Learn more:\n"
+                "  [bold cyan]ollmcp mcp --help[/bold cyan]\n\n"
+                "[dim]Exit with Ctrl+D or /q[/dim]"
+            )
+            self.console.print(Panel(no_tools_text, title="[bold]🔧 No Tools Available[/bold]", border_style="yellow", padding=(1, 2)))
 
     # These helper methods break down the select_tools method into more manageable pieces
     def _display_tool_selection_header(self) -> None:
