@@ -95,7 +95,7 @@ INTERACTIVE_COMMANDS = {
     'reload-servers': 'Reload MCP servers',
     'reset-config': 'Reset to default config',
     'save-config': 'Save current configuration',
-    'display-mode': 'Choose plain, markdown, or both display modes',
+    'display-mode': 'Choose plain, markdown, both, or blocks display modes',
     'show-metrics': 'Toggle performance metrics display',
     'show-thinking': 'Toggle thinking visibility',
     'show-tool-execution': 'Toggle tool execution display',

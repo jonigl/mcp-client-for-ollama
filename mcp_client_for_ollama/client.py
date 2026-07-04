@@ -1165,7 +1165,7 @@ class MCPClient:
             "• Type [bold]/reset-config[/bold] or [bold]/rc[/bold] to reset configuration to defaults\n\n"
 
             "[bold cyan]Interface:[/bold cyan]\n"
-            "• Type [bold]/display-mode[/bold] or [bold]/dm[/bold] to choose plain, markdown, or both display modes\n"
+            "• Type [bold]/display-mode[/bold] or [bold]/dm[/bold] to choose plain, markdown, both, or blocks display modes\n"
             "• Type [bold]/input-mode[/bold] or [bold]/im[/bold] to switch single-line or multiline chat input\n\n"
 
             "[bold cyan]Basic Commands:[/bold cyan]\n"
@@ -1353,7 +1353,7 @@ class MCPClient:
             self.console.print(Panel(
                 "\n"
                 "1. [bold]Plain only[/bold] [green](most stable)[/green]\n"
-                "2. [bold]Markdown only[/bold] [yellow](live; can flicker/duplicate lines with emojis or on resize)[/yellow]\n"
+                "2. [bold]Markdown only[/bold] [green](streams formatted markdown line by line; resilient to emojis and resizes)[/green]\n"
                 "3. [bold]Both[/bold] plain streaming and final markdown [green](more stable)[/green]\n"
                 "4. [bold]Markdown (blocks)[/bold] [cyan](stable; renders each block once it completes)[/cyan]\n\n"
                 "[dim]Type 1, 2, 3, 4, plain, markdown, both, blocks, or q to cancel.[/dim]",
@@ -1379,7 +1379,7 @@ class MCPClient:
                 if self.answer_render_mode == "plain":
                     self.console.print("[cyan]Responses will stream once without the final markdown re-render.[/cyan]")
                 elif self.answer_render_mode == "markdown":
-                    self.console.print("[cyan]Responses will render as markdown during streaming with throttled redraws.[/cyan]")
+                    self.console.print("[cyan]Responses will render as markdown line by line; only a small tail is ever redrawn.[/cyan]")
                 elif self.answer_render_mode == "blocks":
                     self.console.print("[cyan]Responses will render as markdown one block at a time, append-only (no redraws).[/cyan]")
                 else:
