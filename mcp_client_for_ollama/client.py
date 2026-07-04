@@ -59,8 +59,8 @@ class MCPClient:
     """Main client class for interacting with Ollama and MCP servers"""
 
     ANSWER_RENDER_MODE_LABELS = {
-        "plain": "Plain",
-        "markdown": "Markdown",
+        "plain": "Plain only",
+        "markdown": "Markdown only",
         "both": "Both",
         "blocks": "Markdown (blocks)",
     }
@@ -1330,7 +1330,7 @@ class MCPClient:
 
     def get_answer_render_mode_label(self):
         """Return a user-friendly label for the current answer render mode."""
-        return self.ANSWER_RENDER_MODE_LABELS.get(self.answer_render_mode, self.ANSWER_RENDER_MODE_LABELS["both"])
+        return self.ANSWER_RENDER_MODE_LABELS.get(self.answer_render_mode, self.ANSWER_RENDER_MODE_LABELS["markdown"])
 
     def get_input_mode_label(self):
         """Return a user-friendly label for the current chat input mode."""
@@ -1339,12 +1339,12 @@ class MCPClient:
     async def select_answer_render_mode(self):
         """Select how model answers should be shown while streaming."""
         mode_options = {
-            "1": ("plain", "Plain"),
-            "2": ("markdown", "Markdown"),
+            "1": ("plain", "Plain only"),
+            "2": ("markdown", "Markdown only"),
             "3": ("both", "Both"),
             "4": ("blocks", "Markdown (blocks)"),
-            "plain": ("plain", "Plain"),
-            "markdown": ("markdown", "Markdown"),
+            "plain": ("plain", "Plain only"),
+            "markdown": ("markdown", "Markdown only"),
             "both": ("both", "Both"),
             "blocks": ("blocks", "Markdown (blocks)"),
         }
