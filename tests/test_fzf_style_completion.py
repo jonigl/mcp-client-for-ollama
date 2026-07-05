@@ -60,7 +60,8 @@ class TestFZFStyleCompleter(unittest.TestCase):
             completions = self._complete("/he")
 
         self.assertTrue(completions)
-        badge_style = completions[0].display_meta[0][0]
+        # Index 1 is the badge; index 0 is the shortcut column
+        badge_style = completions[0].display_meta[1][0]
         self.assertIn("bg:#ff8c00", badge_style)
         self.assertIn("fg:#ffffff", badge_style)
 
