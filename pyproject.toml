@@ -9,7 +9,7 @@ authors = [
     {name = "Jonathan Löwenstern"}
 ]
 dependencies = [
-    "any-llm-sdk[ollama,openai] ~=1.18.0",
+    "any-llm-sdk[ollama,openai]>=1.18,<1.20",
     "mcp>=1.25,<1.28",
     "prompt-toolkit~=3.0.52",
     "rich>=14.2.0,<14.3",
