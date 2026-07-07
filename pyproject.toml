@@ -9,11 +9,11 @@ authors = [
     {name = "Jonathan Löwenstern"}
 ]
 dependencies = [
-    "any-llm-sdk[ollama,openai] ~=1.18.0",
-    "mcp>=1.25,<1.28",
+    "any-llm-sdk[ollama,openai] ~=1.19.0",
+    "mcp>=1.25,<1.29",
     "prompt-toolkit~=3.0.52",
     "rich>=14.2.0,<14.3",
-    "typer~=0.21.0",
+    "typer~=0.26.0",
 ]
 
 [project.scripts]
@@ -33,5 +33,5 @@ include = ["mcp_client_for_ollama*"]
 
 [dependency-groups]
 dev = [
-    "pytest~=9.0.0",
+    "pytest~=9.1.0",
 ]
