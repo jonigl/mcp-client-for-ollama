@@ -660,18 +660,18 @@ random numbers, and calculating BMI. It also provides a BMI calculator prompt.
 The `display-mode` (`dm`) command lets you choose how model answers are shown while they stream:
 
 - **Plain**: Streams the response once as plain text with no final markdown re-render
-- **Markdown**: Renders the response as markdown during streaming with throttled redraws (live; can flicker or duplicate lines with emojis or when you resize the terminal)
-- **Both** (default): Streams plain text first, then renders the completed response again as markdown
-- ✨**NEW** **Markdown (blocks)**: Renders the response as markdown one block at a time, append-only each paragraph/list/table/code block prints once when it completes and is never redrawn, so it cannot duplicate lines
+- ✨**NEW** **Markdown** (default): Streams formatted markdown line by line — lines above a small live tail are printed once and never redrawn, so it stays reliable even with emojis or terminal resizes
+- **Both**: Streams plain text first, then renders the completed response again as markdown
+- **Markdown (blocks)**: Renders the response as markdown one block at a time, append-only each paragraph/list/table/code block prints once when it completes and is never redrawn, so it cannot duplicate lines
 
 Use `/display-mode` or `/dm` during chat to open the interactive picker.
 
 **Why you might switch modes:**
 
 - **Plain** is the least noisy option if you want minimal redraw or flicker
-- **Markdown** shows live markdown formatting, but its in-place redraws can flicker or duplicate lines with emojis/resizes
+- **Markdown** combines line-by-line streaming with coherent markdown formatting; at most the last few lines are ever redrawn, so glitches stay bounded even with emojis or resizes
 - **Both** gives you fast streaming feedback plus a clean final markdown rendering
-- **Markdown (blocks)** is the most stable way to see formatted markdown while streaming, at the cost of block-by-block (rather than token-by-token) updates
+- **Markdown (blocks)** is the most conservative way to see formatted markdown while streaming, at the cost of block-by-block (rather than line-by-line) updates
 
 > [!TIP]
 > Your selected display mode is saved with `save-config` and restored with `load-config`, so you can keep different viewing preferences for different workflows.

@@ -2,12 +2,15 @@
 This file implements streaming functionality for the MCP client for Ollama.
 
 Classes:
-    ProgressiveMarkdownRenderer: Progressive markdown renderer.
+    BlockMarkdownRenderer: Append-only markdown renderer.
+    LiveMarkdownRenderer: Line-by-line markdown renderer with a bounded live tail.
     StreamingManager: Handles streaming responses from Ollama.
 """
 import shutil
+from io import StringIO
 from time import monotonic
 
+from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
 from rich.text import Text
@@ -15,12 +18,13 @@ from rich.text import Text
 from .metrics import display_metrics, extract_metrics
 
 
-class ProgressiveMarkdownRenderer:
-    """Progressive markdown renderer.
+class BlockMarkdownRenderer:
+    """Append-only markdown renderer.
 
-    Uses Rich Live with vertical_overflow="crop" to prevent scrollback
-    corruption, and progressively commits stable content above the Live
-    zone via console.print()
+    Prints each completed markdown block (paragraph/list/table/code fence) once
+    via console.print and never redraws it. Because nothing is ever erased, it
+    cannot exhibit the rich.Live cursor-miscount duplication that occurs with
+    wide glyphs (emoji) or terminal resizes.
     """
 
     REFRESH_INTERVAL = 0.15
@@ -30,78 +34,47 @@ class ProgressiveMarkdownRenderer:
         self.console = console
         self.full_text = ""
         self.committed_text = ""
-        self._live = None
         self._last_refresh = 0.0
 
     def start(self):
-        """Start the live rendering zone."""
-        self._live = Live(
-            Text(""),
-            console=self.console,
-            vertical_overflow="crop",
-            refresh_per_second=15,
-            transient=True,
-        )
-        self._live.start()
+        """No live zone; just reset the refresh throttle."""
         self._last_refresh = monotonic()
 
     def update(self, new_chunk):
-        """Append a new chunk and refresh the display (throttled)."""
+        """Append a chunk and flush any completed blocks (throttled)."""
         self.full_text += new_chunk
-
         now = monotonic()
         if now - self._last_refresh < self.REFRESH_INTERVAL:
             return
         self._last_refresh = now
-
-        self._maybe_commit()
-        uncommitted = self.full_text[len(self.committed_text):]
-        if uncommitted:
-            self._live.update(Markdown(uncommitted), refresh=True)
+        self._commit_complete_blocks()
 
     def finish(self):
-        """Commit all remaining content and cleanly stop the Live zone."""
-        if self._live is None:
-            return
-
-        # Commit whatever remains
+        """Flush whatever remains as a final markdown block."""
         remaining = self.full_text[len(self.committed_text):]
         if remaining:
             self._print_markdown_preserving_trailing_newlines(remaining)
             self.committed_text = self.full_text
 
-        # Clear the live zone (transient=True will erase it) and stop
-        self._live.update(Text(""), refresh=True)
-        self._live.stop()
-        self._live = None
-
-    def _maybe_commit(self):
-        """Commit content above the Live zone if uncommitted text is tall."""
+    def _commit_complete_blocks(self):
+        """Commit complete paragraphs; flush lines if a block grows too tall."""
         uncommitted = self.full_text[len(self.committed_text):]
         if not uncommitted:
             return
-
-        terminal_size = shutil.get_terminal_size()
-        term_lines = terminal_size.lines
-        viewport_height = max(1, term_lines - 2)  # Ensure positive value for edge cases
-        threshold = int(viewport_height * self.VIEWPORT_COMMIT_THRESHOLD)
-
-        estimated_height = self._estimate_height(uncommitted, terminal_size.columns)
-        if estimated_height <= threshold:
-            return
-
         commit_point = self._find_safe_commit_point(uncommitted)
         if commit_point is None:
-            # No paragraph boundary, but the live zone is taller than the
-            # threshold. Fall back to the last single-newline boundary so the
-            # zone stays bounded and rich.Live can still erase prior frames.
-            commit_point = self._find_fallback_commit_point(uncommitted)
+            # No completed paragraph yet. If the in-progress block is already
+            # taller than the viewport, flush its completed lines so long prose
+            # keeps flowing; otherwise wait for more content.
+            terminal_size = shutil.get_terminal_size()
+            viewport_height = max(1, terminal_size.lines - 2)
+            threshold = int(viewport_height * self.VIEWPORT_COMMIT_THRESHOLD)
+            if self._estimate_height(uncommitted, terminal_size.columns) > threshold:
+                commit_point = self._find_fallback_commit_point(uncommitted)
         if commit_point is None:
             return
-
-        text_to_commit = uncommitted[:commit_point]
-        self._print_markdown_preserving_trailing_newlines(text_to_commit)
-        self.committed_text += text_to_commit
+        self._print_markdown_preserving_trailing_newlines(uncommitted[:commit_point])
+        self.committed_text += uncommitted[:commit_point]
 
     def _print_markdown_preserving_trailing_newlines(self, text):
         """Render markdown while preserving source trailing blank lines.
@@ -194,54 +167,122 @@ class ProgressiveMarkdownRenderer:
         return last_safe_break
 
 
-class BlockMarkdownRenderer(ProgressiveMarkdownRenderer):
-    """Append-only markdown renderer.
+class LiveMarkdownRenderer:
+    """Line-by-line markdown renderer with a bounded live tail.
 
-    Prints each completed markdown block (paragraph/list/table/code fence) once
-    via console.print and never redraws it. Because nothing is ever erased, it
-    cannot exhibit the rich.Live cursor-miscount duplication that occurs with
-    wide glyphs (emoji) or terminal resizes.
+    Each frame renders the full uncommitted markdown source to exact ANSI
+    lines on an offscreen console, prints every line except the last
+    LIVE_WINDOW permanently above the Live zone (printed lines are never
+    redrawn), and keeps only that small tail inside rich.Live. Any Live
+    cursor-miscount (e.g. emoji cell-width disagreement with the terminal)
+    can therefore garble at most LIVE_WINDOW lines, which the next repaint
+    overwrites. Rendering happens at console width minus WIDTH_MARGIN so a
+    one-cell width disagreement cannot trigger an unexpected wrap.
+
+    A terminal resize invalidates Live's erase math, so on resize the last
+    rendered frame is committed as-is and a fresh Live zone is started (a
+    new "epoch" anchored at a source offset), bounding resize damage to a
+    single frame.
+
+    Known limitation (shared with aider's mdstream): printed lines are never
+    retroactively corrected, e.g. a streaming table only recomputes column
+    widths for rows still inside the live window.
     """
 
+    REFRESH_INTERVAL = 0.15
+    LIVE_WINDOW = 6
+    WIDTH_MARGIN = 1
+
+    def __init__(self, console):
+        self.console = console
+        self.full_text = ""
+        self.committed_source_offset = 0
+        self._printed_line_count = 0
+        self._last_render_lines = []
+        self._last_render_source_len = 0
+        self._terminal_size = None
+        self._live = None
+        self._last_refresh = 0.0
+
     def start(self):
-        """No live zone; just reset the refresh throttle."""
+        """Start the live rendering zone."""
+        self._terminal_size = shutil.get_terminal_size()
+        self._start_live()
         self._last_refresh = monotonic()
 
     def update(self, new_chunk):
-        """Append a chunk and flush any completed blocks (throttled)."""
+        """Append a new chunk and repaint (throttled)."""
         self.full_text += new_chunk
         now = monotonic()
         if now - self._last_refresh < self.REFRESH_INTERVAL:
             return
         self._last_refresh = now
-        self._commit_complete_blocks()
+        self._check_resize()
+        self._render_frame(final=False)
 
     def finish(self):
-        """Flush whatever remains as a final markdown block."""
-        remaining = self.full_text[len(self.committed_text):]
-        if remaining:
-            self._print_markdown_preserving_trailing_newlines(remaining)
-            self.committed_text = self.full_text
+        """Print all remaining lines and cleanly stop the Live zone."""
+        if self._live is None:
+            return
+        self._render_frame(final=True)
+        self._live.update(Text(""), refresh=True)
+        self._live.stop()
+        self._live = None
 
-    def _commit_complete_blocks(self):
-        """Commit complete paragraphs; flush lines if a block grows too tall."""
-        uncommitted = self.full_text[len(self.committed_text):]
-        if not uncommitted:
+    def _start_live(self):
+        self._live = Live(
+            Text(""),
+            console=self.console,
+            vertical_overflow="crop",
+            refresh_per_second=15,
+            transient=True,
+        )
+        self._live.start()
+
+    def _render_frame(self, final):
+        epoch_source = self.full_text[self.committed_source_offset:]
+        lines = self._render_markdown_to_lines(epoch_source)
+        stable_count = len(lines) if final else max(0, len(lines) - self.LIVE_WINDOW)
+        if stable_count > self._printed_line_count:
+            self._print_ansi_lines(lines[self._printed_line_count:stable_count])
+            self._printed_line_count = stable_count
+        if not final:
+            tail = lines[self._printed_line_count:]
+            self._live.update(Text.from_ansi("".join(tail).rstrip("\n")), refresh=True)
+        self._last_render_lines = lines
+        self._last_render_source_len = len(self.full_text)
+
+    def _check_resize(self):
+        """Commit the last frame and re-anchor the Live zone if the terminal resized.
+
+        Live erases frames with cursor math computed for the old size; after a
+        resize that math is stale, so freeze everything rendered so far and
+        start a new epoch from a fresh anchor.
+        """
+        size = shutil.get_terminal_size()
+        if size == self._terminal_size:
             return
-        commit_point = self._find_safe_commit_point(uncommitted)
-        if commit_point is None:
-            # No completed paragraph yet. If the in-progress block is already
-            # taller than the viewport, flush its completed lines so long prose
-            # keeps flowing; otherwise wait for more content.
-            terminal_size = shutil.get_terminal_size()
-            viewport_height = max(1, terminal_size.lines - 2)
-            threshold = int(viewport_height * self.VIEWPORT_COMMIT_THRESHOLD)
-            if self._estimate_height(uncommitted, terminal_size.columns) > threshold:
-                commit_point = self._find_fallback_commit_point(uncommitted)
-        if commit_point is None:
-            return
-        self._print_markdown_preserving_trailing_newlines(uncommitted[:commit_point])
-        self.committed_text += uncommitted[:commit_point]
+        self._terminal_size = size
+        self._print_ansi_lines(self._last_render_lines[self._printed_line_count:])
+        self.committed_source_offset = self._last_render_source_len
+        self._printed_line_count = 0
+        self._last_render_lines = []
+        self._live.stop()
+        self._start_live()
+
+    def _render_markdown_to_lines(self, source):
+        """Render markdown source to exact ANSI terminal lines offscreen."""
+        if not source:
+            return []
+        width = max(1, self.console.width - self.WIDTH_MARGIN)
+        buffer = Console(file=StringIO(), force_terminal=True, width=width)
+        buffer.print(Markdown(source))
+        return buffer.file.getvalue().splitlines(keepends=True)
+
+    def _print_ansi_lines(self, lines):
+        """Print pre-rendered ANSI lines exactly once, one terminal line each."""
+        for line in lines:
+            self.console.print(Text.from_ansi(line.rstrip("\n")))
 
 
 class StreamingManager:
@@ -291,7 +332,7 @@ class StreamingManager:
             thinking_mode: Whether to handle thinking mode responses
             show_thinking: Whether to keep thinking text visible in final output
             show_metrics: Whether to display performance metrics when streaming completes
-            answer_render_mode: One of plain, markdown, or both for answer rendering
+            answer_render_mode: One of plain, markdown, both, or blocks for answer rendering
             cancellation_check: Optional callable that returns True if processing should be cancelled
 
         Returns:
@@ -385,7 +426,7 @@ class StreamingManager:
                                 self._print_answer_transition_header(show_thinking, "markdown")
                                 renderer_cls = (
                                     BlockMarkdownRenderer if render_mode == "blocks"
-                                    else ProgressiveMarkdownRenderer
+                                    else LiveMarkdownRenderer
                                 )
                                 progressive_renderer = renderer_cls(self.console)
                                 progressive_renderer.start()

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from mcp_client_for_ollama.utils.streaming import (
     BlockMarkdownRenderer,
-    ProgressiveMarkdownRenderer,
+    LiveMarkdownRenderer,
     StreamingManager,
 )
 
@@ -70,7 +70,18 @@ class FakeLive:
         self.stopped = True
 
 
-class TestableProgressiveMarkdownRenderer(ProgressiveMarkdownRenderer):
+class FakeAnsiText:
+    """Text double that also supports the from_ansi constructor."""
+
+    def __new__(cls, text=""):
+        return f"TEXT::{text}"
+
+    @staticmethod
+    def from_ansi(text):
+        return f"ANSI::{text}"
+
+
+class TestableBlockMarkdownRenderer(BlockMarkdownRenderer):
     """Test helper exposing stable wrappers around internal renderer methods."""
 
     def print_markdown_preserving_trailing_newlines(self, text):
@@ -132,49 +143,6 @@ class TestStreamingManager(unittest.IsolatedAsyncioTestCase):
         self.assertIn("MD::📝 **Answer (Markdown):**", printed)
         self.assertIn("hello **world**", printed)
 
-    async def test_markdown_mode_uses_progressive_renderer(self):
-        manager = StreamingManager(self.console)
-
-        with patch("mcp_client_for_ollama.utils.streaming.Markdown", side_effect=lambda text: f"MD::{text}"), patch(
-            "mcp_client_for_ollama.utils.streaming.Live",
-            FakeLive,
-        ), patch(
-            "mcp_client_for_ollama.utils.streaming.Text",
-            side_effect=lambda text: f"TEXT::{text}",
-        ), patch(
-            "mcp_client_for_ollama.utils.streaming.extract_metrics",
-            return_value=None,
-        ), patch(
-            "mcp_client_for_ollama.utils.streaming.monotonic",
-            side_effect=[0.0, 0.0, 1.0, 2.0],
-        ):
-            response_text, _, _ = await manager.process_streaming_response(
-                _stream_chunks(
-                    DummyChunk(choices=[DummyChoice(DummyDelta(content="hello "))]),
-                    DummyChunk(choices=[DummyChoice(DummyDelta(content="**world**"))]),
-                ),
-                answer_render_mode="markdown",
-            )
-
-        printed = [call.args[0] for call in self.console.print.call_args_list if call.args]
-        self.assertEqual(response_text, "hello **world**")
-        # Should NOT have plain-mode answer header
-        self.assertNotIn("MD::📝 **Answer:**", printed)
-        # Should have markdown answer header
-        self.assertEqual(printed.count("MD::📝 **Answer (Markdown):**"), 1)
-        # Progressive renderer creates one Live instance
-        self.assertEqual(len(FakeLive.instances), 1)
-
-        live = FakeLive.instances[0]
-        self.assertTrue(live.started)
-        self.assertTrue(live.stopped)
-        # Progressive renderer uses transient=True and vertical_overflow="crop"
-        self.assertTrue(live.transient)
-        self.assertEqual(live.vertical_overflow, "crop")
-        # Final content is committed via console.print (the finish() call)
-        # The last update should clear the live zone
-        self.assertTrue(any(refresh for _, refresh in live.updates))
-
     async def test_blocks_mode_uses_append_only_renderer(self):
         manager = StreamingManager(self.console)
 
@@ -202,6 +170,51 @@ class TestStreamingManager(unittest.IsolatedAsyncioTestCase):
         self.assertIn("MD::hello **world**", printed)
         # Block mode never creates a Live zone.
         self.assertEqual(FakeLive.instances, [])
+
+    async def test_markdown_mode_uses_live_renderer(self):
+        manager = StreamingManager(self.console)
+        self.console.width = 80
+
+        with patch("mcp_client_for_ollama.utils.streaming.Markdown", side_effect=lambda text: f"MD::{text}"), patch(
+            "mcp_client_for_ollama.utils.streaming.Live",
+            FakeLive,
+        ), patch(
+            "mcp_client_for_ollama.utils.streaming.Text",
+            FakeAnsiText,
+        ), patch(
+            "mcp_client_for_ollama.utils.streaming.shutil.get_terminal_size",
+            return_value=os.terminal_size((80, 24)),
+        ), patch(
+            "mcp_client_for_ollama.utils.streaming.extract_metrics",
+            return_value=None,
+        ), patch(
+            "mcp_client_for_ollama.utils.streaming.monotonic",
+            side_effect=[0.0, 1.0, 2.0],
+        ):
+            response_text, _, _ = await manager.process_streaming_response(
+                _stream_chunks(
+                    DummyChunk(choices=[DummyChoice(DummyDelta(content="hello "))]),
+                    DummyChunk(choices=[DummyChoice(DummyDelta(content="**world**"))]),
+                ),
+                answer_render_mode="markdown",
+            )
+
+        printed = [call.args[0] for call in self.console.print.call_args_list if call.args]
+        self.assertEqual(response_text, "hello **world**")
+        # Markdown header, not the plain one.
+        self.assertNotIn("MD::📝 **Answer:**", printed)
+        self.assertEqual(printed.count("MD::📝 **Answer (Markdown):**"), 1)
+        # finish() commits the rendered answer as ANSI-decoded lines.
+        self.assertIn("ANSI::MD::hello **world**", printed)
+        # Live renderer creates exactly one Live zone and cleans it up.
+        self.assertEqual(len(FakeLive.instances), 1)
+        live = FakeLive.instances[0]
+        self.assertTrue(live.started)
+        self.assertTrue(live.stopped)
+        self.assertTrue(live.transient)
+        self.assertEqual(live.vertical_overflow, "crop")
+        # The last update clears the live zone before stopping.
+        self.assertEqual(live.updates[-1], ("TEXT::", True))
 
     async def test_visible_thinking_gets_blank_line_before_answer_header(self):
         manager = StreamingManager(self.console)
@@ -232,12 +245,12 @@ class TestStreamingManager(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls[thinking_index + 3].args, ("MD::📝 **Answer:**",))
 
 
-class TestProgressiveMarkdownRenderer(unittest.TestCase):
-    """Validate renderer helpers used by markdown-only streaming mode."""
+class TestBlockMarkdownRendererHelpers(unittest.TestCase):
+    """Validate helper methods of the append-only block renderer."""
 
     def setUp(self):
         self.console = MagicMock()
-        self.renderer = TestableProgressiveMarkdownRenderer(self.console)
+        self.renderer = TestableBlockMarkdownRenderer(self.console)
 
     def test_preserves_trailing_newline_spacing(self):
         with patch("mcp_client_for_ollama.utils.streaming.Markdown", side_effect=lambda text: f"MD::{text}"):
@@ -269,18 +282,13 @@ class TestProgressiveMarkdownRenderer(unittest.TestCase):
             self.renderer.find_fallback_commit_point("one very long single line")
         )
 
-    def test_fallback_commit_bounds_live_zone_without_paragraph_breaks(self):
-        renderer = TestableProgressiveMarkdownRenderer(self.console)
+    def test_fallback_commit_bounds_uncommitted_buffer_without_paragraph_breaks(self):
+        renderer = TestableBlockMarkdownRenderer(self.console)
         fake_size = os.terminal_size((80, 10))  # columns=80, lines=10 -> viewport 8
         times = iter(float(i) for i in range(100))
         with patch(
             "mcp_client_for_ollama.utils.streaming.Markdown",
             side_effect=lambda text: f"MD::{text}",
-        ), patch(
-            "mcp_client_for_ollama.utils.streaming.Live", FakeLive
-        ), patch(
-            "mcp_client_for_ollama.utils.streaming.Text",
-            side_effect=lambda text: f"TEXT::{text}",
         ), patch(
             "mcp_client_for_ollama.utils.streaming.shutil.get_terminal_size",
             return_value=fake_size,
@@ -294,7 +302,7 @@ class TestProgressiveMarkdownRenderer(unittest.TestCase):
 
         # A commit must have occurred even though no paragraph boundary exists.
         self.assertNotEqual(renderer.committed_text, "")
-        # The remaining live content must stay below the viewport so rich can erase it.
+        # The uncommitted buffer must stay bounded below the viewport.
         uncommitted = renderer.full_text[len(renderer.committed_text):]
         viewport = max(1, fake_size.lines - 2)
         self.assertLess(renderer.estimate_height(uncommitted, fake_size.columns), viewport)
@@ -358,6 +366,120 @@ class TestBlockMarkdownRenderer(unittest.TestCase):
         self.assertEqual(renderer.committed_text, renderer.full_text)
         self.assertEqual(FakeLive.instances, [])
         self.assertNotEqual(renderer.committed_text, "")
+
+
+class TestLiveMarkdownRenderer(unittest.TestCase):
+    """Validate the bounded-live-tail markdown renderer."""
+
+    def setUp(self):
+        self.console = MagicMock()
+        self.console.width = 80
+        FakeLive.instances.clear()
+
+    def _drive(self, renderer, chunks, sizes=None, finish=True):
+        times = iter(float(i) for i in range(1000))
+        size_kwargs = (
+            {"side_effect": sizes} if sizes
+            else {"return_value": os.terminal_size((80, 24))}
+        )
+        with patch(
+            "mcp_client_for_ollama.utils.streaming.Markdown",
+            side_effect=lambda text: f"MD::{text}",
+        ), patch(
+            "mcp_client_for_ollama.utils.streaming.Live", FakeLive
+        ), patch(
+            "mcp_client_for_ollama.utils.streaming.Text", FakeAnsiText
+        ), patch(
+            "mcp_client_for_ollama.utils.streaming.shutil.get_terminal_size",
+            **size_kwargs,
+        ), patch(
+            "mcp_client_for_ollama.utils.streaming.monotonic",
+            side_effect=lambda *a, **k: next(times),
+        ):
+            renderer.start()
+            for chunk in chunks:
+                renderer.update(chunk)
+            if finish:
+                renderer.finish()
+
+    def _printed(self):
+        return [c.args[0] for c in self.console.print.call_args_list if c.args]
+
+    def test_stable_lines_print_once_and_tail_stays_bounded(self):
+        renderer = LiveMarkdownRenderer(self.console)
+        self._drive(renderer, [f"line{i}\n" for i in range(10)], finish=False)
+
+        printed = self._printed()
+        # Lines beyond the live window were committed, each exactly once,
+        # despite the full document being re-rendered on every update.
+        self.assertEqual(printed.count("ANSI::MD::line0"), 1)
+        self.assertEqual(printed.count("ANSI::line1"), 1)
+        # The newest lines are still in the live tail, not printed.
+        self.assertNotIn("ANSI::line9", printed)
+
+        self.assertEqual(len(FakeLive.instances), 1)
+        live = FakeLive.instances[0]
+        tail = live.updates[-1][0]
+        self.assertIn("line9", tail)
+        # The tail never exceeds the live window.
+        self.assertLessEqual(len(tail.split("\n")), LiveMarkdownRenderer.LIVE_WINDOW)
+
+    def test_finish_flushes_remaining_lines_and_stops_live(self):
+        renderer = LiveMarkdownRenderer(self.console)
+        self._drive(renderer, ["hello **world**"])
+
+        self.assertIn("ANSI::MD::hello **world**", self._printed())
+        self.assertEqual(len(FakeLive.instances), 1)
+        live = FakeLive.instances[0]
+        self.assertTrue(live.stopped)
+        self.assertEqual(live.updates[-1], ("TEXT::", True))
+
+    def test_resize_commits_last_frame_and_starts_new_epoch(self):
+        renderer = LiveMarkdownRenderer(self.console)
+        # start() sees 80x24; the first update sees the same size; the second
+        # update sees a resized terminal.
+        self._drive(
+            renderer,
+            ["one\ntwo\n", "three\n"],
+            sizes=[
+                os.terminal_size((80, 24)),
+                os.terminal_size((80, 24)),
+                os.terminal_size((100, 30)),
+            ],
+        )
+
+        printed = self._printed()
+        # On resize the cached last frame is committed as-is...
+        self.assertEqual(printed.count("ANSI::MD::one"), 1)
+        self.assertEqual(printed.count("ANSI::two"), 1)
+        # ...and the new epoch starts right after the committed source.
+        self.assertEqual(renderer.committed_source_offset, len("one\ntwo\n"))
+        self.assertEqual(printed.count("ANSI::MD::three"), 1)
+
+        # A fresh Live zone replaced the stale one.
+        self.assertEqual(len(FakeLive.instances), 2)
+        self.assertTrue(FakeLive.instances[0].stopped)
+        self.assertTrue(FakeLive.instances[1].started)
+        self.assertTrue(FakeLive.instances[1].stopped)
+
+    def test_offscreen_render_uses_width_margin(self):
+        renderer = LiveMarkdownRenderer(self.console)
+        fake_console_cls = MagicMock()
+        fake_console_cls.return_value.file.getvalue.return_value = "rendered\n"
+
+        with patch(
+            "mcp_client_for_ollama.utils.streaming.Markdown",
+            side_effect=lambda text: f"MD::{text}",
+        ), patch(
+            "mcp_client_for_ollama.utils.streaming.Console", fake_console_cls
+        ):
+            lines = renderer._render_markdown_to_lines("hello")
+
+        self.assertEqual(lines, ["rendered\n"])
+        self.assertEqual(
+            fake_console_cls.call_args.kwargs["width"],
+            80 - LiveMarkdownRenderer.WIDTH_MARGIN,
+        )
 
 
 if __name__ == "__main__":
