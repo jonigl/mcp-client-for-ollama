@@ -1214,10 +1214,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Ollama](https://ollama.com/) for the local LLM runtime
 - [Model Context Protocol](https://modelcontextprotocol.io/) for the specification and examples
+- [any-llm](https://github.com/mozilla-ai/any-llm/) for the single interface to multiple LLM providers
 - [Rich](https://rich.readthedocs.io/) for the terminal user interface
 - [Typer](https://typer.tiangolo.com/) for the modern CLI experience
 - [Prompt Toolkit](https://python-prompt-toolkit.readthedocs.io/) for the interactive command line interface
-- [UV](https://www.uvicorn.org/) for the lightning-fast Python package manager and virtual environment management
+- [uv](https://github.com/astral-sh/uv) for the lightning-fast Python package manager and virtual environment management
 - [Asciinema](https://asciinema.org/) for the demo recording
 
 ---
