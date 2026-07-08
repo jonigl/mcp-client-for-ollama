@@ -70,6 +70,7 @@
   - [Ollama Cloud Models](#ollama-cloud-models)
 - [Where Can I Find More MCP Servers?](#where-can-i-find-more-mcp-servers)
 - [Related Projects](#related-projects)
+- [Security](#security)
 - [License](#license)
 - [Acknowledgments](#acknowledgments)
 
@@ -1205,6 +1206,10 @@ This repository contains reference implementations for the Model Context Protoco
 
 - **[Ollama MCP Bridge](https://github.com/jonigl/ollama-mcp-bridge)** - A Python API layer that sits in front of Ollama, automatically adding tools from multiple MCP servers to every chat request. This project provides a transparent proxy solution that pre-loads all MCP servers at startup and seamlessly integrates their tools into the Ollama API.
 - **[MCP Server with Streamable HTTP Example](https://github.com/jonigl/mcp-server-with-streamable-http-example)** - An example MCP server demonstrating the usage of the streamable HTTP protocol.
+
+## Security
+
+MCP servers you connect are trusted by you, and their tool/resource responses are treated as untrusted content that reaches the model. See [SECURITY.md](SECURITY.md) for the trust model, how indirect prompt injection is handled, and how to report a vulnerability.
 
 ## License
 
