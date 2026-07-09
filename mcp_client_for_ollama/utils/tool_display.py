@@ -12,6 +12,8 @@ from rich.text import Text
 from typing import Any
 from rich.markdown import Markdown
 
+from .sanitize import strip_control_chars
+
 
 class ToolDisplayManager:
     """Manages the display of tool calls and responses"""
@@ -35,8 +37,10 @@ class ToolDisplayManager:
             parsed_data = json.loads(str(data))
             formatted_json = json.dumps(parsed_data, indent=2)
 
-        # Use Rich Syntax with Monokai theme for JSON
-        return Syntax(formatted_json, "json", theme="monokai", line_numbers=False)
+        # Use Rich Syntax with Monokai theme for JSON. word_wrap=True so long
+        # single-line values wrap instead of being cropped at the panel width,
+        # which would silently hide part of an argument or response.
+        return Syntax(formatted_json, "json", theme="monokai", line_numbers=False, word_wrap=True)
 
     def display_tool_execution(self, tool_name: str, tool_args: Any, show: bool = True) -> None:
         """Display the tool execution panel with arguments
@@ -79,6 +83,14 @@ class ToolDisplayManager:
         """
         if not show:
             return
+
+        # The response comes straight from the (untrusted) MCP server. Strip
+        # control characters so it can't emit raw ANSI escapes that spoof the
+        # terminal or hide part of what the tool actually returned. This panel
+        # is shown regardless of the HIL setting, so it must be safe even when
+        # confirmations are disabled. The JSON path below is unaffected: valid
+        # JSON has no raw control bytes.
+        tool_response = strip_control_chars(tool_response)
 
         args_display = self._format_json(tool_args)
 
