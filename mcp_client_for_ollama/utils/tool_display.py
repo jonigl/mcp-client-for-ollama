@@ -37,8 +37,10 @@ class ToolDisplayManager:
             parsed_data = json.loads(str(data))
             formatted_json = json.dumps(parsed_data, indent=2)
 
-        # Use Rich Syntax with Monokai theme for JSON
-        return Syntax(formatted_json, "json", theme="monokai", line_numbers=False)
+        # Use Rich Syntax with Monokai theme for JSON. word_wrap=True so long
+        # single-line values wrap instead of being cropped at the panel width,
+        # which would silently hide part of an argument or response.
+        return Syntax(formatted_json, "json", theme="monokai", line_numbers=False, word_wrap=True)
 
     def display_tool_execution(self, tool_name: str, tool_args: Any, show: bool = True) -> None:
         """Display the tool execution panel with arguments
