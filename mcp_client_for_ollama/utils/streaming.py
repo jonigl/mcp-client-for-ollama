@@ -466,8 +466,14 @@ class StreamingManager:
                     progressive_renderer.finish()
                 status.stop()
 
-            # Print newline at end
+            # Print newline at end. Thinking (and plain answer text) is streamed
+            # with end="", leaving the cursor mid-line. Close that dangling line
+            # so whatever follows (a tool panel, metrics, or the next turn) isn't
+            # glued to it. The thinking-only case (no answer text) matters for
+            # turns that go straight from thinking to tool calls.
             if accumulated_text and stream_plain_text:
+                self.console.print()
+            elif show_thinking and thinking_content and not accumulated_text:
                 self.console.print()
             # Render final markdown content properly (for "both" mode where progressive_renderer wasn't used)
             if accumulated_text and render_markdown and progressive_renderer is None:
