@@ -5,6 +5,9 @@
 <p align="center">
 <i>A simple yet powerful Python client for interacting with Model Context Protocol (MCP) servers using Ollama, allowing you to harness local LLMs for advanced tool execution.</i>
 </p>
+<p align="center">
+  <b>English</b> | <a href="README.zh-CN.md">简体中文</a> | <a href="README.es.md">Español</a>
+</p>
 
 ---
 
@@ -29,11 +32,11 @@
 - [Features](#features)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
-- [Installation options](#installation-options)
-  - [Troubleshooting](#troubleshooting)
+- [Installation Options](#installation-options)
+- [Troubleshooting](#troubleshooting)
 - ✨**NEW** [Managing MCP Servers via CLI](#managing-mcp-servers-via-cli)
-    - [mcp add options](#mcp-add-options)
-    - [Scopes](#scopes)
+  - [mcp add options](#mcp-add-options)
+  - [Scopes](#scopes)
   - [Command-line Arguments](#command-line-arguments)
     - [MCP Server Configuration](#mcp-server-configuration)
     - ✨**NEW** [Inference Provider Configuration](#inference-provider-configuration)
@@ -100,8 +103,8 @@ MCP Client for Ollama (ollmcp) is a modern, interactive terminal application (TU
 - 🤔 **Thinking Mode**: Advanced reasoning capabilities with visible thought processes for supported models (e.g., gpt-oss, deepseek-r1, qwen3, etc.)
 - 💪 **Reasoning Effort Levels**: Set reasoning effort to auto, minimal, low, medium, high, or xhigh for supported models
 - 🖼️ **Vision Tool Support**: Images returned by tools are automatically forwarded to vision-capable models
- - 🗣️ **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
- - 📜 **History Management**: View full conversation history, export to JSON for backup/analysis, and import previous sessions for continuity
+- 🗣️ **Cross-Language Support**: Seamlessly work with both Python and JavaScript MCP servers
+- 📜 **History Management**: View full conversation history, export to JSON for backup/analysis, and import previous sessions for continuity
 - 🔍 **Auto-Discovery**: Automatically find and use Claude's existing MCP server configurations
 - 🔁 **Dynamic Model Switching**: Switch between any installed Ollama model without restarting
 - 💾 **Configuration Persistence**: Save and load tool preferences and model settings between sessions
@@ -152,13 +155,13 @@ pip install --upgrade ollmcp
 ollmcp
 ```
 
-**Option 2:** Only run without installing (requires `uv` package manager)
+**Option 3:** Only run without installing (requires `uv` package manager)
 
 ```bash
 uvx ollmcp
 ```
 
-**Option 3:** Install from source and run using virtual environment
+**Option 4:** Install from source and run using virtual environment
 
 ```bash
 git clone https://github.com/jonigl/mcp-client-for-ollama.git
@@ -187,7 +190,7 @@ python3.11 -m pip install --upgrade ollmcp
 # Then run the client:
 ollmcp
 ```
-Take a look to the [Installation Options](#installation-options).
+Take a look at the [Installation Options](#installation-options).
 
 ### `error: externally-managed-environment` (PEP 668)
 
@@ -202,7 +205,7 @@ python3.11 -m pip install --upgrade ollmcp
 # Then run the client:
 ollmcp
 ```
-Take a look to the [Installation Options](#installation-options).
+Take a look at the [Installation Options](#installation-options).
 
 > [!WARNING]
 > Avoid `pip install --break-system-packages ollmcp`. It works, but it installs into the system Python and can break packages your OS depends on.
@@ -448,6 +451,48 @@ ollmcp --mcp-server /path/to/weather.py --mcp-server-url http://localhost:8000/m
 ollmcp -s /path/to/weather.py -u http://localhost:8000/mcp --claude-desktop
 ```
 
+### How Tool Calls Work
+
+1. The client sends your query to Ollama with a list of available tools
+2. If Ollama decides to use a tool, the client:
+   - Displays the tool execution with formatted arguments and syntax highlighting
+   - Shows a Human-in-the-Loop confirmation prompt (if enabled) allowing you to review and approve the tool call
+   - Extracts the tool name and arguments from the model response
+   - Calls the appropriate MCP server with these arguments (only if approved or HIL is disabled)
+   - Shows the tool response in a structured, easy-to-read format (including image and unsupported-media summaries)
+   - If the tool returned images and the current model supports vision, attaches the images to the next LLM message; otherwise displays a warning
+   - Sends the tool result back to Ollama
+   - If in Agent Mode, repeats the process if the model requests more tool calls
+3. Finally, the client:
+   - Displays the model's final response incorporating the tool results
+
+### Agent Mode
+
+Some models may request multiple tool calls in a single conversation. The client supports an **Agent Mode** that allows for iterative tool execution:
+- When the model requests a tool call, the client executes it and sends the result back to the model
+- This process repeats until the model provides a final answer or reaches the configured loop limit
+- You can set the maximum number of iterations using the `/loop-limit` (`/ll`) command
+- The default loop limit is `7` to prevent infinite loops
+
+#### When the loop limit is reached
+
+Instead of silently stopping, the client pauses and asks you how to proceed:
+
+| Choice | Key | Description |
+|--------|-----|-------------|
+| **Continue** | `c` *(default)* | Grant another batch of iterations (same size as the current limit) |
+| **Number** | `n` | Choose exactly how many more iterations to allow |
+| **Unlimited** | `u` | Remove the cap and run until the model stops requesting tools |
+| **Wrap up** | `w` | Ask the model to summarise what it gathered so far and produce a final answer — preserves all tool results collected before the limit |
+| **Abort** | `a` | Discard the turn entirely (nothing saved to history) |
+
+> [!NOTE]
+> If you want to prevent using Agent Mode, simply set the loop limit to `1`.
+
+#### Agent Mode Quick Demo:
+
+[![asciicast](https://asciinema.org/a/476qpEamCX9TFQt4jNEXIgHxS.svg)](https://asciinema.org/a/476qpEamCX9TFQt4jNEXIgHxS)
+
 ## Interactive Commands
 
 During chat, use these commands:
@@ -658,7 +703,7 @@ random numbers, and calculating BMI. It also provides a BMI calculator prompt.
 
 ### Answer Display Modes
 
-The `display-mode` (`dm`) command lets you choose how model answers are shown while they stream:
+The `/display-mode` (`/dm`) command lets you choose how model answers are shown while they stream:
 
 - **Plain**: Streams the response once as plain text with no final markdown re-render
 - ✨**NEW** **Markdown** (default): Streams formatted markdown line by line — lines above a small live tail are printed once and never redrawn, so it stays reliable even with emojis or terminal resizes
@@ -675,11 +720,11 @@ Use `/display-mode` or `/dm` during chat to open the interactive picker.
 - **Markdown (blocks)** is the most conservative way to see formatted markdown while streaming, at the cost of block-by-block (rather than line-by-line) updates
 
 > [!TIP]
-> Your selected display mode is saved with `save-config` and restored with `load-config`, so you can keep different viewing preferences for different workflows.
+> Your selected display mode is saved with `/save-config` and restored with `/load-config`, so you can keep different viewing preferences for different workflows.
 
 ### Input Mode
 
-The `input-mode` (`im`) command controls how you write chat messages:
+The `/input-mode` (`/im`) command controls how you write chat messages:
 
 - **Single-line** (default): Press **Enter** to send immediately after typing your message
 - **Multiline**: Press **Enter** to add a new line, then press **Esc** followed by **Enter** to send the entire message when you're done. This allows for more complex messages with multiple paragraphs or code blocks.
@@ -703,7 +748,7 @@ The model selection interface shows all available models in your Ollama installa
 
 ### Advanced Model Configuration
 
-The `model-config` (`mc`) command opens the advanced model settings interface, allowing you to fine-tune how the model generates responses:
+The `/model-config` (`/mc`) command opens the advanced model settings interface, allowing you to fine-tune how the model generates responses:
 
 ![ollmcp model configuration interface](https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-model-configuration.png?raw=true)
 
@@ -713,7 +758,6 @@ The `model-config` (`mc`) command opens the advanced model settings interface, a
 
 #### Key Parameters
 
-- **System Prompt**: Set the model's role and behavior to guide responses.
 - **Context Window (num_ctx)**: Set how much chat history the model uses. Balance with memory usage and performance.
 - **Keep Tokens**: Prevent important tokens from being dropped
 - **Max Tokens**: Limit response length (0 = auto)
@@ -769,7 +813,7 @@ Use `/reasoning-effort` (`/re`) to control **how much reasoning effort** the mod
 
 ### Server Reloading for Development
 
-The `reload-servers` command (`rs`) is particularly useful during MCP server development. It allows you to reload all connected servers without restarting the entire client application.
+The `/reload-servers` command (`/rs`) is particularly useful during MCP server development. It allows you to reload all connected servers without restarting the entire client application.
 
 **Key Benefits:**
 - 🔄 **Hot Reload**: Instantly apply changes to your MCP server code
@@ -818,13 +862,13 @@ When prompted, you can choose from the following options:
 - **y/yes**: Execute this specific tool call
 - **n/no**: Skip this tool call and continue with the query
 - **s/session**: Execute this and all subsequent tool calls for the current query without further prompts
-- **d/disable**: Permanently disable HIL confirmations (can be re-enabled with `hil` command)
+- **d/disable**: Permanently disable HIL confirmations (can be re-enabled with the `/hil` command)
 - **a/abort**: Abort the entire query immediately without saving to history
 
 > [!TIP]
 > The **session** option is particularly useful when the model needs to execute multiple tools in sequence. Instead of confirming each one individually, you can approve all tools for the current query session, then HIL will reset automatically for the next query.
 
-### Human-in-the-Loop (HIL) Configuration
+#### Human-in-the-Loop (HIL) Configuration
 
 - **Default State**: HIL confirmations are enabled by default for safety
 - **Toggle Command**: Use `/human-in-the-loop` or `/hil` to toggle on/off
@@ -832,7 +876,7 @@ When prompted, you can choose from the following options:
 - **Quick Disable**: Choose "disable" during any confirmation to turn off permanently
 - **Session Auto-Approve**: Use "session" during confirmation to approve all tools for current query
 - **Query Abort**: Use "abort" during confirmation to immediately stop the query without saving
-- **Re-enable**: Use the `hil` command anytime to turn confirmations back on
+- **Re-enable**: Use the `/hil` command anytime to turn confirmations back on
 
 **Benefits:**
 - **Enhanced Safety**: Prevent accidental or unwanted tool executions
@@ -863,7 +907,7 @@ The Performance Metrics feature displays detailed model performance data after e
 #### Performance Metrics Configuration
 
 - **Default State**: Metrics are disabled by default for cleaner output
-- **Toggle Command**: Use `show-metrics` or `sm` to enable/disable metrics display
+- **Toggle Command**: Use `/show-metrics` or `/sm` to enable/disable metrics display
 - **Persistent Settings**: Metrics preference is saved with your configuration
 
 **Benefits:**
@@ -887,19 +931,19 @@ The History Management feature allows you to view, export, and import your conve
 
 **View Full History:**
 ```
-full-history  # or 'fh'
+/full-history  # or '/fh'
 ```
 Displays all conversation history from the current session in a formatted view, showing both queries and responses.
 
 **Export History:**
 ```
-export-history  # or 'eh'
+/export-history  # or '/eh'
 ```
 Exports your current chat history to a JSON file. You can specify a custom filename or use the default timestamp-based name (e.g., `ollmcp_chat_history_2026-01-05_143022.json`). Files are saved to `~/.config/ollmcp/history/` directory. The command includes file overwrite protection.
 
 **Import History:**
 ```
-import-history  # or 'ih'
+/import-history  # or '/ih'
 ```
 Imports a previously exported chat history from a JSON file. The command validates the JSON structure to ensure compatibility. Imported history is added to your current conversation context.
 
@@ -1061,7 +1105,7 @@ The JSON configuration file supports STDIO, SSE, and Streamable HTTP server type
 
 A common point of confusion is where to store MCP server configuration files and how the TUI's save/load feature is used. Here's a short, practical guide that has helped other users:
 
-- The TUI's `save-config` / `load-config` (or `sc` / `lc`) commands are intended to save *TUI preferences* like which tools you enabled, your selected model, thinking mode, display mode, and other client-side settings. They are not required to register MCP server connections with the client.
+- The TUI's `/save-config` / `/load-config` (or `/sc` / `/lc`) commands are intended to save *TUI preferences* like which tools you enabled, your selected model, thinking mode, display mode, and other client-side settings. They are not required to register MCP server connections with the client.
 - For MCP server JSON files (the `mcpServers` object shown above) we recommend keeping them outside the TUI config directory or in a clear subfolder, for example:
 
 ```
@@ -1150,51 +1194,9 @@ MCP Client for Ollama now supports [Ollama Cloud models](https://github.com/olla
    ```
 
 > [!NOTE]
-> The model `deepseek-v3.1:671b-cloud` only supports tool use when thinking mode is turned off. You can toggle thinking mode in `ollmcp` by typing either `thinking-mode` or `tm`.
+> The model `deepseek-v3.1:671b-cloud` only supports tool use when thinking mode is turned off. You can toggle thinking mode in `ollmcp` by typing either `/thinking-mode` or `/tm`.
 
 For more information about Ollama Cloud, visit the [Ollama Cloud documentation](https://docs.ollama.com/cloud).
-
-### How Tool Calls Work
-
-1. The client sends your query to Ollama with a list of available tools
-2. If Ollama decides to use a tool, the client:
-   - Displays the tool execution with formatted arguments and syntax highlighting
-   - Shows a Human-in-the-Loop confirmation prompt (if enabled) allowing you to review and approve the tool call
-   - Extracts the tool name and arguments from the model response
-   - Calls the appropriate MCP server with these arguments (only if approved or HIL is disabled)
-   - Shows the tool response in a structured, easy-to-read format (including image and unsupported-media summaries)
-   - If the tool returned images and the current model supports vision, attaches the images to the next LLM message; otherwise displays a warning
-   - Sends the tool result back to Ollama
-   - If in Agent Mode, repeats the process if the model requests more tool calls
-3. Finally, the client:
-   - Displays the model's final response incorporating the tool results
-
-### Agent Mode
-
-Some models may request multiple tool calls in a single conversation. The client supports an **Agent Mode** that allows for iterative tool execution:
-- When the model requests a tool call, the client executes it and sends the result back to the model
-- This process repeats until the model provides a final answer or reaches the configured loop limit
-- You can set the maximum number of iterations using the `loop-limit` (`ll`) command
-- The default loop limit is `7` to prevent infinite loops
-
-#### When the loop limit is reached
-
-Instead of silently stopping, the client pauses and asks you how to proceed:
-
-| Choice | Key | Description |
-|--------|-----|-------------|
-| **Continue** | `c` *(default)* | Grant another batch of iterations (same size as the current limit) |
-| **Number** | `n` | Choose exactly how many more iterations to allow |
-| **Unlimited** | `u` | Remove the cap and run until the model stops requesting tools |
-| **Wrap up** | `w` | Ask the model to summarise what it gathered so far and produce a final answer — preserves all tool results collected before the limit |
-| **Abort** | `a` | Discard the turn entirely (nothing saved to history) |
-
-> [!NOTE]
-> If you want to prevent using Agent Mode, simply set the loop limit to `1`.
-
-#### Agent Mode Quick Demo:
-
-[![asciicast](https://asciinema.org/a/476qpEamCX9TFQt4jNEXIgHxS.svg)](https://asciinema.org/a/476qpEamCX9TFQt4jNEXIgHxS)
 
 ## Where Can I Find More MCP Servers?
 
