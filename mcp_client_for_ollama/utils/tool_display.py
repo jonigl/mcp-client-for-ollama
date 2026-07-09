@@ -12,6 +12,8 @@ from rich.text import Text
 from typing import Any
 from rich.markdown import Markdown
 
+from .sanitize import strip_control_chars
+
 
 class ToolDisplayManager:
     """Manages the display of tool calls and responses"""
@@ -79,6 +81,14 @@ class ToolDisplayManager:
         """
         if not show:
             return
+
+        # The response comes straight from the (untrusted) MCP server. Strip
+        # control characters so it can't emit raw ANSI escapes that spoof the
+        # terminal or hide part of what the tool actually returned. This panel
+        # is shown regardless of the HIL setting, so it must be safe even when
+        # confirmations are disabled. The JSON path below is unaffected: valid
+        # JSON has no raw control bytes.
+        tool_response = strip_control_chars(tool_response)
 
         args_display = self._format_json(tool_args)
 

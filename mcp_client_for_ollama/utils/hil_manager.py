@@ -4,18 +4,11 @@ This module manages HIL confirmations for tool calls, allowing users to review,
 approve, or skip tool executions before they are performed.
 """
 
-import re
-
 from rich.prompt import Prompt
 from rich.console import Console
 from rich.markup import escape
 
-
-# Control characters that could corrupt or spoof the confirmation display
-# (raw ANSI escapes, carriage returns, backspaces, C1 controls, ...). Tab and
-# newline are kept: they render harmlessly and newlines are needed for readable
-# multi-line values.
-_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+from .sanitize import strip_control_chars
 
 
 def _sanitize_for_display(value) -> str:
@@ -28,7 +21,7 @@ def _sanitize_for_display(value) -> str:
     and newline) and escape Rich markup. The value is otherwise shown in full,
     never truncated, so nothing is hidden at the moment the user approves.
     """
-    return escape(_CONTROL_CHARS.sub("", str(value)))
+    return escape(strip_control_chars(str(value)))
 
 
 class AbortQueryException(Exception):
