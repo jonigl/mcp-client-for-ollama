@@ -3,6 +3,7 @@
 import os
 import unittest
 from dataclasses import dataclass
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from mcp_client_for_ollama.utils.streaming import (
@@ -243,6 +244,44 @@ class TestStreamingManager(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls[thinking_index + 1].args, ())
         self.assertEqual(calls[thinking_index + 2].args, ())
         self.assertEqual(calls[thinking_index + 3].args, ("MD::📝 **Answer:**",))
+
+    async def test_thinking_only_turn_closes_dangling_line(self):
+        # Thinking streamed with end="" then a tool call, with no answer text.
+        # The thinking line must be closed with a bare print() so a following
+        # tool-execution panel (or metrics) isn't glued to the last line.
+        tool_call = SimpleNamespace(
+            index=0, id="call_1",
+            function=SimpleNamespace(name="srv.tool", arguments="{}"),
+        )
+        manager = StreamingManager(self.console)
+
+        with patch("mcp_client_for_ollama.utils.streaming.Markdown", side_effect=lambda text: f"MD::{text}"), patch(
+            "mcp_client_for_ollama.utils.streaming.extract_metrics",
+            return_value=None,
+        ):
+            response_text, tool_calls, _ = await manager.process_streaming_response(
+                _stream_chunks(
+                    DummyChunk(choices=[DummyChoice(DummyDelta(reasoning="planning"))]),
+                    DummyChunk(choices=[DummyChoice(DummyDelta(tool_calls=[tool_call]),
+                                                    finish_reason="tool_calls")]),
+                ),
+                thinking_mode=True,
+                show_thinking=True,
+                answer_render_mode="plain",
+            )
+
+        calls = self.console.print.call_args_list
+
+        self.assertEqual(response_text, "")
+        self.assertEqual(len(tool_calls), 1)
+        # No answer header on a tool-only turn.
+        self.assertFalse(any(call.args and "📝" in str(call.args[0]) for call in calls))
+        # Thinking was streamed without a trailing newline, and the last thing
+        # printed is a bare print() that closes the dangling line.
+        thinking_call = next(c for c in calls if c.args and c.args[0] == "planning")
+        self.assertEqual(thinking_call.kwargs.get("end"), "")
+        self.assertEqual(calls[-1].args, ())
+        self.assertEqual(calls[-1].kwargs, {})
 
 
 class TestBlockMarkdownRendererHelpers(unittest.TestCase):
