@@ -47,7 +47,7 @@ wheels = [
 
 [[package]]
 name = "any-llm-sdk"
-version = "1.19.0"
+version = "1.21.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anthropic" },
@@ -58,9 +58,9 @@ dependencies = [
     { name = "rich" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/45/40/70f1f1a71baaf99f3946307e5dcd38ecfb93f5b0a9e3381213ca51c0c58f/any_llm_sdk-1.19.0.tar.gz", hash = "sha256:dfcb315999f1eeb5a835a7ea0c4ab4d3c06b40c9dc9927725d1c6a1311ff72ce", size = 157107, upload-time = "2026-06-26T10:00:52.865Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1d/f5/055dd5458d38fd77521b6f555468ef2ec656ebbbf81a59e21fd48e46fac3/any_llm_sdk-1.21.0.tar.gz", hash = "sha256:15fee01e543014245557d86a848e836a7d7cbbf67638eb626c181cfabef92017", size = 162165, upload-time = "2026-07-16T14:59:27.549Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1c/fb/8f5e8a0ec2eddb020542eb187d83fe44f66afee35929a5bc22f820599295/any_llm_sdk-1.19.0-py3-none-any.whl", hash = "sha256:1e91ff18a07107ebb1bf6e8175cc8580f48e4d6b58ca5932a39a7f9e72c8c521", size = 207352, upload-time = "2026-06-26T10:00:51.262Z" },
+    { url = "https://files.pythonhosted.org/packages/ac/cb/4140aa7f43e7ca6a6429ef5b50f3db7a2cbedb8ebe6eeb26780a161cb116/any_llm_sdk-1.21.0-py3-none-any.whl", hash = "sha256:793ce8a52d074a85ca6f393f07f1a5a7f2c6e473c8cf3d5e09b06286ae0c0928", size = 213440, upload-time = "2026-07-16T14:59:26.022Z" },
 ]
 
 [package.optional-dependencies]
@@ -508,7 +508,7 @@ wheels = [
 
 [[package]]
 name = "mcp-client-for-ollama"
-version = "0.32.1"
+version = "0.33.0"
 source = { editable = "." }
 dependencies = [
     { name = "any-llm-sdk", extra = ["ollama"] },
@@ -525,7 +525,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "any-llm-sdk", extras = ["ollama", "openai"], specifier = "~=1.19.0" },
+    { name = "any-llm-sdk", extras = ["ollama", "openai", "atlascloud"], specifier = "~=1.21.0" },
     { name = "mcp", specifier = ">=1.25,<1.29" },
     { name = "prompt-toolkit", specifier = "~=3.0.52" },
     { name = "rich", specifier = ">=14.2.0,<14.3" },
