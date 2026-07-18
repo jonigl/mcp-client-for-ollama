@@ -1,6 +1,6 @@
 [project]
 name = "mcp-client-for-ollama"
-version = "0.32.1"
+version = "0.33.0"
 description = "MCP Client for Ollama - A client for connecting to Model Context Protocol servers using Ollama"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -9,7 +9,7 @@ authors = [
     {name = "Jonathan Löwenstern"}
 ]
 dependencies = [
-    "any-llm-sdk[ollama,openai] ~=1.19.0",
+    "any-llm-sdk[ollama,openai,atlascloud] ~=1.21.0",
     "mcp>=1.25,<1.29",
     "prompt-toolkit~=3.0.52",
     "rich>=14.2.0,<14.3",

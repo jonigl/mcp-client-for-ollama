@@ -23,6 +23,19 @@
 [![CI](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml/badge.svg)](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml)
 
 <p align="center">
+  <sub>Patrocinado por</sub>
+  <br>
+  <a href="https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=mcp-client-for-ollama">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/atlascloud-logo-dark.png?raw=true">
+      <img src="https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/atlascloud-logo.png?raw=true" alt="Atlas Cloud" height="20">
+    </picture>
+  </a>
+  <br>
+  <sub>Aprende a usar Atlas Cloud con ollmcp en la sección de <a href="#patrocinadores">Patrocinadores</a></sub>
+</p>
+
+<p align="center">
   <img src="https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/v0.27.0/misc/ollmcp-demo.gif" alt="Demo de MCP Client for Ollama">
 </p>
 <p align="center">
@@ -74,6 +87,9 @@
   - [Consejos: dónde poner las configuraciones de servidores MCP y un ejemplo funcional](#consejos-dónde-poner-las-configuraciones-de-servidores-mcp-y-un-ejemplo-funcional)
 - [Modelos compatibles](#modelos-compatibles)
   - [Modelos de Ollama Cloud](#modelos-de-ollama-cloud)
+- ✨**NUEVO** [Patrocinadores](#patrocinadores)
+  - [Atlas Cloud](#atlas-cloud)
+  - [Conviértete en patrocinador](#conviértete-en-patrocinador)
 - [¿Dónde puedo encontrar más servidores MCP?](#dónde-puedo-encontrar-más-servidores-mcp)
 - [Proyectos relacionados](#proyectos-relacionados)
 - [Seguridad](#seguridad)
@@ -295,12 +311,12 @@ El ámbito `project` escribe un archivo `.mcp.json` estándar en la raíz de tu 
 #### Configuración del proveedor de inferencia:
 
 - `--model`, `-m` MODEL: Modelo a usar. Por defecto: el modelo de tu configuración guardada si existe; de lo contrario, el primer modelo disponible en Ollama
-- `--provider`, `-p` PROVIDER: Proveedor de LLM a usar (p. ej. `ollama`, `openai`, `openrouter`, `deepseek`). Por defecto: `ollama`
+- `--provider`, `-p` PROVIDER: Proveedor de LLM a usar (p. ej. `ollama`, `openai`, `atlascloud`, `openrouter`, `deepseek`). Por defecto: `ollama`
 - `--host`, `-H` HOST: Host del LLM / URL base de la API. Por defecto es `http://localhost:11434` de Ollama para el proveedor `ollama`, o el endpoint por defecto del proveedor en los demás casos.
 - `--api-key`, `-k` KEY: API key del proveedor de LLM. También se lee de la variable de entorno `$OLLMCP_API_KEY`, que es **independiente del proveedor** (aplica al proveedor que selecciones con `--provider`). Las keys pasadas vía `$OLLMCP_API_KEY` nunca se escriben en el archivo de configuración; solo las pasadas con `--api-key` se guardan. No es necesaria para `ollama`.
 
 > [!NOTE]
-> Proveedores actualmente soportados: `ollama`, `openai` y cualquier proveedor compatible con OpenAI (`openrouter`, `deepseek`, `perplexity`, etc.). Pronto habrá más proveedores.
+> Proveedores actualmente soportados: `ollama`, `openai`, `atlascloud` y cualquier proveedor compatible con OpenAI (`openrouter`, `deepseek`, `perplexity`, etc.). Pronto habrá más proveedores.
 
 #### Opciones generales:
 
@@ -319,6 +335,7 @@ ollmcp funciona con **Ollama** más cualquier proveedor **compatible con OpenAI*
 | Proveedor (`--provider`) | Variable de entorno de la API key |
 |---|---|
 | [`ollama`](https://github.com/ollama/ollama) (por defecto) | - (local) |
+| [`atlascloud`](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=mcp-client-for-ollama) | `ATLASCLOUD_API_KEY` |
 | [`azureopenai`](https://learn.microsoft.com/en-us/azure/ai-foundry/) | `AZURE_OPENAI_API_KEY` |
 | [`dashscope`](https://bailian.console.aliyun.com/cn-beijing/?tab=api#/api) | `DASHSCOPE_API_KEY` |
 | [`databricks`](https://docs.databricks.com/) | `DATABRICKS_TOKEN` |
@@ -1200,6 +1217,38 @@ MCP Client for Ollama ahora soporta los [modelos de Ollama Cloud](https://github
 > El modelo `deepseek-v3.1:671b-cloud` solo soporta el uso de herramientas cuando el modo de pensamiento está desactivado. Puedes alternar el modo de pensamiento en `ollmcp` escribiendo `/thinking-mode` o `/tm`.
 
 Para más información sobre Ollama Cloud, visita la [documentación de Ollama Cloud](https://docs.ollama.com/cloud).
+
+## Patrocinadores
+
+Este proyecto cuenta con el apoyo de:
+
+<p align="center">
+  <a href="https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=mcp-client-for-ollama">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/atlascloud-logo-dark.png?raw=true">
+      <img src="https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/atlascloud-logo.png?raw=true" alt="Atlas Cloud" height="36">
+    </picture>
+  </a>
+</p>
+
+### Atlas Cloud
+
+[Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=mcp-client-for-ollama) es una plataforma de inferencia de IA full-modal — una única API de IA con acceso unificado a más de 300 modelos curados para video, imágenes y LLMs.
+
+Funciona con ollmcp sin configuración adicional:
+
+```bash
+ollmcp --provider atlascloud --api-key YOUR_ATLASCLOUD_API_KEY
+# or export the key once and skip the flag:
+export ATLASCLOUD_API_KEY=YOUR_ATLASCLOUD_API_KEY
+ollmcp --provider atlascloud
+```
+
+El streaming y el tool calling están totalmente soportados, y puedes explorar y elegir cualquiera de los modelos de Atlas Cloud con el comando interactivo `/model`.
+
+### Conviértete en patrocinador
+
+¿Quieres ver tu logo aquí? Apoya el proyecto a través de [GitHub Sponsors](https://github.com/sponsors/jonigl) ❤️
 
 ## ¿Dónde puedo encontrar más servidores MCP?
 

@@ -38,7 +38,7 @@ DEFAULT_REASONING_EFFORT = "medium"
 # Providers ollmcp currently supports: Ollama (native) plus OpenAI and any
 # OpenAI-compatible provider (they all use the bundled openai package).
 SUPPORTED_PROVIDERS = (
-    "ollama, openai, and OpenAI-compatible providers "
+    "ollama, openai, atlascloud, and OpenAI-compatible providers "
     "(openrouter, deepseek, perplexity, etc.)"
 )
 

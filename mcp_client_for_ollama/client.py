@@ -2088,7 +2088,7 @@ def main(
     ),
     provider: Optional[str] = typer.Option(
         None, "--provider", "-p",
-        help="LLM provider (e.g., ollama, openai, deepseek, openrouter). Defaults to your saved configuration's provider, or ollama.",
+        help="LLM provider (e.g., ollama, openai, atlascloud, deepseek, openrouter). Defaults to your saved configuration's provider, or ollama.",
         rich_help_panel="LLM Configuration"
     ),
     api_key: Optional[str] = typer.Option(

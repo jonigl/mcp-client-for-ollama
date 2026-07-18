@@ -23,6 +23,19 @@
 [![CI](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml/badge.svg)](https://github.com/jonigl/mcp-client-for-ollama/actions/workflows/ci.yml)
 
 <p align="center">
+  <sub>由以下赞助商支持</sub>
+  <br>
+  <a href="https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=mcp-client-for-ollama">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/atlascloud-logo-dark.png?raw=true">
+      <img src="https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/atlascloud-logo.png?raw=true" alt="Atlas Cloud" height="20">
+    </picture>
+  </a>
+  <br>
+  <sub>了解如何在 ollmcp 中使用 Atlas Cloud — 参见<a href="#赞助商">赞助商</a>一节</sub>
+</p>
+
+<p align="center">
   <img src="https://raw.githubusercontent.com/jonigl/mcp-client-for-ollama/v0.27.0/misc/ollmcp-demo.gif" alt="MCP Client for Ollama 演示">
 </p>
 <p align="center">
@@ -74,6 +87,9 @@
   - [小贴士: MCP 服务器配置文件的存放位置及可用示例](#小贴士-mcp-服务器配置文件的存放位置及可用示例)
 - [兼容的模型](#兼容的模型)
   - [Ollama Cloud 模型](#ollama-cloud-模型)
+- ✨**新** [赞助商](#赞助商)
+  - [Atlas Cloud](#atlas-cloud)
+  - [成为赞助商](#成为赞助商)
 - [在哪里可以找到更多 MCP 服务器?](#在哪里可以找到更多-mcp-服务器)
 - [相关项目](#相关项目)
 - [安全](#安全)
@@ -295,12 +311,12 @@ ollmcp mcp add --env API_KEY=YOUR_KEY --transport sse my-sse-server http://local
 #### 推理提供商配置:
 
 - `--model`, `-m` MODEL: 要使用的模型。默认: 已保存配置中的模型（如有设置），否则为 Ollama 中第一个可用的模型
-- `--provider`, `-p` PROVIDER: 要使用的 LLM 提供商（例如 `ollama`、`openai`、`openrouter`、`deepseek`）。默认: `ollama`
+- `--provider`, `-p` PROVIDER: 要使用的 LLM 提供商（例如 `ollama`、`openai`、`atlascloud`、`openrouter`、`deepseek`）。默认: `ollama`
 - `--host`, `-H` HOST: LLM 主机 / API 基础 URL。对 `ollama` 提供商默认为 Ollama 的 `http://localhost:11434`，其他提供商则使用其自身的默认端点。
 - `--api-key`, `-k` KEY: LLM 提供商的 API key。也可从环境变量 `$OLLMCP_API_KEY` 读取，该变量**与提供商无关**（作用于你通过 `--provider` 选择的任何提供商）。通过 `$OLLMCP_API_KEY` 传入的 key 永远不会写入配置文件；只有通过 `--api-key` 传入的 key 才会被保存。`ollama` 不需要 key。
 
 > [!NOTE]
-> 当前支持的提供商: `ollama`、`openai` 以及任何兼容 OpenAI 的提供商（`openrouter`、`deepseek`、`perplexity` 等）。更多提供商即将支持。
+> 当前支持的提供商: `ollama`、`openai`、`atlascloud` 以及任何兼容 OpenAI 的提供商（`openrouter`、`deepseek`、`perplexity` 等）。更多提供商即将支持。
 
 #### 通用选项:
 
@@ -319,6 +335,7 @@ ollmcp 支持 **Ollama** 以及 [any-llm](https://github.com/mozilla-ai/any-llm)
 | 提供商（`--provider`） | API key 环境变量 |
 |---|---|
 | [`ollama`](https://github.com/ollama/ollama)（默认） | -（本地） |
+| [`atlascloud`](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=mcp-client-for-ollama) | `ATLASCLOUD_API_KEY` |
 | [`azureopenai`](https://learn.microsoft.com/en-us/azure/ai-foundry/) | `AZURE_OPENAI_API_KEY` |
 | [`dashscope`](https://bailian.console.aliyun.com/cn-beijing/?tab=api#/api) | `DASHSCOPE_API_KEY` |
 | [`databricks`](https://docs.databricks.com/) | `DATABRICKS_TOKEN` |
@@ -1200,6 +1217,38 @@ MCP Client for Ollama 现已支持 [Ollama Cloud 模型](https://github.com/olla
 > 模型 `deepseek-v3.1:671b-cloud` 仅在思考模式关闭时支持工具使用。你可以在 `ollmcp` 中输入 `/thinking-mode` 或 `/tm` 来切换思考模式。
 
 关于 Ollama Cloud 的更多信息，请访问 [Ollama Cloud 文档](https://docs.ollama.com/cloud)。
+
+## 赞助商
+
+本项目得到以下赞助商的支持:
+
+<p align="center">
+  <a href="https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=mcp-client-for-ollama">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/atlascloud-logo-dark.png?raw=true">
+      <img src="https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/atlascloud-logo.png?raw=true" alt="Atlas Cloud" height="36">
+    </picture>
+  </a>
+</p>
+
+### Atlas Cloud
+
+[Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=mcp-client-for-ollama) 是一个全模态 AI 推理平台 — 单一 AI API 即可统一访问 300+ 精选模型，覆盖视频、图像和 LLM 场景。
+
+它与 ollmcp 开箱即用:
+
+```bash
+ollmcp --provider atlascloud --api-key YOUR_ATLASCLOUD_API_KEY
+# or export the key once and skip the flag:
+export ATLASCLOUD_API_KEY=YOUR_ATLASCLOUD_API_KEY
+ollmcp --provider atlascloud
+```
+
+流式输出和工具调用均受支持，使用交互式 `/model` 命令即可浏览并选择 Atlas Cloud 的任意模型。
+
+### 成为赞助商
+
+想在这里展示你的 logo？欢迎通过 [GitHub Sponsors](https://github.com/sponsors/jonigl) 支持本项目 ❤️
 
 ## 在哪里可以找到更多 MCP 服务器?
 
