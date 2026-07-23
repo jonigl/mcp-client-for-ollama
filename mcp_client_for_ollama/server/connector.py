@@ -108,13 +108,7 @@ class ServerConnector:
             ))
             return self.sessions, self.available_tools, self.enabled_tools, self.prompts_by_server, self.resources_by_server, self.templates_by_server
 
-        # Connect to each server. The MCP `initialize` handshake in
-        # _connect_to_server is the source of truth for reachability: it uses
-        # the correct transport with the server's auth/streaming headers and
-        # reports clear, per-server errors on failure. We therefore no longer
-        # pre-filter HTTP servers with a header-less GET/POST probe, which
-        # false-negatived on authenticated and streaming (SSE) endpoints and
-        # skipped valid servers as "connectivity issues" (#278).
+        # Connect to each server
         for server in all_servers:
             await self._connect_to_server(server)
 
