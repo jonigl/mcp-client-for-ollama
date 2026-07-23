@@ -391,3 +391,27 @@ class TestConnectToServersMerging(unittest.IsolatedAsyncioTestCase):
 
             connected_names = {call.args[0]["name"] for call in mock_connect.call_args_list}
             assert connected_names == {"fs", os.path.basename(__file__).split('.')[0]}
+
+
+class TestStreamableHttpNotPrefiltered(unittest.IsolatedAsyncioTestCase):
+    """A Streamable HTTP / SSE server must reach the real MCP handshake and not
+    be pre-filtered by a header-less connectivity probe (#278): authenticated
+    and streaming endpoints answer only a proper MCP `initialize`, so the
+    handshake in _connect_to_server is the only valid reachability test."""
+
+    async def test_streamable_http_server_reaches_handshake(self):
+        # A URL that a raw GET/POST probe could never validate (unresolvable
+        # host). It must still be handed to _connect_to_server, which performs
+        # the real, header-aware handshake and reports any failure itself.
+        async with AsyncExitStack() as stack:
+            connector = ServerConnector(stack)
+
+            with patch.object(connector, '_connect_to_server', new=AsyncMock(return_value=True)) as mock_connect:
+                await connector.connect_to_servers(
+                    server_urls=["https://mcp.unreachable.invalid/api/v1/connect"],
+                )
+
+            attempted = [call.args[0] for call in mock_connect.call_args_list]
+            assert len(attempted) == 1, "the HTTP server must not be skipped"
+            assert attempted[0]["type"] == "streamable_http"
+            assert attempted[0]["url"] == "https://mcp.unreachable.invalid/api/v1/connect"
