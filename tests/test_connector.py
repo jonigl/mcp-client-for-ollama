@@ -394,10 +394,8 @@ class TestConnectToServersMerging(unittest.IsolatedAsyncioTestCase):
 
 
 class TestStreamableHttpNotPrefiltered(unittest.IsolatedAsyncioTestCase):
-    """A Streamable HTTP / SSE server must reach the real MCP handshake and not
-    be pre-filtered by a header-less connectivity probe (#278): authenticated
-    and streaming endpoints answer only a proper MCP `initialize`, so the
-    handshake in _connect_to_server is the only valid reachability test."""
+    """HTTP servers must reach _connect_to_server instead of being dropped by a
+    pre-flight probe (#278)."""
 
     async def test_streamable_http_server_reaches_handshake(self):
         async with AsyncExitStack() as stack:
