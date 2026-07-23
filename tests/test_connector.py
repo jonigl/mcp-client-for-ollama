@@ -400,9 +400,6 @@ class TestStreamableHttpNotPrefiltered(unittest.IsolatedAsyncioTestCase):
     handshake in _connect_to_server is the only valid reachability test."""
 
     async def test_streamable_http_server_reaches_handshake(self):
-        # A URL that a raw GET/POST probe could never validate (unresolvable
-        # host). It must still be handed to _connect_to_server, which performs
-        # the real, header-aware handshake and reports any failure itself.
         async with AsyncExitStack() as stack:
             connector = ServerConnector(stack)
 
