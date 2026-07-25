@@ -256,6 +256,9 @@ class TestResourceCapability(unittest.IsolatedAsyncioTestCase):
             server = {"name": "test-server", "type": "script", "path": "/tmp/test_server.py"}
 
             mock_session = AsyncMock()
+            # __aenter__ yields this mock; falsy __aexit__ so it can't swallow assertions.
+            mock_session.__aenter__.return_value = mock_session
+            mock_session.__aexit__.return_value = False
             mock_init_result = MagicMock()
             mock_init_result.capabilities = MagicMock()
             mock_init_result.capabilities.tools = None
@@ -285,7 +288,7 @@ class TestResourceCapability(unittest.IsolatedAsyncioTestCase):
                  patch.object(connector, '_create_script_params', return_value=MagicMock()):
 
                 mock_stdio.return_value.__aenter__ = AsyncMock(return_value=(AsyncMock(), AsyncMock()))
-                mock_stdio.return_value.__aexit__ = AsyncMock()
+                mock_stdio.return_value.__aexit__ = AsyncMock(return_value=False)
 
                 result = await connector._connect_to_server(server)
 
@@ -305,6 +308,9 @@ class TestResourceCapability(unittest.IsolatedAsyncioTestCase):
             server = {"name": "test-server", "type": "script", "path": "/tmp/test_server.py"}
 
             mock_session = AsyncMock()
+            # __aenter__ yields this mock; falsy __aexit__ so it can't swallow assertions.
+            mock_session.__aenter__.return_value = mock_session
+            mock_session.__aexit__.return_value = False
             mock_init_result = MagicMock()
             mock_init_result.capabilities = MagicMock()
             mock_init_result.capabilities.tools = None
@@ -318,7 +324,7 @@ class TestResourceCapability(unittest.IsolatedAsyncioTestCase):
                  patch.object(connector, '_create_script_params', return_value=MagicMock()):
 
                 mock_stdio.return_value.__aenter__ = AsyncMock(return_value=(AsyncMock(), AsyncMock()))
-                mock_stdio.return_value.__aexit__ = AsyncMock()
+                mock_stdio.return_value.__aexit__ = AsyncMock(return_value=False)
 
                 result = await connector._connect_to_server(server)
 
