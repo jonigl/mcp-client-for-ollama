@@ -133,6 +133,11 @@ class ServerConnector:
         server_name = server["name"]
         self.console.print(f"[cyan]Connecting to server: {server_name}[/cyan]")
 
+        # Tracks whether the MCP handshake completed, so a cancellation raised
+        # later (while querying capabilities) is not reported as the server
+        # failing to answer initialize.
+        initialized = False
+
         try:
             server_type = server.get("type", "script")
             session = None
@@ -200,6 +205,7 @@ class ServerConnector:
 
                 # Initialize the session and capture capabilities
                 init_result = await session.initialize()
+                initialized = True
 
                 # Success — transfer connection contexts to the main exit_stack.
                 # local_stack is now empty; its __aexit__ becomes a no-op.
@@ -230,6 +236,8 @@ class ServerConnector:
                         )
                         server_tools.append(tool_copy)
                         self.enabled_tools[qualified_name] = True
+                except asyncio.CancelledError:
+                    self.console.print(f"[yellow]Warning: Listing tools from {server_name} was cancelled; continuing without them[/yellow]")
                 except Exception as e:
                     self.console.print(f"[yellow]Warning: Failed to list tools from {server_name}: {str(e)}[/yellow]")
             else:
@@ -246,6 +254,8 @@ class ServerConnector:
                     server_prompts = prompts_response.prompts if hasattr(prompts_response, 'prompts') else []
                     if server_prompts:
                         self.prompts_by_server[server_name] = server_prompts
+                except asyncio.CancelledError:
+                    self.console.print(f"[yellow]Warning: Listing prompts from {server_name} was cancelled; continuing without them[/yellow]")
                 except Exception as e:
                     self.console.print(f"[yellow]Warning: Failed to list prompts from {server_name}: {str(e)}[/yellow]")
             else:
@@ -260,6 +270,8 @@ class ServerConnector:
                     server_resources = resources_response.resources if hasattr(resources_response, 'resources') else []
                     if server_resources:
                         self.resources_by_server[server_name] = server_resources
+                except asyncio.CancelledError:
+                    self.console.print(f"[yellow]Warning: Listing resources from {server_name} was cancelled; continuing without them[/yellow]")
                 except Exception as e:
                     self.console.print(f"[yellow]Warning: Failed to list resources from {server_name}: {str(e)}[/yellow]")
                 try:
@@ -267,6 +279,8 @@ class ServerConnector:
                     server_templates = templates_response.resourceTemplates if hasattr(templates_response, 'resourceTemplates') else []
                     if server_templates:
                         self.templates_by_server[server_name] = server_templates
+                except asyncio.CancelledError:
+                    self.console.print(f"[yellow]Warning: Listing resource templates from {server_name} was cancelled; continuing without them[/yellow]")
                 except Exception as e:
                     self.console.print(f"[yellow]Warning: Failed to list resource templates from {server_name}: {str(e)}[/yellow]")
                 summary_parts = []
@@ -287,19 +301,29 @@ class ServerConnector:
             return True
 
         except asyncio.CancelledError:
-            self.console.print(
-                f"[red]Error connecting to {server_name}: Server did not respond to MCP "
-                f"initialization. Verify the URL serves an MCP endpoint, not a regular web "
-                f"page or other service.[/red]"
-            )
+            self._discard_server_state(server_name)
+            if initialized:
+                self.console.print(
+                    f"[red]Error connecting to {server_name}: Connection dropped after a "
+                    f"successful MCP initialization.[/red]"
+                )
+            else:
+                self.console.print(
+                    f"[red]Error connecting to {server_name}: Server did not respond to MCP "
+                    f"initialization. Verify the URL serves an MCP endpoint, not a regular web "
+                    f"page or other service.[/red]"
+                )
             return False
         except FileNotFoundError as e:
+            self._discard_server_state(server_name)
             self.console.print(f"[red]Error connecting to {server_name}: File not found - {str(e)}[/red]")
             return False
         except PermissionError:
+            self._discard_server_state(server_name)
             self.console.print(f"[red]Error connecting to {server_name}: Permission denied[/red]")
             return False
         except Exception as e:
+            self._discard_server_state(server_name)
             sub_exceptions = getattr(e, 'exceptions', None)
             if sub_exceptions:
                 for sub in sub_exceptions:
@@ -493,6 +517,27 @@ class ServerConnector:
             headers["mcp-protocol-version"] = MCP_PROTOCOL_VERSION
 
         return headers
+
+    def _discard_server_state(self, server_name: str) -> None:
+        """Drop any state a failed connection attempt already registered.
+
+        Capabilities are queried after the session is stored, so a failure
+        partway through can leave a server registered as connected. Tools are
+        matched by their qualified "<server>.<tool>" prefix to also cover a
+        tools loop that only partially completed.
+
+        Args:
+            server_name: Name of the server whose partial state to remove
+        """
+        prefix = f"{server_name}."
+        self.sessions.pop(server_name, None)
+        self.session_ids.pop(server_name, None)
+        self.prompts_by_server.pop(server_name, None)
+        self.resources_by_server.pop(server_name, None)
+        self.templates_by_server.pop(server_name, None)
+        self.available_tools[:] = [t for t in self.available_tools if not t.name.startswith(prefix)]
+        for qualified_name in [n for n in self.enabled_tools if n.startswith(prefix)]:
+            del self.enabled_tools[qualified_name]
 
     async def disconnect_all_servers(self):
         """Disconnect from all servers and reset state"""
