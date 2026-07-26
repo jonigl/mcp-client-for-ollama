@@ -6,8 +6,8 @@ like Claude's configuration files.
 
 import os
 import json
-from typing import Dict, List, Any
-from urllib.parse import urlparse
+from typing import Dict, List, Any, Tuple
+from urllib.parse import urlparse, urlunparse
 from ..utils.constants import DEFAULT_CLAUDE_CONFIG
 
 def process_server_paths(server_paths) -> List[Dict[str, Any]]:
@@ -159,6 +159,98 @@ def parse_server_configs(config_path: str) -> List[Dict[str, Any]]:
     except Exception:
         # Return empty list on error
         return []
+
+def _server_target(server: Dict[str, Any]) -> tuple:
+    """Identify the endpoint a server entry points at.
+
+    Two entries with the same target are one server reached from two sources
+    (e.g. the registry and a ``-u`` flag), not two servers. The transport is
+    part of the target, so the same URL served over SSE and Streamable HTTP
+    stays two distinct entries.
+    """
+    server_type = server.get("type", "script")
+
+    url = server.get("url")
+    if url:
+        parsed = urlparse(url)
+        # Case in scheme/host is not meaningful, a trailing slash is not either,
+        # and the fragment never reaches the server.
+        normalized = urlunparse((
+            parsed.scheme.lower(),
+            parsed.netloc.lower(),
+            parsed.path.rstrip("/"),
+            parsed.params,
+            parsed.query,
+            "",
+        ))
+        return (server_type, normalized)
+
+    path = server.get("path")
+    if path:
+        return ("script", os.path.abspath(path))
+
+    config = server.get("config") or {}
+    command = config.get("command")
+    if command:
+        return ("stdio", command, tuple(config.get("args") or []))
+
+    return ("name", server.get("name"))
+
+
+def deduplicate_servers(servers: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """Collapse duplicate entries and make the remaining names unique.
+
+    Server entries arrive from five independent sources, so the same endpoint
+    can appear more than once, and names derived from a URL's netloc can
+    collide for endpoints that differ only by path. Both cases used to end with
+    one connection silently overwriting another in ``ServerConnector.sessions``
+    while the overwritten server's tools stayed advertised to the model.
+
+    Args:
+        servers: Server configurations, in source precedence order
+
+    Returns:
+        Tuple of (servers, notices) where notices are human-readable messages
+        about what was dropped or renamed
+    """
+    notices = []
+
+    # Same endpoint from two sources: keep the first, which is the entry from
+    # the more explicit source (a registry name beats a name derived from a URL).
+    unique = []
+    seen: Dict[tuple, str] = {}
+    for server in servers:
+        target = _server_target(server)
+        if target in seen:
+            notices.append(
+                f"Skipping duplicate entry '{server.get('name')}': "
+                f"same server as '{seen[target]}'"
+            )
+            continue
+        seen[target] = server.get("name")
+        unique.append(server)
+
+    # Distinct endpoints that resolved to the same name: disambiguate instead
+    # of letting the later one overwrite the earlier one.
+    result = []
+    used = set()
+    for server in unique:
+        name = server.get("name")
+        if name in used:
+            suffix = 2
+            while f"{name}-{suffix}" in used:
+                suffix += 1
+            new_name = f"{name}-{suffix}"
+            notices.append(
+                f"Renaming '{name}' to '{new_name}': another server already uses that name"
+            )
+            server = {**server, "name": new_name}
+            name = new_name
+        used.add(name)
+        result.append(server)
+
+    return result, notices
+
 
 def load_claude_desktop_servers() -> List[Dict[str, Any]]:
     """Load server configurations from Claude Desktop's config file.

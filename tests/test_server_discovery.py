@@ -1,6 +1,6 @@
 """Test server discovery functionality."""
 
-from mcp_client_for_ollama.server.discovery import process_server_urls, parse_server_config_mapping
+from mcp_client_for_ollama.server.discovery import process_server_urls, parse_server_config_mapping, deduplicate_servers
 
 
 def test_process_server_urls():
@@ -158,3 +158,82 @@ def test_parse_server_config_mapping_stdio_and_disabled():
     assert len(result) == 1
     assert result[0]["name"] == "fs"
     assert result[0]["type"] == "config"
+
+
+def test_deduplicate_servers_keeps_registry_entry_over_url_flag():
+    """A registry entry and a `-u` flag for one endpoint are one server.
+
+    The registry entry wins because it carries the name the user chose.
+    """
+    url = "http://127.0.0.1:8000/mcp"
+    servers = [
+        {"type": "streamable_http", "name": "unreal-mcp", "url": url, "config": {"url": url}},
+        {"type": "streamable_http", "name": "127_0_0_1_8000", "url": url},
+    ]
+    result, notices = deduplicate_servers(servers)
+
+    assert [s["name"] for s in result] == ["unreal-mcp"]
+    assert any("duplicate" in n for n in notices)
+
+
+def test_deduplicate_servers_normalizes_url_before_comparing():
+    """Trailing slash and host casing do not make a second server."""
+    servers = [
+        {"type": "streamable_http", "name": "a", "url": "http://LocalHost:8000/mcp/"},
+        {"type": "streamable_http", "name": "b", "url": "http://localhost:8000/mcp"},
+    ]
+    result, _ = deduplicate_servers(servers)
+
+    assert [s["name"] for s in result] == ["a"]
+
+
+def test_deduplicate_servers_keeps_same_url_on_different_transports():
+    """SSE and Streamable HTTP on one URL are genuinely two entries."""
+    servers = [
+        {"type": "sse", "name": "x", "url": "http://localhost:8000/mcp"},
+        {"type": "streamable_http", "name": "y", "url": "http://localhost:8000/mcp"},
+    ]
+    result, notices = deduplicate_servers(servers)
+
+    assert len(result) == 2
+    assert notices == []
+
+
+def test_deduplicate_servers_renames_colliding_names():
+    """Two endpoints that differ only by path must not share a name.
+
+    `process_server_urls` derives the name from netloc alone, so these collide.
+    """
+    servers = process_server_urls([
+        "http://localhost:8000/alpha",
+        "http://localhost:8000/beta",
+    ])
+    result, notices = deduplicate_servers(servers)
+
+    assert [s["name"] for s in result] == ["localhost_8000", "localhost_8000-2"]
+    assert result[0]["url"].endswith("/alpha")
+    assert result[1]["url"].endswith("/beta")
+    assert any("Renaming" in n for n in notices)
+
+
+def test_deduplicate_servers_dedupes_stdio_by_command():
+    """The same STDIO command from two scopes is one server."""
+    servers = [
+        {"type": "config", "name": "fs", "config": {"command": "npx", "args": ["-y", "fs", "."]}},
+        {"type": "config", "name": "fs-copy", "config": {"command": "npx", "args": ["-y", "fs", "."]}},
+    ]
+    result, _ = deduplicate_servers(servers)
+
+    assert [s["name"] for s in result] == ["fs"]
+
+
+def test_deduplicate_servers_passes_through_distinct_servers():
+    """Unrelated servers are returned untouched, in order."""
+    servers = process_server_urls([
+        "http://localhost:8000/mcp",
+        "http://localhost:9000/mcp",
+    ])
+    result, notices = deduplicate_servers(servers)
+
+    assert [s["name"] for s in result] == ["localhost_8000", "localhost_9000"]
+    assert notices == []
