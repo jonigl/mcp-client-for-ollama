@@ -1,3 +1,5 @@
+[![MCP Toplist](https://mcptoplist.com/badge/mcp.so%2Fmcp-client-for-ollama%2Fjonigl.svg)](https://mcptoplist.com/server/mcp.so%2Fmcp-client-for-ollama%2Fjonigl)
+
 <p align="center">
   <img src="https://github.com/jonigl/mcp-client-for-ollama/blob/main/misc/ollmcp-logo-512.png?raw=true" width="256" />
 </p>
