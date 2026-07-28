@@ -227,6 +227,65 @@ def test_deduplicate_servers_dedupes_stdio_by_command():
     assert [s["name"] for s in result] == ["fs"]
 
 
+def test_deduplicate_servers_keeps_stdio_entries_with_different_env():
+    """One command run with two credential sets is two servers.
+
+    Both entries connect today, because their names differ; collapsing them
+    would silently drop an account.
+    """
+    servers = [
+        {"type": "config", "name": "github-work", "config": {
+            "command": "npx", "args": ["-y", "server-github"],
+            "env": {"GITHUB_TOKEN": "work-token"},
+        }},
+        {"type": "config", "name": "github-personal", "config": {
+            "command": "npx", "args": ["-y", "server-github"],
+            "env": {"GITHUB_TOKEN": "personal-token"},
+        }},
+    ]
+    result, notices = deduplicate_servers(servers)
+
+    assert [s["name"] for s in result] == ["github-work", "github-personal"]
+    assert notices == []
+
+
+def test_deduplicate_servers_dedupes_stdio_with_identical_env():
+    """The same command with the same env is still one server."""
+    env = {"GITHUB_TOKEN": "token"}
+    servers = [
+        {"type": "config", "name": "github", "config": {"command": "npx", "args": ["-y", "server-github"], "env": env}},
+        {"type": "config", "name": "github-copy", "config": {"command": "npx", "args": ["-y", "server-github"], "env": dict(env)}},
+    ]
+    result, _ = deduplicate_servers(servers)
+
+    assert [s["name"] for s in result] == ["github"]
+
+
+def test_deduplicate_servers_keeps_http_entries_with_different_headers():
+    """Two tenants on one URL differ only by Authorization."""
+    url = "https://mcp.example.com/mcp"
+    servers = [
+        {"type": "streamable_http", "name": "tenant-a", "url": url, "headers": {"Authorization": "Bearer a"}},
+        {"type": "streamable_http", "name": "tenant-b", "url": url, "headers": {"Authorization": "Bearer b"}},
+    ]
+    result, notices = deduplicate_servers(servers)
+
+    assert [s["name"] for s in result] == ["tenant-a", "tenant-b"]
+    assert notices == []
+
+
+def test_deduplicate_servers_ignores_header_name_casing():
+    """Header names are compared as they are sent: lowercased."""
+    url = "https://mcp.example.com/mcp"
+    servers = [
+        {"type": "streamable_http", "name": "a", "url": url, "headers": {"Authorization": "Bearer x"}},
+        {"type": "streamable_http", "name": "b", "url": url, "config": {"headers": {"authorization": "Bearer x"}}},
+    ]
+    result, _ = deduplicate_servers(servers)
+
+    assert [s["name"] for s in result] == ["a"]
+
+
 def test_deduplicate_servers_passes_through_distinct_servers():
     """Unrelated servers are returned untouched, in order."""
     servers = process_server_urls([

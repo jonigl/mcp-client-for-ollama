@@ -160,15 +160,30 @@ def parse_server_configs(config_path: str) -> List[Dict[str, Any]]:
         # Return empty list on error
         return []
 
+def _header_fingerprint(server: Dict[str, Any], config: Dict[str, Any]) -> tuple:
+    """Summarize the headers an HTTP entry connects with.
+
+    Mirrors ``ServerConnector._get_headers_from_server``: headers on the entry
+    win over headers in its config, and names are compared lowercased, since
+    that is how they are sent.
+    """
+    headers = server.get("headers") or config.get("headers") or {}
+    return tuple(sorted((name.lower(), value) for name, value in headers.items()))
+
+
 def _server_target(server: Dict[str, Any]) -> tuple:
-    """Identify the endpoint a server entry points at.
+    """Identify the endpoint a server entry points at, and as whom.
 
     Two entries with the same target are one server reached from two sources
     (e.g. the registry and a ``-u`` flag), not two servers. The transport is
     part of the target, so the same URL served over SSE and Streamable HTTP
-    stays two distinct entries.
+    stays two distinct entries. So are entries that differ only by credentials:
+    one URL with two ``Authorization`` headers is two tenants, and one command
+    with two ``env`` blocks is two accounts. Those configurations work today
+    because their names differ, and collapsing them would break them.
     """
     server_type = server.get("type", "script")
+    config = server.get("config") or {}
 
     url = server.get("url")
     if url:
@@ -183,16 +198,21 @@ def _server_target(server: Dict[str, Any]) -> tuple:
             parsed.query,
             "",
         ))
-        return (server_type, normalized)
+        return (server_type, normalized, _header_fingerprint(server, config))
 
     path = server.get("path")
     if path:
+        # A script server is launched with env=None, so the path is the whole target.
         return ("script", os.path.abspath(path))
 
-    config = server.get("config") or {}
     command = config.get("command")
     if command:
-        return ("stdio", command, tuple(config.get("args") or []))
+        return (
+            "stdio",
+            command,
+            tuple(config.get("args") or []),
+            tuple(sorted((config.get("env") or {}).items())),
+        )
 
     return ("name", server.get("name"))
 
@@ -231,7 +251,10 @@ def deduplicate_servers(servers: List[Dict[str, Any]]) -> Tuple[List[Dict[str, A
         unique.append(server)
 
     # Distinct endpoints that resolved to the same name: disambiguate instead
-    # of letting the later one overwrite the earlier one.
+    # of letting the later one overwrite the earlier one. Which entry keeps the
+    # bare name depends on source order, so the "-2" suffix can move between
+    # runs, and enabledTools is persisted by qualified name. That selection is
+    # already lost today, when one of the two servers disappears entirely.
     result = []
     used = set()
     for server in unique:
