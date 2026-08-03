@@ -160,6 +160,17 @@ def parse_server_configs(config_path: str) -> List[Dict[str, Any]]:
         # Return empty list on error
         return []
 
+def _stable(value: Any) -> str:
+    """Render a config value as a hashable, order-stable string.
+
+    Target tuples become dict keys, so every part of one has to be hashable —
+    but ``args``, ``env`` and ``headers`` come from hand-written JSON, which
+    permits lists and objects there. The key only has to be stable, not
+    readable, so anything JSON cannot serialize falls back to its repr.
+    """
+    return json.dumps(value, sort_keys=True, default=repr)
+
+
 def _header_fingerprint(server: Dict[str, Any], config: Dict[str, Any]) -> tuple:
     """Summarize the headers an HTTP entry connects with.
 
@@ -168,7 +179,7 @@ def _header_fingerprint(server: Dict[str, Any], config: Dict[str, Any]) -> tuple
     that is how they are sent.
     """
     headers = server.get("headers") or config.get("headers") or {}
-    return tuple(sorted((name.lower(), value) for name, value in headers.items()))
+    return tuple(sorted((name.lower(), _stable(value)) for name, value in headers.items()))
 
 
 def _server_target(server: Dict[str, Any]) -> tuple:
@@ -210,8 +221,11 @@ def _server_target(server: Dict[str, Any]) -> tuple:
         return (
             "stdio",
             command,
-            tuple(config.get("args") or []),
-            tuple(sorted((config.get("env") or {}).items())),
+            tuple(_stable(arg) for arg in config.get("args") or []),
+            tuple(sorted(
+                (name, _stable(value))
+                for name, value in (config.get("env") or {}).items()
+            )),
         )
 
     return ("name", server.get("name"))

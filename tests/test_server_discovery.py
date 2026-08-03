@@ -286,6 +286,50 @@ def test_deduplicate_servers_ignores_header_name_casing():
     assert [s["name"] for s in result] == ["a"]
 
 
+def test_deduplicate_servers_handles_list_valued_env():
+    """Config JSON permits arrays in env, and the target tuple is a dict key.
+
+    Before the values were serialized, one entry like this raised
+    ``TypeError: unhashable type: 'list'`` out of ``deduplicate_servers`` —
+    which runs before the per-server ``try/except`` in ``_connect_to_server``,
+    so a single malformed entry took down every server instead of just its own.
+    """
+    servers = [
+        {"type": "config", "name": "a", "config": {
+            "command": "npx", "args": ["-y", "srv"], "env": {"OPTS": ["--a", "--b"]},
+        }},
+        {"type": "config", "name": "b", "config": {
+            "command": "npx", "args": ["-y", "srv"], "env": {"OPTS": ["--a", "--c"]},
+        }},
+    ]
+    result, notices = deduplicate_servers(servers)
+
+    # Different lists are different targets; equal lists still collapse.
+    assert [s["name"] for s in result] == ["a", "b"]
+    assert notices == []
+
+    duplicate = [servers[0], {"type": "config", "name": "a-copy", "config": {
+        "command": "npx", "args": ["-y", "srv"], "env": {"OPTS": ["--a", "--b"]},
+    }}]
+    result, _ = deduplicate_servers(duplicate)
+
+    assert [s["name"] for s in result] == ["a"]
+
+
+def test_deduplicate_servers_handles_list_valued_headers_and_args():
+    """The same applies to header values and to args."""
+    url = "https://mcp.example.com/mcp"
+    servers = [
+        {"type": "streamable_http", "name": "a", "url": url, "headers": {"X-Scope": ["read", "write"]}},
+        {"type": "streamable_http", "name": "b", "url": url, "headers": {"X-Scope": ["read"]}},
+        {"type": "config", "name": "c", "config": {"command": "npx", "args": [{"flag": "-y"}]}},
+    ]
+    result, notices = deduplicate_servers(servers)
+
+    assert [s["name"] for s in result] == ["a", "b", "c"]
+    assert notices == []
+
+
 def test_deduplicate_servers_passes_through_distinct_servers():
     """Unrelated servers are returned untouched, in order."""
     servers = process_server_urls([
