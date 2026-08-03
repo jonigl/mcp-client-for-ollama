@@ -6,8 +6,8 @@ like Claude's configuration files.
 
 import os
 import json
-from typing import Dict, List, Any
-from urllib.parse import urlparse
+from typing import Dict, List, Any, Tuple
+from urllib.parse import urlparse, urlunparse
 from ..utils.constants import DEFAULT_CLAUDE_CONFIG
 
 def process_server_paths(server_paths) -> List[Dict[str, Any]]:
@@ -159,6 +159,135 @@ def parse_server_configs(config_path: str) -> List[Dict[str, Any]]:
     except Exception:
         # Return empty list on error
         return []
+
+def _stable(value: Any) -> str:
+    """Render a config value as a hashable, order-stable string.
+
+    Target tuples become dict keys, so every part of one has to be hashable —
+    but ``args``, ``env`` and ``headers`` come from hand-written JSON, which
+    permits lists and objects there. The key only has to be stable, not
+    readable, so anything JSON cannot serialize falls back to its repr.
+    """
+    return json.dumps(value, sort_keys=True, default=repr)
+
+
+def _header_fingerprint(server: Dict[str, Any], config: Dict[str, Any]) -> tuple:
+    """Summarize the headers an HTTP entry connects with.
+
+    Mirrors ``ServerConnector._get_headers_from_server``: headers on the entry
+    win over headers in its config, and names are compared lowercased, since
+    that is how they are sent.
+    """
+    headers = server.get("headers") or config.get("headers") or {}
+    return tuple(sorted((name.lower(), _stable(value)) for name, value in headers.items()))
+
+
+def _server_target(server: Dict[str, Any]) -> tuple:
+    """Identify the endpoint a server entry points at, and as whom.
+
+    Two entries with the same target are one server reached from two sources
+    (e.g. the registry and a ``-u`` flag), not two servers. The transport is
+    part of the target, so the same URL served over SSE and Streamable HTTP
+    stays two distinct entries. So are entries that differ only by credentials:
+    one URL with two ``Authorization`` headers is two tenants, and one command
+    with two ``env`` blocks is two accounts. Those configurations work today
+    because their names differ, and collapsing them would break them.
+    """
+    server_type = server.get("type", "script")
+    config = server.get("config") or {}
+
+    url = server.get("url")
+    if url:
+        parsed = urlparse(url)
+        # Case in scheme/host is not meaningful, a trailing slash is not either,
+        # and the fragment never reaches the server.
+        normalized = urlunparse((
+            parsed.scheme.lower(),
+            parsed.netloc.lower(),
+            parsed.path.rstrip("/"),
+            parsed.params,
+            parsed.query,
+            "",
+        ))
+        return (server_type, normalized, _header_fingerprint(server, config))
+
+    path = server.get("path")
+    if path:
+        # A script server is launched with env=None, so the path is the whole target.
+        return ("script", os.path.abspath(path))
+
+    command = config.get("command")
+    if command:
+        return (
+            "stdio",
+            command,
+            tuple(_stable(arg) for arg in config.get("args") or []),
+            tuple(sorted(
+                (name, _stable(value))
+                for name, value in (config.get("env") or {}).items()
+            )),
+        )
+
+    return ("name", server.get("name"))
+
+
+def deduplicate_servers(servers: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """Collapse duplicate entries and make the remaining names unique.
+
+    Server entries arrive from five independent sources, so the same endpoint
+    can appear more than once, and names derived from a URL's netloc can
+    collide for endpoints that differ only by path. Both cases used to end with
+    one connection silently overwriting another in ``ServerConnector.sessions``
+    while the overwritten server's tools stayed advertised to the model.
+
+    Args:
+        servers: Server configurations, in source precedence order
+
+    Returns:
+        Tuple of (servers, notices) where notices are human-readable messages
+        about what was dropped or renamed
+    """
+    notices = []
+
+    # Same endpoint from two sources: keep the first, which is the entry from
+    # the more explicit source (a registry name beats a name derived from a URL).
+    unique = []
+    seen: Dict[tuple, str] = {}
+    for server in servers:
+        target = _server_target(server)
+        if target in seen:
+            notices.append(
+                f"Skipping duplicate entry '{server.get('name')}': "
+                f"same server as '{seen[target]}'"
+            )
+            continue
+        seen[target] = server.get("name")
+        unique.append(server)
+
+    # Distinct endpoints that resolved to the same name: disambiguate instead
+    # of letting the later one overwrite the earlier one. Which entry keeps the
+    # bare name depends on source order, so the "-2" suffix can move between
+    # runs, and enabledTools is persisted by qualified name. That selection is
+    # already lost today, when one of the two servers disappears entirely.
+    result = []
+    used = set()
+    for server in unique:
+        name = server.get("name")
+        if name in used:
+            suffix = 2
+            while f"{name}-{suffix}" in used:
+                suffix += 1
+            new_name = f"{name}-{suffix}"
+            notices.append(
+                f"Renaming '{name}' to '{new_name}': another server already uses that name"
+            )
+            server = {**server, "name": new_name}
+            name = new_name
+        used.add(name)
+        result.append(server)
+
+    return result, notices
+
 
 def load_claude_desktop_servers() -> List[Dict[str, Any]]:
     """Load server configurations from Claude Desktop's config file.

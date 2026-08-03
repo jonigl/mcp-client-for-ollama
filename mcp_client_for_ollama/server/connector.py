@@ -16,7 +16,7 @@ from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamablehttp_client
 
-from .discovery import process_server_paths, process_server_urls, parse_server_configs, parse_server_config_mapping, load_claude_desktop_servers
+from .discovery import process_server_paths, process_server_urls, parse_server_configs, parse_server_config_mapping, load_claude_desktop_servers, deduplicate_servers
 from ..utils.constants import MCP_PROTOCOL_VERSION
 
 class ServerConnector:
@@ -99,6 +99,13 @@ class ServerConnector:
             for server in desktop_servers:
                 self.console.print(f"[cyan]Found Claude Desktop server: {server['name']}[/cyan]")
             all_servers.extend(desktop_servers)
+
+        # The sources above are independent, so the same endpoint can arrive
+        # twice and distinct endpoints can arrive with the same name. Resolve
+        # both before connecting, or the second connection overwrites the first.
+        all_servers, notices = deduplicate_servers(all_servers)
+        for notice in notices:
+            self.console.print(f"[yellow]{notice}[/yellow]")
 
         if not all_servers:
             self.console.print(Panel(
