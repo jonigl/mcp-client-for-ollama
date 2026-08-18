@@ -9,11 +9,11 @@ authors = [
     {name = "Jonathan Löwenstern"}
 ]
 dependencies = [
-    "any-llm-sdk[ollama,openai,atlascloud] ~=1.21.0",
-    "mcp>=1.25,<1.29",
-    "prompt-toolkit~=3.0.52",
+    "any-llm-sdk[ollama,openai,atlascloud] ~=1.26.0",
+    "mcp>=1.25,<2",
+    "prompt-toolkit~=3.0.53",
     "rich>=14.2.0,<14.3",
-    "typer~=0.26.0",
+    "typer~=0.27.0",
 ]
 
 [project.scripts]
