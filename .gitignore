@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+
+# MacOS
+.DS_Store
+
+# IDE
+.vscode
+.claude

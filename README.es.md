@@ -325,6 +325,13 @@ El ámbito `project` escribe un archivo `.mcp.json` estándar en la raíz de tu 
 - `--install-completion`: Instalar los scripts de autocompletado de shell para el cliente
 - `--show-completion`: Mostrar las opciones de autocompletado de shell disponibles
 
+#### Logs de los servidores MCP:
+
+Lo que reportan los servidores MCP siempre se escribe en `~/.config/ollmcp/logs/<sesión>/<servidor>.log`, un directorio por ejecución, conservando los últimos 5. Estas opciones solo deciden qué además se muestra en vivo en pantalla:
+
+- `--debug`: Muestra la salida de los servidores a medida que llega: el stderr de los servidores stdio y sus notificaciones de log MCP.
+- `--log-level` NIVEL: Muestra las notificaciones de log MCP de ese nivel o superior (`debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`), y le pide a los servidores que solo envíen esas. No aplica al stderr; para eso usá `--debug`. Si lo pasás junto con `--debug`, gana este nivel.
+
 ### Proveedores de inferencia soportados
 
 > [!WARNING]

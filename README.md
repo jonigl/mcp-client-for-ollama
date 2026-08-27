@@ -321,6 +321,13 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 - `--install-completion`: Install shell autocompletion scripts for the client
 - `--show-completion`: Show available shell completion options
 
+#### MCP Server Logging:
+
+What the MCP servers report is always written to `~/.config/ollmcp/logs/<session>/<server>.log`, one directory per run, keeping the last 5. These flags only decide what is also shown live on screen:
+
+- `--debug`: Show the servers' output as it arrives: the stderr of stdio servers and their MCP log notifications.
+- `--log-level` LEVEL: Show MCP log notifications of this level or higher (`debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`), and ask the servers to only send those. Does not apply to stderr; use `--debug` for that. Given together with `--debug`, this level wins.
+
 ### Supported Inference Providers
 
 > [!WARNING]

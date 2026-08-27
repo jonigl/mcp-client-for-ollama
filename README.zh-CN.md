@@ -325,6 +325,13 @@ ollmcp mcp add --env API_KEY=YOUR_KEY --transport sse my-sse-server http://local
 - `--install-completion`: 为客户端安装 shell 自动补全脚本
 - `--show-completion`: 显示可用的 shell 补全选项
 
+#### MCP 服务器日志:
+
+MCP 服务器报告的内容始终会写入 `~/.config/ollmcp/logs/<session>/<server>.log`，每次运行一个目录，保留最近 5 次。以下选项只决定哪些内容会同时实时显示在屏幕上：
+
+- `--debug`: 实时显示服务器的输出：stdio 服务器的 stderr 以及它们的 MCP 日志通知。
+- `--log-level` LEVEL: 显示该级别及以上的 MCP 日志通知（`debug`、`info`、`notice`、`warning`、`error`、`critical`、`alert`、`emergency`），并请求服务器只发送这些级别。不影响 stderr，那些请使用 `--debug`。与 `--debug` 同时使用时，以此级别为准。
+
 ### 支持的推理提供商
 
 > [!WARNING]

@@ -17,7 +17,8 @@ from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamablehttp_client
 
 from .discovery import process_server_paths, process_server_urls, parse_server_configs, parse_server_config_mapping, load_claude_desktop_servers, deduplicate_servers
-from ..utils.constants import MCP_PROTOCOL_VERSION
+from ..utils.constants import MCP_LOG_LEVELS, MCP_PROTOCOL_VERSION
+from ..utils.server_logs import ServerLogSink
 
 class ServerConnector:
     """Manages connections to one or more MCP servers.
@@ -27,15 +28,21 @@ class ServerConnector:
     tools provided by those servers.
     """
 
-    def __init__(self, exit_stack: AsyncExitStack, console: Optional[Console] = None):
+    def __init__(self, exit_stack: AsyncExitStack, console: Optional[Console] = None, debug: bool = False, log_level: Optional[str] = None):
         """Initialize the ServerConnector.
 
         Args:
             exit_stack: AsyncExitStack to manage server connections
             console: Rich console for output (optional)
+            debug: Show everything the servers report, including the stderr of
+                stdio servers
+            log_level: Lowest level of MCP log notification to show. Wins over
+                debug, which only picks the level when none was asked for.
         """
         self.exit_stack = exit_stack
         self.console = console or Console()
+        self.debug = debug
+        self.log_level = log_level or ("debug" if debug else None)
         self.sessions = {}  # Dict to store multiple sessions
         self.available_tools = []  # List to store all available tools
         self.enabled_tools = {}  # Dict to store tool enabled status
@@ -144,6 +151,8 @@ class ServerConnector:
         # later (while querying capabilities) is not reported as the server
         # failing to answer initialize.
         initialized = False
+        # The server's log file, pointed at if the connection fails
+        log_path = None
 
         try:
             server_type = server.get("type", "script")
@@ -154,6 +163,20 @@ class ServerConnector:
             # cancelled anyio scope so it cannot leak into later operations.
             # On success, contexts are transferred to self.exit_stack via pop_all().
             async with AsyncExitStack() as local_stack:
+
+                # Everything the server reports goes to its own log file: the
+                # stderr of a stdio server would otherwise print over whatever
+                # is on screen, including a streaming answer (issue #293).
+                # Registered before the transport so it closes after it: the
+                # pipe reaches EOF only once the server process is gone.
+                # Only a stdio server has a stderr to intercept; a remote one
+                # reports through log notifications, which the sink echoes on
+                # their own path.
+                is_stdio = server_type not in ("sse", "streamable_http")
+                log_sink = ServerLogSink(server_name, console=self.console, echo_stderr=self.debug and is_stdio)
+                log_path = log_sink.path
+                local_stack.callback(log_sink.close)
+                logging_callback = self._make_logging_callback(log_sink)
 
                 # Connect based on server type
                 if server_type == "sse":
@@ -168,7 +191,9 @@ class ServerConnector:
                     # Connect using SSE transport
                     sse_transport = await local_stack.enter_async_context(sse_client(url, headers=headers))
                     read_stream, write_stream = sse_transport
-                    session = await local_stack.enter_async_context(ClientSession(read_stream, write_stream))
+                    session = await local_stack.enter_async_context(
+                        ClientSession(read_stream, write_stream, logging_callback=logging_callback)
+                    )
 
                 elif server_type == "streamable_http":
                     # Connect to Streamable HTTP server
@@ -184,31 +209,31 @@ class ServerConnector:
                         streamablehttp_client(url, headers=headers)
                     )
                     read_stream, write_stream, session_info = transport
-                    session = await local_stack.enter_async_context(ClientSession(read_stream, write_stream))
+                    session = await local_stack.enter_async_context(
+                        ClientSession(read_stream, write_stream, logging_callback=logging_callback)
+                    )
 
                     # Store session ID if provided
                     if hasattr(session_info, 'session_id') and session_info.session_id:
                         self.session_ids[server_name] = session_info.session_id
 
-                elif server_type == "script":
-                    # Connect to script-based server using STDIO
-                    server_params = self._create_script_params(server)
-                    if server_params is None:
-                        return False
-
-                    stdio_transport = await local_stack.enter_async_context(stdio_client(server_params))
-                    read_stream, write_stream = stdio_transport
-                    session = await local_stack.enter_async_context(ClientSession(read_stream, write_stream))
-
                 else:
-                    # Connect to config-based server using STDIO
-                    server_params = self._create_config_params(server)
+                    # Connect to a STDIO server, given either as a script path
+                    # or as a full command
+                    if server_type == "script":
+                        server_params = self._create_script_params(server)
+                    else:
+                        server_params = self._create_config_params(server)
                     if server_params is None:
                         return False
 
-                    stdio_transport = await local_stack.enter_async_context(stdio_client(server_params))
+                    stdio_transport = await local_stack.enter_async_context(
+                        stdio_client(server_params, errlog=log_sink.stream)
+                    )
                     read_stream, write_stream = stdio_transport
-                    session = await local_stack.enter_async_context(ClientSession(read_stream, write_stream))
+                    session = await local_stack.enter_async_context(
+                        ClientSession(read_stream, write_stream, logging_callback=logging_callback)
+                    )
 
                 # Initialize the session and capture capabilities
                 init_result = await session.initialize()
@@ -224,9 +249,11 @@ class ServerConnector:
                 "tools": []
             }
 
+            capabilities = getattr(init_result, 'capabilities', None)
+            await self._apply_log_level(session, server_name, capabilities)
+
             # Get tools from this server if capability is present
             server_tools = []
-            capabilities = getattr(init_result, 'capabilities', None)
             if capabilities and getattr(capabilities, 'tools', None):
                 try:
                     response = await session.list_tools()
@@ -320,14 +347,17 @@ class ServerConnector:
                     f"initialization. Verify the URL serves an MCP endpoint, not a regular web "
                     f"page or other service.[/red]"
                 )
+            self._print_server_log_hint(log_path)
             return False
         except FileNotFoundError as e:
             self._discard_server_state(server_name)
             self.console.print(f"[red]Error connecting to {server_name}: File not found - {str(e)}[/red]")
+            self._print_server_log_hint(log_path)
             return False
         except PermissionError:
             self._discard_server_state(server_name)
             self.console.print(f"[red]Error connecting to {server_name}: Permission denied[/red]")
+            self._print_server_log_hint(log_path)
             return False
         except Exception as e:
             self._discard_server_state(server_name)
@@ -337,7 +367,50 @@ class ServerConnector:
                     self.console.print(f"[red]Error connecting to {server_name}: {str(sub)}[/red]")
             else:
                 self.console.print(f"[red]Error connecting to {server_name}: {str(e)}[/red]")
+            self._print_server_log_hint(log_path)
             return False
+
+    async def _apply_log_level(self, session, server_name: str, capabilities) -> None:
+        """Ask a server to only send log notifications from the wanted level up."""
+        if not self.log_level or not (capabilities and getattr(capabilities, 'logging', None)):
+            return
+        try:
+            await session.set_logging_level(self.log_level)
+        except Exception as e:
+            self.console.print(f"[yellow]Warning: Failed to set log level on {server_name}: {str(e)}[/yellow]")
+
+    def _make_logging_callback(self, log_sink: ServerLogSink):
+        """Build the handler for the log notifications of one server."""
+        async def handle_log_message(params) -> None:
+            level = getattr(params, "level", "info")
+            logger_name = getattr(params, "logger", None)
+            source = f"{level} {logger_name}" if logger_name else level
+            data = params.data if isinstance(params.data, str) else repr(params.data)
+            log_sink.log(f"{source}: {data}", echo=self._shows_level(level))
+
+        return handle_log_message
+
+    def _shows_level(self, level: str) -> bool:
+        """Whether a notification at this level belongs on screen.
+
+        The level is also set on the server, but a server may ignore that and
+        send everything anyway, so the threshold is applied here too.
+        """
+        if not self.log_level:
+            return False
+        if level not in MCP_LOG_LEVELS:
+            # A level the spec does not define: better shown than swallowed
+            return True
+        return MCP_LOG_LEVELS.index(level) >= MCP_LOG_LEVELS.index(self.log_level)
+
+    def _print_server_log_hint(self, log_path: Optional[str]) -> None:
+        """Point at a stdio server's log file, which now holds its stderr.
+
+        Whatever the server printed on its way out is in there instead of on
+        screen, and that is usually the actual reason the connection failed.
+        """
+        if log_path and os.path.exists(log_path) and os.path.getsize(log_path) > 0:
+            self.console.print(f"[dim]Server output: {log_path}[/dim]")
 
     def _create_script_params(self, server: Dict[str, Any]) -> Optional[StdioServerParameters]:
         """Create server parameters for a script-type server
