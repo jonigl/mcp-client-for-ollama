@@ -6,12 +6,19 @@ that drops the stream on resources/list makes the pending request fail *after*
 a successful handshake, and that used to be reported as the server never
 answering initialize.
 
+Round two of the same issue is here as well: dropping the stream cancels the
+anyio scope the transport runs in, so *swallowing* that cancellation and
+keeping the connection left the scope cancelled inside the client's own task,
+which then died with "Cancelled via cancel scope ..." at the next await, long
+after the connection had been reported as successful.
+
 The server runs in-process on an ephemeral port, so nothing here depends on a
 fixed port being free. Assertions target the observable outcome (does the
 connection survive, are the tools usable) rather than the exception type the
 SDK happens to raise, so they stay valid across mcp releases.
 """
 
+import asyncio
 import contextlib
 import json
 import socket
@@ -38,7 +45,7 @@ class _MCPTestServer(ThreadingHTTPServer):
 
     daemon_threads = True
     allow_reuse_address = True
-    mode = "healthy"  # or "drop_on_resources"
+    mode = "healthy"  # or "drop_on_resources" / "drop_on_templates"
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -71,6 +78,13 @@ class _Handler(BaseHTTPRequestHandler):
     def _result(self, msg_id, result, extra_headers=None):
         self._send_json({"jsonrpc": "2.0", "id": msg_id, "result": result}, extra_headers)
 
+    def _drop(self):
+        """Die mid-request, the way the server in #274 does."""
+        with contextlib.suppress(OSError):
+            self.connection.shutdown(socket.SHUT_RDWR)
+        self.connection.close()
+        self.close_connection = True
+
     def do_POST(self):
         raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         try:
@@ -100,16 +114,16 @@ class _Handler(BaseHTTPRequestHandler):
         elif method == "resources/list":
             if self.server.mode == "drop_on_resources":
                 # The #274 trigger: advertise resources, then die when asked.
-                with contextlib.suppress(OSError):
-                    self.connection.shutdown(socket.SHUT_RDWR)
-                self.connection.close()
-                self.close_connection = True
-                return
+                return self._drop()
             self._result(msg_id, {"resources": [
                 {"uri": "file:///level.umap", "name": "level.umap"},
             ]})
 
         elif method == "resources/templates/list":
+            if self.server.mode == "drop_on_templates":
+                # What the reporter's server actually does: resources/list is
+                # answered, the request right after it kills the connection.
+                return self._drop()
             self._result(msg_id, {"resourceTemplates": []})
 
         else:
@@ -142,41 +156,93 @@ class TestConnectorAgainstRealServer(unittest.IsolatedAsyncioTestCase):
         cls.thread.join(timeout=5)
 
     async def _connect(self, mode):
-        """Connect to the fake server in the given mode; returns (ok, connector, output)."""
+        """Connect to the fake server in the given mode.
+
+        Returns (ok, connector, output, still_running): `still_running` is what
+        catches a cancellation left behind by a dead transport - it is False
+        when an ordinary await after the connection gets cancelled.
+        """
         type(self).server.mode = mode
         console = Console(record=True, width=200)
         stack = AsyncExitStack()
         connector = ServerConnector(stack, console=console)
+        still_running = False
         try:
             ok = await connector._connect_to_server({
                 "name": "unreal-mcp", "type": "streamable_http", "url": self.url,
             })
+            try:
+                # The client does plenty of awaiting after connecting; a scope
+                # left cancelled by the connection turns the first of them into
+                # a CancelledError with nothing to blame it on.
+                await asyncio.sleep(0)
+                still_running = True
+            except asyncio.CancelledError:
+                still_running = False
         finally:
             # In drop mode the server hard-resets the socket, so unwinding the
             # transport raises on its way out. That teardown noise is not what
             # these tests are about.
             with contextlib.suppress(BaseException):
                 await stack.aclose()
-        return ok, connector, console.export_text()
+        return ok, connector, console.export_text(), still_running
 
     async def test_healthy_server_connects_with_tools_and_resources(self):
         """Sanity check on the fake server: a well-behaved one connects fully."""
-        ok, connector, _ = await self._connect("healthy")
+        ok, connector, _, still_running = await self._connect("healthy")
 
         assert ok is True
         assert [t.name for t in connector.available_tools] == ["unreal-mcp.spawn_actor"]
         assert "unreal-mcp" in connector.resources_by_server
+        assert still_running is True
 
     async def test_stream_dropped_on_resources_keeps_the_connection(self):
         """#274: losing the stream on resources/list must not undo a working
         connection, nor be blamed on the URL."""
-        ok, connector, output = await self._connect("drop_on_resources")
+        ok, connector, output, _ = await self._connect("drop_on_resources")
 
         assert ok is True, "a broken resources/list must not fail the connection"
         assert "unreal-mcp" in connector.sessions
         assert [t.name for t in connector.available_tools] == ["unreal-mcp.spawn_actor"]
         assert connector.enabled_tools == {"unreal-mcp.spawn_actor": True}
         assert HANDSHAKE_ERROR not in output, "initialize succeeded; do not blame the URL"
+
+    async def test_dropped_listing_leaves_no_cancellation_behind(self):
+        """#274 round two: the dead transport's cancelled scope must not be
+        handed to the shared exit stack, where it cancels the client itself."""
+        for mode in ("drop_on_resources", "drop_on_templates"):
+            with self.subTest(mode=mode):
+                ok, connector, output, still_running = await self._connect(mode)
+
+                assert ok is True
+                assert still_running is True, (
+                    "the connection left a cancelled scope in the client's task"
+                )
+                assert [t.name for t in connector.available_tools] == ["unreal-mcp.spawn_actor"]
+
+    async def test_retry_names_the_listing_that_closed_the_connection(self):
+        """The user gets told which request the server died on, spelled the way
+        it goes over the wire so it can be matched with a server-side log."""
+        _, _, output, _ = await self._connect("drop_on_templates")
+
+        assert "closed the connection on resources/templates/list" in output
+        # The listing that did answer is still there.
+        assert "1 resource(s)" in output
+
+    async def test_dropped_listing_keeps_the_session_usable(self):
+        """Reconnecting is only worth it if the surviving session works."""
+        type(self).server.mode = "drop_on_templates"
+        stack = AsyncExitStack()
+        connector = ServerConnector(stack, console=Console(record=True, width=200))
+        try:
+            assert await connector._connect_to_server({
+                "name": "unreal-mcp", "type": "streamable_http", "url": self.url,
+            })
+            live = await connector.sessions["unreal-mcp"]["session"].list_tools()
+            assert [t.name for t in live.tools] == ["spawn_actor"]
+        finally:
+            with contextlib.suppress(BaseException):
+                await stack.aclose()
 
 
 if __name__ == "__main__":
