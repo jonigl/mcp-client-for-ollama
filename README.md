@@ -258,7 +258,12 @@ ollmcp mcp add --transport http github https://api.githubcopilot.com/mcp/ --head
 ollmcp mcp add --transport stdio playwright npx @playwright/mcp@latest
 ollmcp mcp add filesystem -- npx -y @modelcontextprotocol/server-filesystem /allowed-dir1 ~/allowed-dir2 # stdio transport by default
 ollmcp mcp add --env API_KEY=YOUR_KEY --transport sse my-sse-server http://localhost:8000/sse
+ollmcp mcp add --transport http you https://api.you.com/mcp --header "Authorization: Bearer YOUR_YDC_API_KEY" # You.com web search (key: https://you.com/platform/api-keys)
+ollmcp mcp add --transport http you-free "https://api.you.com/mcp?profile=free" # keyless basic web search, no token needed
 ```
+
+> [!TIP]
+> The [You.com MCP server](https://you.com/docs) gives local models live web access through the `you-search` tool (current web search; the authenticated endpoint adds `you-contents` for URL content extraction). The `?profile=free` endpoint works without any API key, so it is the quickest way to try a remote HTTP server with a local model.
 
 
 ### mcp add options
