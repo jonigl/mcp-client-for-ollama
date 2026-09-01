@@ -1196,6 +1196,13 @@ Streamable HTTP MCP 服务器通常在 `/mcp` 暴露 MCP 端点（例如 `https:
 
 更多详情见 [MCP 规范 2025-06-18 版 - Transports](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)。
 
+> [!NOTE]
+> 远程 MCP 服务器的 HTTPS 证书是根据**操作系统信任库**验证的，而不是 `certifi` 证书包。如果 MCP 服务器位于私有或企业 CA 之后，或者你在没有系统 CA 库的精简容器中运行 ollmcp，TLS 握手会失败，且错误信息不会提及 ollmcp。将 `SSL_CERT_FILE`（证书包文件）或 `SSL_CERT_DIR`（目录）指向你的 CA 即可解决:
+>
+> ```bash
+> export SSL_CERT_FILE=/path/to/corporate-ca.pem
+> ```
+
 ## 兼容的模型
 
 以下 Ollama 模型在工具使用方面表现良好:

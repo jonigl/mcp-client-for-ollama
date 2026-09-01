@@ -1,7 +1,7 @@
 """Constants used throughout the MCP Client for Ollama application."""
 
 import os
-from mcp.types import LATEST_PROTOCOL_VERSION
+from mcp.types.version import LATEST_HANDSHAKE_VERSION
 
 # Default Claude config file location
 DEFAULT_CLAUDE_CONFIG = os.path.expanduser("~/Library/Application Support/Claude/claude_desktop_config.json")
@@ -60,10 +60,13 @@ MAX_COMPLETION_MENU_ROWS = 7
 # URL for checking package updates on PyPI
 PYPI_PACKAGE_URL = "https://pypi.org/pypi/mcp-client-for-ollama/json"
 
-# MCP Protocol Version - Using SDK's latest supported version (currently "2025-11-25")
+# MCP Protocol Version - the revision the initialize handshake offers (currently "2025-11-25").
 # The SDK handles backward compatibility with servers on older protocol versions:
 # Supported versions: ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"]
-MCP_PROTOCOL_VERSION = LATEST_PROTOCOL_VERSION
+# Deliberately not LATEST_PROTOCOL_VERSION: since SDK v2 that name means the newest revision
+# the SDK speaks in any era ("2026-07-28"), which initialize cannot negotiate. Advertising it
+# in the header would claim a revision the connection never agreed on.
+MCP_PROTOCOL_VERSION = LATEST_HANDSHAKE_VERSION
 
 # Startup ASCII banner shown when launching ollmcp
 OLLMCP_ASCII_ART = r"""

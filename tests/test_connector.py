@@ -10,6 +10,36 @@ from mcp_client_for_ollama.utils.constants import MCP_PROTOCOL_VERSION
 from contextlib import AsyncExitStack
 
 
+def test_protocol_version_header_is_the_negotiable_revision():
+    """The advertised revision must be one the initialize handshake can negotiate.
+
+    Every other header test compares against MCP_PROTOCOL_VERSION itself, so none of
+    them notices when the constant changes value. SDK v2 redefined
+    LATEST_PROTOCOL_VERSION to mean the newest revision the SDK speaks in any era
+    ("2026-07-28"), which initialize never negotiates -- sourcing the header from it
+    would silently advertise a revision the connection did not agree on.
+    """
+    assert MCP_PROTOCOL_VERSION == "2025-11-25"
+
+
+def test_leaf_error_messages_unwraps_nested_groups():
+    """A transport failure must name its cause, however deeply it is wrapped.
+
+    mcp 2.x runs the streamable-HTTP transport inside nested TaskGroups, so a
+    server answering with a plain web page arrives as an ExceptionGroup holding
+    another ExceptionGroup. Unwrapping one level printed only "unhandled errors
+    in a TaskGroup", which says nothing about what went wrong.
+    """
+    connector = ServerConnector(AsyncExitStack())
+    cause = RuntimeError("Unexpected content type: text/html")
+    nested = ExceptionGroup("outer", [ExceptionGroup("inner", [cause])])
+
+    assert connector._leaf_error_messages(nested) == ["Unexpected content type: text/html"]
+    assert connector._leaf_error_messages(cause) == ["Unexpected content type: text/html"]
+    # An exception carrying no message still has to identify itself.
+    assert connector._leaf_error_messages(ConnectionResetError()) == ["ConnectionResetError"]
+
+
 def test_get_headers_from_server_sse():
     """Test that headers are correctly extracted and formatted for SSE servers."""
     connector = ServerConnector(AsyncExitStack())
@@ -329,7 +359,7 @@ class TestCapabilityHandling(unittest.IsolatedAsyncioTestCase):
             mock_tool = MagicMock()
             mock_tool.name = "test_tool"
             mock_tool.description = "A test tool"
-            mock_tool.inputSchema = {}
+            mock_tool.input_schema = {}
             mock_tools_response = MagicMock()
             mock_tools_response.tools = [mock_tool]
             mock_session.list_tools.return_value = mock_tools_response
@@ -446,8 +476,8 @@ class TestPostInitCancellation(unittest.IsolatedAsyncioTestCase):
         mock_tool = MagicMock()
         mock_tool.name = "spawn_actor"
         mock_tool.description = "Spawn an actor"
-        mock_tool.inputSchema = {}
-        mock_tool.outputSchema = None
+        mock_tool.input_schema = {}
+        mock_tool.output_schema = None
         mock_tools_response = MagicMock()
         mock_tools_response.tools = [mock_tool]
         mock_session.list_tools.return_value = mock_tools_response

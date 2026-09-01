@@ -1196,6 +1196,13 @@ Los servidores MCP Streamable HTTP típicamente exponen el endpoint MCP en `/mcp
 
 Puedes encontrar más detalles en la [especificación MCP versión 2025-06-18 - Transports](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports).
 
+> [!NOTE]
+> Los certificados HTTPS de los servidores MCP remotos se validan contra el **almacén de confianza del sistema operativo**, no contra el paquete `certifi`. Si un servidor MCP está detrás de una CA privada o corporativa, o ejecutas ollmcp en un contenedor mínimo sin almacén de CA del sistema, el handshake TLS falla con un error que no menciona a ollmcp. Apunta `SSL_CERT_FILE` (un archivo de bundle) o `SSL_CERT_DIR` (un directorio) a tu CA para solucionarlo:
+>
+> ```bash
+> export SSL_CERT_FILE=/ruta/a/ca-corporativa.pem
+> ```
+
 ## Modelos compatibles
 
 Los siguientes modelos de Ollama funcionan bien con el uso de herramientas:
