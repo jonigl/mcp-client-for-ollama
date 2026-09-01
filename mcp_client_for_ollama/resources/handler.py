@@ -65,16 +65,16 @@ class ResourceHandler:
             for resource in resources:
                 uri = str(resource.uri)
                 name = resource.name
-                mime_type = getattr(resource, 'mimeType', '') or ''
+                mime_type = getattr(resource, 'mime_type', '') or ''
                 description = getattr(resource, 'description', '') or ''
                 is_binary = self._is_binary_type(mime_type)
                 type_display = f"{mime_type} [red][binary][/red]" if is_binary and mime_type else mime_type
                 table.add_row(uri, name, type_display, description)
 
             for template in templates:
-                uri_template = template.uriTemplate
+                uri_template = template.uri_template
                 name = template.name
-                mime_type = getattr(template, 'mimeType', '') or ''
+                mime_type = getattr(template, 'mime_type', '') or ''
                 description = getattr(template, 'description', '') or ''
                 table.add_row(
                     uri_template,
@@ -174,7 +174,7 @@ class ResourceHandler:
             images: List[str] = []
 
             for content in read_result.contents:
-                mime_type = getattr(content, 'mimeType', None) or ''
+                mime_type = getattr(content, 'mime_type', None) or ''
 
                 if hasattr(content, 'blob') and content.blob:
                     if mime_type.startswith(_IMAGE_MIME_PREFIXES):

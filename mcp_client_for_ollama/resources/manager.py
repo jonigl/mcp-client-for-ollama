@@ -37,7 +37,7 @@ class ResourceManager:
                     'name': resource.name,
                     'server': server_name,
                     'description': getattr(resource, 'description', None),
-                    'mimeType': getattr(resource, 'mimeType', None),
+                    'mimeType': getattr(resource, 'mime_type', None),
                 })
         return resources
 
@@ -47,11 +47,11 @@ class ResourceManager:
         for server_name, server_templates in self.templates_by_server.items():
             for template in server_templates:
                 templates.append({
-                    'uriTemplate': template.uriTemplate,
+                    'uriTemplate': template.uri_template,
                     'name': template.name,
                     'server': server_name,
                     'description': getattr(template, 'description', None),
-                    'mimeType': getattr(template, 'mimeType', None),
+                    'mimeType': getattr(template, 'mime_type', None),
                 })
         return templates
 
@@ -68,5 +68,5 @@ class ResourceManager:
                 uris.add(str(resource.uri))
         for templates in self.templates_by_server.values():
             for template in templates:
-                uris.add(template.uriTemplate)
+                uris.add(template.uri_template)
         return uris

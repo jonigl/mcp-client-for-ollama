@@ -7,14 +7,16 @@ initialization, and communication.
 import asyncio
 import os
 import shutil
+import warnings
 from contextlib import AsyncExitStack
 from typing import Dict, List, Any, Optional, Tuple
 from rich.console import Console
 from rich.panel import Panel
-from mcp import ClientSession, Tool
+import httpx2
+from mcp import ClientSession, MCPDeprecationWarning, Tool
 from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp.client.sse import sse_client
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 from .discovery import process_server_paths, process_server_urls, parse_server_configs, parse_server_config_mapping, load_claude_desktop_servers, deduplicate_servers
 from ..utils.constants import MCP_LOG_LEVELS, MCP_PROTOCOL_VERSION
@@ -46,7 +48,6 @@ class ServerConnector:
         self.sessions = {}  # Dict to store multiple sessions
         self.available_tools = []  # List to store all available tools
         self.enabled_tools = {}  # Dict to store tool enabled status
-        self.session_ids = {}  # Dict to store session IDs for HTTP connections
         self.prompts_by_server = {}  # Dict to store prompts grouped by server
         self.resources_by_server = {}  # Dict to store resources grouped by server
         self.templates_by_server = {}  # Dict to store resource templates grouped by server
@@ -204,18 +205,23 @@ class ServerConnector:
 
                     headers = self._get_headers_from_server(server)
 
-                    # Use the streamablehttp_client for Streamable HTTP connections
-                    transport = await local_stack.enter_async_context(
-                        streamablehttp_client(url, headers=headers)
+                    # streamable_http_client takes no transport-level options: headers,
+                    # timeouts and redirects are configured on the httpx2 client instead.
+                    # The values mirror the ones the SDK applies to a client of its own.
+                    http_client = await local_stack.enter_async_context(
+                        httpx2.AsyncClient(
+                            headers=headers,
+                            timeout=httpx2.Timeout(30, read=300),
+                            follow_redirects=True,
+                        )
                     )
-                    read_stream, write_stream, session_info = transport
+                    transport = await local_stack.enter_async_context(
+                        streamable_http_client(url, http_client=http_client)
+                    )
+                    read_stream, write_stream = transport
                     session = await local_stack.enter_async_context(
                         ClientSession(read_stream, write_stream, logging_callback=logging_callback)
                     )
-
-                    # Store session ID if provided
-                    if hasattr(session_info, 'session_id') and session_info.session_id:
-                        self.session_ids[server_name] = session_info.session_id
 
                 else:
                     # Connect to a STDIO server, given either as a script path
@@ -265,8 +271,8 @@ class ServerConnector:
                         tool_copy = Tool(
                             name=qualified_name,
                             description=f"[{server_name}] {tool.description}" if hasattr(tool, 'description') else f"Tool from {server_name}",
-                            inputSchema=tool.inputSchema,
-                            outputSchema=tool.outputSchema if hasattr(tool, 'outputSchema') else None
+                            input_schema=tool.input_schema,
+                            output_schema=tool.output_schema
                         )
                         server_tools.append(tool_copy)
                         self.enabled_tools[qualified_name] = True
@@ -310,7 +316,7 @@ class ServerConnector:
                     self.console.print(f"[yellow]Warning: Failed to list resources from {server_name}: {str(e)}[/yellow]")
                 try:
                     templates_response = await session.list_resource_templates()
-                    server_templates = templates_response.resourceTemplates if hasattr(templates_response, 'resourceTemplates') else []
+                    server_templates = templates_response.resource_templates
                     if server_templates:
                         self.templates_by_server[server_name] = server_templates
                 except asyncio.CancelledError:
@@ -361,21 +367,35 @@ class ServerConnector:
             return False
         except Exception as e:
             self._discard_server_state(server_name)
-            sub_exceptions = getattr(e, 'exceptions', None)
-            if sub_exceptions:
-                for sub in sub_exceptions:
-                    self.console.print(f"[red]Error connecting to {server_name}: {str(sub)}[/red]")
-            else:
-                self.console.print(f"[red]Error connecting to {server_name}: {str(e)}[/red]")
+            for message in self._leaf_error_messages(e):
+                self.console.print(f"[red]Error connecting to {server_name}: {message}[/red]")
             self._print_server_log_hint(log_path)
             return False
+
+    def _leaf_error_messages(self, exc: BaseException) -> list[str]:
+        """The messages of the real failures inside an exception.
+
+        A transport error surfaces wrapped in one ExceptionGroup per nested
+        TaskGroup, and only the leaves name a cause: unwrapping a single level
+        can still leave nothing but "unhandled errors in a TaskGroup".
+        """
+        sub_exceptions = getattr(exc, 'exceptions', None)
+        if not sub_exceptions:
+            return [str(exc) or type(exc).__name__]
+        return [message for sub in sub_exceptions for message in self._leaf_error_messages(sub)]
 
     async def _apply_log_level(self, session, server_name: str, capabilities) -> None:
         """Ask a server to only send log notifications from the wanted level up."""
         if not self.log_level or not (capabilities and getattr(capabilities, 'logging', None)):
             return
         try:
-            await session.set_logging_level(self.log_level)
+            # SEP-2577 deprecated the logging capability, so the SDK warns on every call.
+            # It stays the only way to set a level on a 2025-era server, which is the era
+            # ClientSession negotiates, and MCPDeprecationWarning subclasses UserWarning:
+            # left alone it prints to stderr over whatever is being rendered.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", MCPDeprecationWarning)
+                await session.set_logging_level(self.log_level)
         except Exception as e:
             self.console.print(f"[yellow]Warning: Failed to set log level on {server_name}: {str(e)}[/yellow]")
 
@@ -611,7 +631,6 @@ class ServerConnector:
         """
         prefix = f"{server_name}."
         self.sessions.pop(server_name, None)
-        self.session_ids.pop(server_name, None)
         self.prompts_by_server.pop(server_name, None)
         self.resources_by_server.pop(server_name, None)
         self.templates_by_server.pop(server_name, None)
@@ -631,5 +650,4 @@ class ServerConnector:
         self.sessions.clear()
         self.available_tools.clear()
         self.enabled_tools.clear()
-        self.session_ids.clear()
         self.prompts_by_server.clear()

@@ -534,7 +534,7 @@ class ToolManager:
 
             # Schema content with JSON syntax highlighting
             try:
-                schema_json = json.dumps(tool.inputSchema, indent=2)
+                schema_json = json.dumps(tool.input_schema, indent=2)
                 syntax = Syntax(schema_json, "json", theme="monokai", line_numbers=False)
                 schema_panel = Panel(
                     syntax,
@@ -544,7 +544,7 @@ class ToolManager:
                 self.console.print(schema_panel)
             except Exception as e:
                 error_panel = Panel(
-                    f"[red]Error: {str(e)}[/red]\n[yellow]Raw: {tool.inputSchema}[/yellow]",
+                    f"[red]Error: {str(e)}[/red]\n[yellow]Raw: {tool.input_schema}[/yellow]",
                     title="Schema Error",
                     border_style="red"
                 )

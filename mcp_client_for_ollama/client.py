@@ -548,7 +548,7 @@ class MCPClient:
             "function": {
                 "name": tool.name,
                 "description": tool.description,
-                "parameters": tool.inputSchema
+                "parameters": tool.input_schema
             }
         } for tool in enabled_tool_objects]
 
@@ -701,14 +701,14 @@ class MCPClient:
                 for content_item in result.content:
                     if hasattr(content_item, 'type') and content_item.type == "image":
                         base64_data = getattr(content_item, 'data', '')
-                        mime_type = getattr(content_item, 'mimeType', 'unknown')
+                        mime_type = getattr(content_item, 'mime_type', 'unknown')
                         tool_images.append(base64_data)
                         if has_vision:
                             text_parts.append(f"[Image: {mime_type}, {len(base64_data)} bytes]")
                         else:
                             text_parts.append(f"[Image returned but not processed: {mime_type} - current model does not support vision]")
                     elif hasattr(content_item, 'type') and content_item.type == "audio":
-                        mime_type = getattr(content_item, 'mimeType', 'unknown')
+                        mime_type = getattr(content_item, 'mime_type', 'unknown')
                         data = getattr(content_item, 'data', '')
                         text_parts.append(f"[Audio returned but not processed: {mime_type}, {len(data)} bytes - Ollama does not support audio input]")
                     elif hasattr(content_item, 'type') and content_item.type == "resource" and hasattr(content_item, 'resource'):
@@ -716,14 +716,14 @@ class MCPClient:
                         #       content_item.resource and forward to LLM once resource support is implemented.
                         resource = content_item.resource
                         uri = getattr(resource, 'uri', 'unknown')
-                        mime_type = getattr(resource, 'mimeType', 'unknown')
+                        mime_type = getattr(resource, 'mime_type', 'unknown')
                         text_parts.append(f"[Resource returned but not processed: {uri} ({mime_type}) - resource support not yet implemented]")
                     elif hasattr(content_item, 'type') and content_item.type == "resource_link":
                         # TODO: Handle MCP resource links (type="resource_link") — fetch content via
                         #       resources/read using the URI once resource support is implemented.
                         uri = getattr(content_item, 'uri', 'unknown')
                         name = getattr(content_item, 'name', '')
-                        mime_type = getattr(content_item, 'mimeType', 'unknown')
+                        mime_type = getattr(content_item, 'mime_type', 'unknown')
                         label = f" ({name})" if name else ""
                         text_parts.append(f"[Resource link returned but not fetched: {uri}{label} ({mime_type}) - resource support not yet implemented]")
                     elif hasattr(content_item, 'text'):
