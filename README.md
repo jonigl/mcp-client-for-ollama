@@ -321,6 +321,25 @@ The `project` scope writes a standard `.mcp.json` file at your project root, com
 - `--install-completion`: Install shell autocompletion scripts for the client
 - `--show-completion`: Show available shell completion options
 
+#### MCP Server Logging:
+
+Whatever an MCP server reports is written to `~/.config/ollmcp/logs/<session>/<server>.log`, one directory per run, keeping the last 5. **Nothing a server prints reaches the screen unless you ask for it** — otherwise it would draw over the answer being streamed.
+
+Servers report through two channels: their **stderr** (only stdio servers, since a remote one runs elsewhere) and **MCP log notifications** (any server). **Both flags only change what you see on screen — the log file gets everything either way:**
+
+| | written to the log file | shown on screen |
+|---|---|---|
+| *(no flag)* | everything the server sends | nothing from the server |
+| `--debug` | everything the server sends | all of it, as it arrives |
+| `--log-level LEVEL` | everything the server sends | only notifications of LEVEL or higher |
+| `--debug --log-level LEVEL` | everything the server sends | stderr in full + notifications of LEVEL or higher |
+
+LEVEL is one of `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`.
+
+With no flag, no level is requested at all: the server decides what it emits and all of it is recorded. `--log-level` filters what you see, and is also sent to the server (`logging/setLevel`) when it advertises the logging capability — such a server may then stop emitting the lower levels, which are missing from the file too. Servers without that capability keep sending everything and the filtering happens here.
+
+When a server fails to connect, the error points at its log file: whatever the server printed on its way out is in there, and that is usually the real reason.
+
 ### Supported Inference Providers
 
 > [!WARNING]

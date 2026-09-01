@@ -32,7 +32,7 @@ from . import __version__
 from .config.manager import ConfigManager
 from .config.defaults import default_config, default_provider_profile
 from .utils.version import check_for_updates
-from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_PROVIDER, SUPPORTED_PROVIDERS, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART, REASONING_EFFORT_LEVELS, DEFAULT_REASONING_EFFORT
+from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_PROVIDER, SUPPORTED_PROVIDERS, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART, REASONING_EFFORT_LEVELS, DEFAULT_REASONING_EFFORT, SERVER_LOG_DIR, MCP_LOG_LEVELS
 from .utils.connection import preflight_ollama, validate_provider
 from .utils.images import apply_images
 from .server.connector import ServerConnector
@@ -70,7 +70,7 @@ class MCPClient:
         "multiline": "Multiline",
     }
 
-    def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST, provider: str = DEFAULT_PROVIDER, api_key: str = None, persist_api_key: bool = True):
+    def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST, provider: str = DEFAULT_PROVIDER, api_key: str = None, persist_api_key: bool = True, debug: bool = False, log_level: str = None):
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
         self.host = host
@@ -83,7 +83,7 @@ class MCPClient:
         self.console = Console()
         self.config_manager = ConfigManager(self.console)
         # Initialize the server connector
-        self.server_connector = ServerConnector(self.exit_stack, self.console)
+        self.server_connector = ServerConnector(self.exit_stack, self.console, debug=debug, log_level=log_level)
         # Initialize the model manager
         self.model_manager = ModelManager(console=self.console, default_model=model, llm=self.llm, provider=provider, api_base=host, api_key=api_key or "")
         # Initialize the model config manager
@@ -2101,6 +2101,16 @@ def main(
     version: Optional[bool] = typer.Option(
         None, "--version", "-v",
         help="Show version and exit",
+    ),
+    debug: bool = typer.Option(
+        False, "--debug",
+        help=f"Show on screen what the servers report (stderr and log notifications) as it arrives. Saved to {SERVER_LOG_DIR.replace(os.path.expanduser('~'), '~')}/ either way.",
+        rich_help_panel="MCP Server Logging",
+    ),
+    log_level: Optional[str] = typer.Option(
+        None, "--log-level", metavar="LEVEL",
+        help=f"Show on screen the log notifications of this level or higher (not stderr, that is --debug): {', '.join(MCP_LOG_LEVELS)}.",
+        rich_help_panel="MCP Server Logging",
     )
 ):
     """Run the MCP Client for Ollama with specified options."""
@@ -2112,12 +2122,18 @@ def main(
         typer.echo(f"ollmcp {__version__}")
         raise typer.Exit()
 
+    if log_level is not None:
+        log_level = log_level.lower()
+        if log_level not in MCP_LOG_LEVELS:
+            typer.echo(f"Error: --log-level must be one of {', '.join(MCP_LOG_LEVELS)} (got: {log_level})", err=True)
+            raise typer.Exit(code=1)
+
     # Run the async main function with proper cleanup
     # Use manual loop management to ensure subprocesses cleanup before loop closes
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host, provider, api_key))
+        loop.run_until_complete(async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host, provider, api_key, debug, log_level))
     finally:
         try:
             # Ensure executor cleanup completes before closing loop
@@ -2126,7 +2142,7 @@ def main(
         finally:
             loop.close()
 
-async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host, provider, api_key):
+async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host, provider, api_key, debug=False, log_level=None):
     """Asynchronous main function to run the MCP Client for Ollama"""
 
     console = Console()
@@ -2170,7 +2186,7 @@ async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, m
     resolved_model = model or profile.get("model") or DEFAULT_MODEL
 
     try:
-        client = MCPClient(model=resolved_model, host=resolved_host, provider=effective_provider, api_key=resolved_api_key, persist_api_key=persist_api_key)
+        client = MCPClient(model=resolved_model, host=resolved_host, provider=effective_provider, api_key=resolved_api_key, persist_api_key=persist_api_key, debug=debug, log_level=log_level)
     except MissingApiKeyError as e:
         console.print(Panel(
             f"[bold red]API key required:[/bold red] The [bold blue]{effective_provider}[/bold blue] provider needs an API key.\n\n"

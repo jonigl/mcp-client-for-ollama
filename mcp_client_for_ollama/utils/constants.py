@@ -13,6 +13,14 @@ if not os.path.exists(DEFAULT_CONFIG_DIR):
 
 DEFAULT_CONFIG_FILE = "config.json"
 
+# Log files of the MCP servers, one directory per ollmcp session
+SERVER_LOG_DIR = os.path.join(DEFAULT_CONFIG_DIR, "logs")
+# How many past sessions to keep there
+KEPT_LOG_SESSIONS = 5
+
+# Levels of the MCP logging channel, least to most severe (RFC 5424)
+MCP_LOG_LEVELS = ("debug", "info", "notice", "warning", "error", "critical", "alert", "emergency")
+
 # MCP server registry files managed by `ollmcp mcp add/list/remove`
 # User scope: global, available across all projects
 USER_MCP_FILE = os.path.join(DEFAULT_CONFIG_DIR, "mcp.json")
