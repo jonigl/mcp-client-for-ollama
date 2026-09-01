@@ -327,10 +327,22 @@ El ámbito `project` escribe un archivo `.mcp.json` estándar en la raíz de tu 
 
 #### Logs de los servidores MCP:
 
-Lo que reportan los servidores MCP siempre se escribe en `~/.config/ollmcp/logs/<sesión>/<servidor>.log`, un directorio por ejecución, conservando los últimos 5. Estas opciones solo deciden qué además se muestra en vivo en pantalla:
+Todo lo que reporta un servidor MCP se escribe en `~/.config/ollmcp/logs/<sesión>/<servidor>.log`, un directorio por ejecución, conservando los últimos 5. **Nada de lo que imprime un servidor llega a la pantalla salvo que lo pidas** — si no, dibujaría encima de la respuesta que se está transmitiendo.
 
-- `--debug`: Muestra la salida de los servidores a medida que llega: el stderr de los servidores stdio y sus notificaciones de log MCP.
-- `--log-level` NIVEL: Muestra las notificaciones de log MCP de ese nivel o superior (`debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`), y le pide a los servidores que solo envíen esas. No aplica al stderr; para eso usá `--debug`. Si lo pasás junto con `--debug`, gana este nivel.
+Los servidores reportan por dos canales: su **stderr** (solo los servidores stdio, porque uno remoto corre en otro lado) y las **notificaciones de log MCP** (cualquier servidor). **Las dos opciones solo cambian lo que ves en pantalla — el archivo recibe todo igual:**
+
+| | se escribe en el archivo | se muestra en pantalla |
+|---|---|---|
+| *(sin opciones)* | todo lo que manda el servidor | nada del servidor |
+| `--debug` | todo lo que manda el servidor | todo eso, a medida que llega |
+| `--log-level NIVEL` | todo lo que manda el servidor | solo las notificaciones de ese nivel o superior |
+| `--debug --log-level NIVEL` | todo lo que manda el servidor | stderr completo + notificaciones de ese nivel o superior |
+
+NIVEL es uno de `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`.
+
+Sin opciones no se pide ningún nivel: decide el servidor qué emite, y todo queda registrado. `--log-level` filtra lo que ves, y además se le envía al servidor (`logging/setLevel`) cuando este anuncia la capability de logging — ahí el servidor puede dejar de emitir los niveles más bajos, que entonces tampoco aparecen en el archivo. Los servidores sin esa capability siguen mandando todo y el filtrado ocurre acá.
+
+Cuando un servidor no logra conectarse, el error apunta a su archivo de log: lo que el servidor haya impreso antes de morir está ahí, y suele ser la razón real.
 
 ### Proveedores de inferencia soportados
 

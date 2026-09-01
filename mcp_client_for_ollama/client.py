@@ -2104,12 +2104,12 @@ def main(
     ),
     debug: bool = typer.Option(
         False, "--debug",
-        help=f"Show the servers' output live. Always saved to {SERVER_LOG_DIR.replace(os.path.expanduser('~'), '~')}/",
+        help=f"Show on screen what the servers report (stderr and log notifications) as it arrives. Saved to {SERVER_LOG_DIR.replace(os.path.expanduser('~'), '~')}/ either way.",
         rich_help_panel="MCP Server Logging",
     ),
     log_level: Optional[str] = typer.Option(
-        None, "--log-level",
-        help=f"Show log notifications of this level or higher: {', '.join(MCP_LOG_LEVELS)}.",
+        None, "--log-level", metavar="LEVEL",
+        help=f"Show on screen the log notifications of this level or higher (not stderr, that is --debug): {', '.join(MCP_LOG_LEVELS)}.",
         rich_help_panel="MCP Server Logging",
     )
 ):
