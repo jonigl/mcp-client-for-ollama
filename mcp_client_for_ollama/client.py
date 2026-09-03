@@ -70,6 +70,65 @@ class MCPClient:
         "multiline": "Multiline",
     }
 
+    @staticmethod
+    def _extract_tool_response(result, has_vision: bool = False):
+        """Build the text forwarded to the LLM from a tool CallToolResult.
+
+        Handles content items (text/image/audio/resource) and the
+        machine-oriented structuredContent payload, which agents need for
+        follow-up calls (issue #303). Returns (tool_response, tool_images).
+        """
+        text_parts = []
+        tool_images = []  # List of base64 strings
+
+        for content_item in result.content:
+
+            if hasattr(content_item, 'type') and content_item.type == "image":
+                base64_data = getattr(content_item, 'data', '')
+                mime_type = getattr(content_item, 'mime_type', 'unknown')
+                tool_images.append(base64_data)
+                if has_vision:
+                    text_parts.append(f"[Image: {mime_type}, {len(base64_data)} bytes]")
+                else:
+                    text_parts.append(f"[Image returned but not processed: {mime_type} - current model does not support vision]")
+            elif hasattr(content_item, 'type') and content_item.type == "audio":
+                mime_type = getattr(content_item, 'mime_type', 'unknown')
+                data = getattr(content_item, 'data', '')
+                text_parts.append(f"[Audio returned but not processed: {mime_type}, {len(data)} bytes - Ollama does not support audio input]")
+            elif hasattr(content_item, 'type') and content_item.type == "resource" and hasattr(content_item, 'resource'):
+                # TODO: Handle MCP resource content (type="resource") — extract text/blob from
+                #       content_item.resource and forward to LLM once resource support is implemented.
+                resource = content_item.resource
+                uri = getattr(resource, 'uri', 'unknown')
+                mime_type = getattr(resource, 'mime_type', 'unknown')
+                text_parts.append(f"[Resource returned but not processed: {uri} ({mime_type}) - resource support not yet implemented]")
+            elif hasattr(content_item, 'type') and content_item.type == "resource_link":
+                # TODO: Handle MCP resource links (type="resource_link") — fetch content via
+                #       resources/read using the URI once resource support is implemented.
+                uri = getattr(content_item, 'uri', 'unknown')
+                name = getattr(content_item, 'name', '')
+                mime_type = getattr(content_item, 'mime_type', 'unknown')
+                label = f" ({name})" if name else ""
+                text_parts.append(f"[Resource link returned but not fetched: {uri}{label} ({mime_type}) - resource support not yet implemented]")
+            elif hasattr(content_item, 'text'):
+                text_parts.append(str(content_item.text))
+            else:
+                text_parts.append(str(content_item))
+
+        # Forward structuredContent so agent workflows can use machine-readable
+        # tool results in subsequent calls (issue #303).
+        structured_content = getattr(result, "structured_content", None)
+        if structured_content is None:
+            structured_content = getattr(result, "structuredContent", None)
+        if structured_content is not None:
+            try:
+                text_parts.append("[Structured tool result]\n" + json.dumps(structured_content, indent=2, default=str))
+            except Exception:
+                text_parts.append("[Structured tool result]\n" + str(structured_content))
+
+        tool_response = "\n\n".join(text_parts) if text_parts else "Tool executed successfully (no text content returned)"
+        return tool_response, tool_images
+
     def __init__(self, model: str = DEFAULT_MODEL, host: str = DEFAULT_OLLAMA_HOST, provider: str = DEFAULT_PROVIDER, api_key: str = None, persist_api_key: bool = True, debug: bool = False, log_level: str = None):
         # Initialize session and client objects
         self.exit_stack = AsyncExitStack()
@@ -695,44 +754,7 @@ class MCPClient:
 
                 # Extract content from tool response - decoupled from display
                 # MCP responses can contain multiple content items (text, images, etc.)
-                text_parts = []
-                tool_images = []  # List of base64 strings
-
-                for content_item in result.content:
-                    if hasattr(content_item, 'type') and content_item.type == "image":
-                        base64_data = getattr(content_item, 'data', '')
-                        mime_type = getattr(content_item, 'mime_type', 'unknown')
-                        tool_images.append(base64_data)
-                        if has_vision:
-                            text_parts.append(f"[Image: {mime_type}, {len(base64_data)} bytes]")
-                        else:
-                            text_parts.append(f"[Image returned but not processed: {mime_type} - current model does not support vision]")
-                    elif hasattr(content_item, 'type') and content_item.type == "audio":
-                        mime_type = getattr(content_item, 'mime_type', 'unknown')
-                        data = getattr(content_item, 'data', '')
-                        text_parts.append(f"[Audio returned but not processed: {mime_type}, {len(data)} bytes - Ollama does not support audio input]")
-                    elif hasattr(content_item, 'type') and content_item.type == "resource" and hasattr(content_item, 'resource'):
-                        # TODO: Handle MCP resource content (type="resource") — extract text/blob from
-                        #       content_item.resource and forward to LLM once resource support is implemented.
-                        resource = content_item.resource
-                        uri = getattr(resource, 'uri', 'unknown')
-                        mime_type = getattr(resource, 'mime_type', 'unknown')
-                        text_parts.append(f"[Resource returned but not processed: {uri} ({mime_type}) - resource support not yet implemented]")
-                    elif hasattr(content_item, 'type') and content_item.type == "resource_link":
-                        # TODO: Handle MCP resource links (type="resource_link") — fetch content via
-                        #       resources/read using the URI once resource support is implemented.
-                        uri = getattr(content_item, 'uri', 'unknown')
-                        name = getattr(content_item, 'name', '')
-                        mime_type = getattr(content_item, 'mime_type', 'unknown')
-                        label = f" ({name})" if name else ""
-                        text_parts.append(f"[Resource link returned but not fetched: {uri}{label} ({mime_type}) - resource support not yet implemented]")
-                    elif hasattr(content_item, 'text'):
-                        text_parts.append(str(content_item.text))
-                    else:
-                        text_parts.append(str(content_item))
-
-                tool_response = "\n\n".join(text_parts) if text_parts else "Tool executed successfully (no text content returned)"
-
+                tool_response, tool_images = self._extract_tool_response(result, has_vision=has_vision)
                 # Display tool response (independent of content extraction)
                 self.tool_display_manager.display_tool_response(
                     tool_name, tool_args, tool_response,
