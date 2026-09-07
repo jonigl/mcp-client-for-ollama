@@ -33,6 +33,7 @@ from .config.manager import ConfigManager
 from .config.defaults import default_config, default_provider_profile
 from .utils.version import check_for_updates
 from .utils.constants import DEFAULT_CLAUDE_CONFIG, DEFAULT_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_PROVIDER, SUPPORTED_PROVIDERS, DEFAULT_COMPLETION_STYLE, DEFAULT_HISTORY_DISPLAY_LIMIT, MAX_COMPLETION_MENU_ROWS, OLLMCP_ASCII_ART, REASONING_EFFORT_LEVELS, DEFAULT_REASONING_EFFORT, SERVER_LOG_DIR, MCP_LOG_LEVELS
+from .utils.client_logs import start_client_log
 from .utils.connection import preflight_ollama, validate_provider
 from .utils.images import apply_images
 from .server.connector import ServerConnector
@@ -2145,6 +2146,7 @@ def main(
 async def async_main(mcp_server, mcp_server_url, servers_json, claude_desktop, model, host, provider, api_key, debug=False, log_level=None):
     """Asynchronous main function to run the MCP Client for Ollama"""
 
+    start_client_log()
     console = Console()
 
     # Resolve the provider and its saved connection profile before building the

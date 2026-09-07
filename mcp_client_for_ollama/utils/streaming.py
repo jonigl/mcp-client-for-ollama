@@ -6,6 +6,9 @@ Classes:
     LiveMarkdownRenderer: Line-by-line markdown renderer with a bounded live tail.
     StreamingManager: Handles streaming responses from Ollama.
 """
+import json
+import logging
+import os
 import shutil
 from io import StringIO
 from time import monotonic
@@ -13,9 +16,56 @@ from time import monotonic
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
+from rich.markup import escape
 from rich.text import Text
 
+from .client_logs import client_log_path
 from .metrics import display_metrics, extract_metrics
+
+logger = logging.getLogger(__name__)
+
+
+def _has_complete_arguments(buf) -> bool:
+    """Whether a tool call's buffered arguments arrived in full.
+
+    Arguments are streamed as a JSON string in pieces; one that no longer parses
+    is a call that was cut short. Empty means a tool taking no arguments, which
+    is complete.
+    """
+    if not buf["arguments"]:
+        return True
+    try:
+        json.loads(buf["arguments"])
+    except ValueError:
+        return False
+    return True
+
+
+def _flush_tool_call_buffers(tool_call_buffers, tool_calls):
+    """Move buffered tool call deltas into the completed tool_calls list.
+
+    Called both when a chunk carries finish_reason and once the stream is over,
+    so a tool call that arrived in full is never dropped just because the
+    provider closed the stream without a finish_reason (or the stream died
+    before sending one).
+    """
+    for idx, buf in sorted(tool_call_buffers.items()):
+        if not buf["name"]:
+            continue
+        if not _has_complete_arguments(buf):
+            # A stream that died mid-arguments leaves truncated JSON behind.
+            # There is no calling a tool with it, and passing it on only turns
+            # a partial answer into a crash further down.
+            logger.warning(
+                "Dropping tool call %s: incomplete arguments %r", buf["name"], buf["arguments"]
+            )
+            continue
+        tool_calls.append({
+            "id": buf["id"] or f"call_{idx}",
+            "type": "function",
+            "function": {"name": buf["name"], "arguments": buf["arguments"]},
+        })
+    tool_call_buffers.clear()
 
 
 class BlockMarkdownRenderer:
@@ -344,6 +394,7 @@ class StreamingManager:
         thinking_content = ""
         tool_calls = []
         metrics = None  # Store metrics from final chunk
+        stream_error = None  # Error that ended the stream early, if any
         render_mode = self._normalize_answer_render_mode(answer_render_mode)
         stream_plain_text = render_mode in {"plain", "both"}
         render_markdown = render_mode in {"markdown", "both"}
@@ -369,9 +420,13 @@ class StreamingManager:
                     except StopAsyncIteration:
                         break
                     except Exception as e:
-                        import logging
-                        logging.getLogger(__name__).debug("Skipping unparseable stream chunk: %s", e)
-                        continue
+                        # The stream is over: a provider's async generator is
+                        # closed once it raises, so there is no next chunk to
+                        # skip to. Keep whatever arrived and say what happened,
+                        # instead of returning an empty response in silence.
+                        stream_error = e
+                        logger.warning("Stream chunk failed: %s", e, exc_info=True)
+                        break
 
                     # Check for cancellation
                     if cancellation_check and cancellation_check():
@@ -453,18 +508,30 @@ class StreamingManager:
 
                     # On finish, emit completed tool calls
                     if getattr(choice, "finish_reason", None) and tool_call_buffers:
-                        for idx, buf in sorted(tool_call_buffers.items()):
-                            tool_calls.append({
-                                "id": buf["id"] or f"call_{idx}",
-                                "type": "function",
-                                "function": {"name": buf["name"], "arguments": buf["arguments"]},
-                            })
-                        tool_call_buffers.clear()
+                        _flush_tool_call_buffers(tool_call_buffers, tool_calls)
 
             finally:
+                # The stream may have ended without a finish_reason (or died
+                # mid-flight); don't lose tool calls that already arrived.
+                _flush_tool_call_buffers(tool_call_buffers, tool_calls)
                 if progressive_renderer is not None:
                     progressive_renderer.finish()
                 status.stop()
+
+            if stream_error is not None:
+                # The message comes from the provider's library and often has
+                # brackets in it (pydantic's are full of them). Left unescaped,
+                # rich either eats the tail as markup or raises out of here.
+                detail = escape(f"{type(stream_error).__name__}: {stream_error}")
+                log_path = client_log_path()
+                where = (
+                    f" Details in {log_path.replace(os.path.expanduser('~'), '~')}"
+                    if log_path else ""
+                )
+                self.console.print(
+                    f"\n[yellow]⚠ The response stream ended early: {detail}[/yellow]\n"
+                    f"[dim]Showing whatever arrived before that.{where}[/dim]"
+                )
 
             # Print newline at end. Thinking (and plain answer text) is streamed
             # with end="", leaving the cursor mid-line. Close that dangling line
@@ -489,9 +556,9 @@ class StreamingManager:
                 except StopAsyncIteration:
                     break
                 except Exception as e:
-                    import logging
-                    logging.getLogger(__name__).debug("Skipping unparseable stream chunk: %s", e)
-                    continue
+                    stream_error = e
+                    logger.warning("Stream chunk failed: %s", e, exc_info=True)
+                    break
 
                 # Check for cancellation
                 if cancellation_check and cancellation_check():
@@ -533,13 +600,9 @@ class StreamingManager:
                                 buf["arguments"] += tc.function.arguments
 
                 if getattr(choice, "finish_reason", None) and tool_call_buffers:
-                    for idx, buf in sorted(tool_call_buffers.items()):
-                        tool_calls.append({
-                            "id": buf["id"] or f"call_{idx}",
-                            "type": "function",
-                            "function": {"name": buf["name"], "arguments": buf["arguments"]},
-                        })
-                    tool_call_buffers.clear()
+                    _flush_tool_call_buffers(tool_call_buffers, tool_calls)
+
+            _flush_tool_call_buffers(tool_call_buffers, tool_calls)
 
         # Display metrics if requested
         if show_metrics and metrics:
