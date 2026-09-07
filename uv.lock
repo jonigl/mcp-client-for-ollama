@@ -4,8 +4,8 @@ requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.14' and sys_platform != 'win32'",
-    "python_full_version < '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten'",
+    "python_full_version < '3.14' and sys_platform == 'win32'",
     "(python_full_version < '3.12' and sys_platform == 'emscripten') or (python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32')",
 ]
 
@@ -48,7 +48,7 @@ wheels = [
 
 [[package]]
 name = "any-llm-sdk"
-version = "1.26.0"
+version = "1.27.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anthropic" },
@@ -59,9 +59,9 @@ dependencies = [
     { name = "rich" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f8/23/abf2deede89c7293467e1a62565c3b4b6a3272785ca6c4d3e784e03ea255/any_llm_sdk-1.26.0.tar.gz", hash = "sha256:a2458bce7601e7761ed067ffa784473a83f610fb011862baf3e9eea1cf84cd35", size = 199609, upload-time = "2026-08-17T10:13:41.608Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/65/81/736798361148759c1350237757545f3b0be36bad2dd5a04ffab94709abfb/any_llm_sdk-1.27.0.tar.gz", hash = "sha256:9e18f1c270c2f0a125b209e5f975c5396d81f838f87bc9d98da240397d56e3ed", size = 210469, upload-time = "2026-09-03T14:27:58.963Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/07/6d/1b3eff49eb77851ac525e62d48b305364de87a72e697cdb156325a03479f/any_llm_sdk-1.26.0-py3-none-any.whl", hash = "sha256:b65c5521c79ee974b39d837863532d41f024b768336e797817b2c310a33c73d6", size = 254205, upload-time = "2026-08-17T10:13:40.224Z" },
+    { url = "https://files.pythonhosted.org/packages/6a/81/a1c6d1e7bfe0192948d08b6edd6a17bb1ca732d24a8b3862dee94a969a0e/any_llm_sdk-1.27.0-py3-none-any.whl", hash = "sha256:3e670d7c61874cf72ce7fef211ee31115aa7480d2114cda3235a46e3c9ade383", size = 265044, upload-time = "2026-09-03T14:27:57.545Z" },
 ]
 
 [package.optional-dependencies]
@@ -557,7 +557,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "any-llm-sdk", extras = ["ollama", "openai", "atlascloud"], specifier = "~=1.26.0" },
+    { name = "any-llm-sdk", extras = ["ollama", "openai", "atlascloud"], specifier = ">=1.26,<1.28" },
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "mcp", specifier = "~=2.1.1" },
     { name = "prompt-toolkit", specifier = "~=3.0.53" },
