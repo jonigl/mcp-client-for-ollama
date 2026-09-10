@@ -624,16 +624,21 @@ class MCPClient:
         # Check vision capability once for the entire query
         has_vision = await self.supports_vision()
 
-        # Initial LLM API call with the query and available tools
-        stream = await self.llm.acompletion(
-            model=model,
-            messages=apply_images(messages),
-            stream=True,
-            stream_options={"include_usage": True},
-            tools=available_tools or None,
-            **self._reasoning_effort_kwargs(supports_thinking),
-            **self.model_config_manager.get_completion_kwargs(self.provider),
-        )
+        # Initial LLM API call with the query and available tools.
+        # The spinner in the streaming manager only starts once the response
+        # headers are in, so without one here the terminal sits blank for the
+        # whole request. Locally that is imperceptible; against a cloud provider
+        # it is seconds, and a request that never comes back looks like a freeze.
+        with self.console.status(f"[cyan]waiting for {self.provider}..."):
+            stream = await self.llm.acompletion(
+                model=model,
+                messages=apply_images(messages),
+                stream=True,
+                stream_options={"include_usage": True},
+                tools=available_tools or None,
+                **self._reasoning_effort_kwargs(supports_thinking),
+                **self.model_config_manager.get_completion_kwargs(self.provider),
+            )
 
         # Process the streaming response with thinking mode support
         response_text = ""
@@ -793,15 +798,16 @@ class MCPClient:
 
 
             # Get stream response from LLM with the tool results
-            stream = await self.llm.acompletion(
-                model=model,
-                messages=apply_images(messages),
-                stream=True,
-                stream_options={"include_usage": True},
-                tools=available_tools or None,
-                **self._reasoning_effort_kwargs(supports_thinking),
-                **self.model_config_manager.get_completion_kwargs(self.provider),
-            )
+            with self.console.status(f"[cyan]waiting for {self.provider}..."):
+                stream = await self.llm.acompletion(
+                    model=model,
+                    messages=apply_images(messages),
+                    stream=True,
+                    stream_options={"include_usage": True},
+                    tools=available_tools or None,
+                    **self._reasoning_effort_kwargs(supports_thinking),
+                    **self.model_config_manager.get_completion_kwargs(self.provider),
+                )
 
             # Process the streaming response with thinking mode support
             followup_response, pending_tool_calls, followup_metrics = await self.streaming_manager.process_streaming_response(
@@ -1555,15 +1561,16 @@ class MCPClient:
             ),
         })
 
-        stream = await self.llm.acompletion(
-            model=model,
-            messages=apply_images(messages),
-            stream=True,
-            stream_options={"include_usage": True},
-            tools=None,
-            **self._reasoning_effort_kwargs(supports_thinking),
-            **self.model_config_manager.get_completion_kwargs(self.provider),
-        )
+        with self.console.status(f"[cyan]waiting for {self.provider}..."):
+            stream = await self.llm.acompletion(
+                model=model,
+                messages=apply_images(messages),
+                stream=True,
+                stream_options={"include_usage": True},
+                tools=None,
+                **self._reasoning_effort_kwargs(supports_thinking),
+                **self.model_config_manager.get_completion_kwargs(self.provider),
+            )
 
         wrap_text, _, wrap_metrics = await self.streaming_manager.process_streaming_response(
             stream,
