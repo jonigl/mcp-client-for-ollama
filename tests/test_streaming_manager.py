@@ -39,6 +39,7 @@ class DummyChunk:
 
     choices: list
     usage: object = None
+    error: object = None
 
 
 async def _stream_chunks(*chunks):
@@ -429,6 +430,85 @@ class TestStreamingManager(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(tool_calls, [])
+
+    async def test_error_reported_inside_a_chunk_ends_the_stream(self):
+        # A provider that fails after the stream opened reports it as a chunk
+        # carrying an error and an empty choices list, then keeps the
+        # connection alive. Skipping it leaves the client reading a stream that
+        # will never produce anything, with nothing on screen to explain why.
+        consumed_past_error = False
+
+        async def erroring_stream():
+            nonlocal consumed_past_error
+            yield DummyChunk(choices=[DummyChoice(DummyDelta(content="partial "))])
+            yield DummyChunk(
+                choices=[DummyChoice(DummyDelta(content=""), finish_reason="error")],
+                error={"code": 400, "message": "invalid tool name"},
+            )
+            consumed_past_error = True
+            yield DummyChunk(choices=[DummyChoice(DummyDelta(content="never arrives"))])
+
+        manager = StreamingManager(self.console)
+
+        with patch("mcp_client_for_ollama.utils.streaming.Markdown", side_effect=lambda text: f"MD::{text}"), patch(
+            "mcp_client_for_ollama.utils.streaming.extract_metrics",
+            return_value=None,
+        ):
+            response_text, _, _ = await manager.process_streaming_response(
+                erroring_stream(),
+                answer_render_mode="plain",
+            )
+
+        printed = " ".join(str(call.args[0]) for call in self.console.print.call_args_list if call.args)
+
+        self.assertFalse(consumed_past_error)
+        self.assertEqual(response_text, "partial ")
+        self.assertIn("ended early", printed)
+        self.assertIn("invalid tool name", printed)
+
+    async def test_stream_left_early_is_closed(self):
+        # Leaving the loop on a provider error abandons a stream that is still
+        # open, holding its HTTP connection until the garbage collector runs.
+        async def erroring_stream():
+            yield DummyChunk(choices=[DummyChoice(DummyDelta(content="partial "))])
+            yield DummyChunk(
+                choices=[DummyChoice(DummyDelta(content=""), finish_reason="error")],
+                error={"message": "invalid tool name"},
+            )
+            yield DummyChunk(choices=[DummyChoice(DummyDelta(content="never arrives"))])
+
+        stream = erroring_stream()
+        manager = StreamingManager(self.console)
+
+        with patch("mcp_client_for_ollama.utils.streaming.Markdown", side_effect=lambda text: f"MD::{text}"), patch(
+            "mcp_client_for_ollama.utils.streaming.extract_metrics",
+            return_value=None,
+        ):
+            await manager.process_streaming_response(stream, answer_render_mode="plain")
+
+        # A closed async generator refuses to resume.
+        with self.assertRaises(StopAsyncIteration):
+            await stream.__anext__()
+
+    async def test_error_reported_inside_a_chunk_is_silent_when_not_printing(self):
+        async def erroring_stream():
+            yield DummyChunk(choices=[DummyChoice(DummyDelta(content="partial "))])
+            yield DummyChunk(
+                choices=[DummyChoice(DummyDelta(content=""), finish_reason="error")],
+                error={"code": 400, "message": "invalid tool name"},
+            )
+            yield DummyChunk(choices=[DummyChoice(DummyDelta(content="never arrives"))])
+
+        manager = StreamingManager(self.console)
+
+        with patch("mcp_client_for_ollama.utils.streaming.extract_metrics", return_value=None):
+            response_text, _, _ = await manager.process_streaming_response(
+                erroring_stream(),
+                print_response=False,
+            )
+
+        self.assertEqual(response_text, "partial ")
+        self.console.print.assert_not_called()
 
 
 class TestBlockMarkdownRendererHelpers(unittest.TestCase):

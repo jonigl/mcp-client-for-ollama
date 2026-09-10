@@ -25,6 +25,34 @@ from .metrics import display_metrics, extract_metrics
 logger = logging.getLogger(__name__)
 
 
+class StreamProviderError(Exception):
+    """An error the provider reported inside the stream instead of raising it."""
+
+
+def _provider_error_message(error) -> str:
+    """A readable one-liner for an error a provider reported inside the stream."""
+    message = error.get("message") if isinstance(error, dict) else getattr(error, "message", None)
+    return str(message or error)
+
+
+async def _close_stream(stream):
+    """Release a stream we stopped reading before it ended.
+
+    Leaving the loop on an error the provider reported inside a chunk, or on an
+    abort, leaves its async generator suspended and the HTTP connection with it
+    until the garbage collector gets there. A generator that already raised is
+    closed and ignores this.
+    """
+    aclose = getattr(stream, "aclose", None)
+    if aclose is None:
+        return
+    try:
+        await aclose()
+    except Exception:
+        # Closing is cleanup: it must not replace whatever we are reporting.
+        logger.debug("Closing the response stream failed", exc_info=True)
+
+
 def _has_complete_arguments(buf) -> bool:
     """Whether a tool call's buffered arguments arrived in full.
 
@@ -438,6 +466,18 @@ class StreamingManager:
                     if extracted_metrics:
                         metrics = extracted_metrics
 
+                    # A provider that fails once the stream is open reports it
+                    # as a chunk carrying an error rather than by dropping the
+                    # connection, and it may keep the connection alive
+                    # afterwards. Since such a chunk has no choices, skipping it
+                    # leaves us reading a stream that will never produce
+                    # anything, with nothing on screen to explain the wait.
+                    chunk_error = getattr(chunk, "error", None)
+                    if chunk_error:
+                        stream_error = StreamProviderError(_provider_error_message(chunk_error))
+                        logger.warning("Provider reported an error in the stream: %r", chunk_error)
+                        break
+
                     if not getattr(chunk, "choices", None):
                         continue
 
@@ -514,6 +554,7 @@ class StreamingManager:
                 # The stream may have ended without a finish_reason (or died
                 # mid-flight); don't lose tool calls that already arrived.
                 _flush_tool_call_buffers(tool_call_buffers, tool_calls)
+                await _close_stream(stream)
                 if progressive_renderer is not None:
                     progressive_renderer.finish()
                 status.stop()
@@ -568,6 +609,12 @@ class StreamingManager:
                 if extracted_metrics:
                     metrics = extracted_metrics
 
+                chunk_error = getattr(chunk, "error", None)
+                if chunk_error:
+                    stream_error = StreamProviderError(_provider_error_message(chunk_error))
+                    logger.warning("Provider reported an error in the stream: %r", chunk_error)
+                    break
+
                 if not getattr(chunk, "choices", None):
                     continue
 
@@ -603,6 +650,7 @@ class StreamingManager:
                     _flush_tool_call_buffers(tool_call_buffers, tool_calls)
 
             _flush_tool_call_buffers(tool_call_buffers, tool_calls)
+            await _close_stream(stream)
 
         # Display metrics if requested
         if show_metrics and metrics:
