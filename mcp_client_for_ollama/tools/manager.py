@@ -4,6 +4,7 @@ This module handles enabling, disabling, and selecting tools from MCP servers.
 """
 
 import json
+import re
 from typing import Dict, List, Optional, Tuple, Callable
 from mcp import Tool
 from rich.console import Console
@@ -12,6 +13,53 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.text import Text
 from rich.syntax import Syntax
+
+_INVALID_WIRE_CHARS = re.compile(r"[^a-zA-Z0-9_-]")
+
+
+def wire_name(qualified_name: str) -> str:
+    """The qualified tool name in the shape a provider accepts as a function name.
+
+    OpenAI documents "a-z, A-Z, 0-9, or ... underscores and dashes" and
+    Anthropic documents ^[a-zA-Z0-9_-]{1,128}$, so the dot in "<server>.<tool>"
+    makes the request invalid. Ollama does not validate the name, which is why
+    this only ever surfaced against cloud providers.
+
+    Names longer than OpenAI's 64 character limit are left alone: they are
+    rejected today with or without this, and no MCP server has run into it yet.
+    """
+    return _INVALID_WIRE_CHARS.sub("_", qualified_name)
+
+
+def build_tool_payload(tools: List[Tool]) -> Tuple[List[Dict], Dict[str, str]]:
+    """Tool definitions for the LLM, plus the map back to qualified names.
+
+    Both come from one pass so the payload and the map cannot drift apart. Two
+    qualified names can sanitize to the same string, and dispatching the wrong
+    one would run a tool the user never approved, so a collision takes the first
+    free suffix. The suffixed name is a name like any other, so it has to be
+    checked against the ones already taken too.
+    """
+    payload = []
+    wire_to_qualified = {}
+    for tool in tools:
+        name = wire_name(tool.name)
+        if name in wire_to_qualified:
+            suffix = 2
+            while f"{name}_{suffix}" in wire_to_qualified:
+                suffix += 1
+            name = f"{name}_{suffix}"
+        wire_to_qualified[name] = tool.name
+        payload.append({
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": tool.description,
+                "parameters": tool.input_schema
+            }
+        })
+    return payload, wire_to_qualified
+
 
 class ToolManager:
     """Manages MCP tools.

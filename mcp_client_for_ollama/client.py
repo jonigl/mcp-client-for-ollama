@@ -41,7 +41,7 @@ from .server import registry
 from .server.cli_commands import mcp_app
 from .models.manager import ModelManager
 from .models.config_manager import ModelConfigManager
-from .tools.manager import ToolManager
+from .tools.manager import ToolManager, build_tool_payload
 from .prompts.manager import PromptManager
 from .prompts.handler import PromptHandler
 from .prompts.commands import run_slash_command
@@ -611,14 +611,9 @@ class MCPClient:
         if not enabled_tool_objects:
             self.console.print("[yellow]Warning: No tools are enabled. Model will respond without tool access.[/yellow]")
 
-        available_tools = [{
-            "type": "function",
-            "function": {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.input_schema
-            }
-        } for tool in enabled_tool_objects]
+        # Providers reject the dot in a qualified "<server>.<tool>" name, so the
+        # payload carries a sanitized one and we map it back before dispatching.
+        available_tools, wire_to_qualified = build_tool_payload(enabled_tool_objects)
 
         # Get current model from the model manager
         model = self.model_manager.get_current_model()
@@ -699,7 +694,9 @@ class MCPClient:
             loop_count += 1
 
             for tool in pending_tool_calls:
-                tool_name = tool["function"]["name"]
+                # Back to the qualified name everything below (and the user) knows.
+                # A model that echoes the qualified name anyway still resolves.
+                tool_name = wire_to_qualified.get(tool["function"]["name"], tool["function"]["name"])
                 tool_call_id = tool["id"]
                 tool_args = json.loads(tool["function"]["arguments"]) if tool["function"]["arguments"] else {}
 
