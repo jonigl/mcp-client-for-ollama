@@ -488,6 +488,73 @@ class MCPClient:
             if len(self.chat_history) > max_history:
                 self.console.print(f"[dim](Showing last {max_history} of {len(self.chat_history)} conversations)[/dim]")
 
+    def _extract_tool_response(self, result, has_vision: bool = False):
+        """Build the text forwarded to the LLM from a tool CallToolResult.
+
+        Returns (tool_response, tool_images).
+        """
+        text_parts = []
+        tool_images = []  # List of base64 strings
+        # Whether the server sent any text block of its own. The placeholders we
+        # write for images, audio and resources are ours, not the server's.
+        has_server_text = False
+
+        for content_item in result.content:
+            if hasattr(content_item, 'type') and content_item.type == "image":
+                base64_data = getattr(content_item, 'data', '')
+                mime_type = getattr(content_item, 'mime_type', 'unknown')
+                tool_images.append(base64_data)
+                if has_vision:
+                    text_parts.append(f"[Image: {mime_type}, {len(base64_data)} bytes]")
+                else:
+                    text_parts.append(f"[Image returned but not processed: {mime_type} - current model does not support vision]")
+            elif hasattr(content_item, 'type') and content_item.type == "audio":
+                mime_type = getattr(content_item, 'mime_type', 'unknown')
+                data = getattr(content_item, 'data', '')
+                text_parts.append(f"[Audio returned but not processed: {mime_type}, {len(data)} bytes - Ollama does not support audio input]")
+            elif hasattr(content_item, 'type') and content_item.type == "resource" and hasattr(content_item, 'resource'):
+                # TODO: Handle MCP resource content (type="resource") — extract text/blob from
+                #       content_item.resource and forward to LLM once resource support is implemented.
+                resource = content_item.resource
+                uri = getattr(resource, 'uri', 'unknown')
+                mime_type = getattr(resource, 'mime_type', 'unknown')
+                text_parts.append(f"[Resource returned but not processed: {uri} ({mime_type}) - resource support not yet implemented]")
+            elif hasattr(content_item, 'type') and content_item.type == "resource_link":
+                # TODO: Handle MCP resource links (type="resource_link") — fetch content via
+                #       resources/read using the URI once resource support is implemented.
+                uri = getattr(content_item, 'uri', 'unknown')
+                name = getattr(content_item, 'name', '')
+                mime_type = getattr(content_item, 'mime_type', 'unknown')
+                label = f" ({name})" if name else ""
+                text_parts.append(f"[Resource link returned but not fetched: {uri}{label} ({mime_type}) - resource support not yet implemented]")
+            elif hasattr(content_item, 'text'):
+                has_server_text = True
+                text_parts.append(str(content_item.text))
+            else:
+                has_server_text = True
+                text_parts.append(str(content_item))
+
+        # A tool that returns structured content SHOULD also serialize it into a
+        # text block, but the spec asks for that only "for backwards
+        # compatibility" -- a SHOULD, so a conforming server may answer with
+        # structuredContent and no text at all, and the whole result would then
+        # reach the model as "no text content returned" (issue #303). So the
+        # payload is forwarded exactly when the server sent no text of its own.
+        # When it did, that text is what the model gets: both fields carry the
+        # same information by construction -- each SDK builds them from one
+        # return value -- and SEP-1624 is explicit that a client SHOULD NOT
+        # forward both:
+        # https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1624
+        # Serialized compactly (this copy is ours, and indentation buys the
+        # model nothing) and with ensure_ascii=False, since escaping non-ASCII
+        # to \uXXXX inflates the payload and small local models echo the escapes
+        # back verbatim.
+        if not has_server_text and result.structured_content is not None:
+            text_parts.append(json.dumps(result.structured_content, separators=(",", ":"), ensure_ascii=False, default=str))
+
+        tool_response = "\n\n".join(text_parts) if text_parts else "Tool executed successfully (no text content returned)"
+        return tool_response, tool_images
+
     async def process_query(self, query: str, images=None) -> str:
         """Process a query using Ollama and available tools"""
         if not self.model_manager.get_current_model():
@@ -695,43 +762,8 @@ class MCPClient:
 
                 # Extract content from tool response - decoupled from display
                 # MCP responses can contain multiple content items (text, images, etc.)
-                text_parts = []
-                tool_images = []  # List of base64 strings
+                tool_response, tool_images = self._extract_tool_response(result, has_vision=has_vision)
 
-                for content_item in result.content:
-                    if hasattr(content_item, 'type') and content_item.type == "image":
-                        base64_data = getattr(content_item, 'data', '')
-                        mime_type = getattr(content_item, 'mime_type', 'unknown')
-                        tool_images.append(base64_data)
-                        if has_vision:
-                            text_parts.append(f"[Image: {mime_type}, {len(base64_data)} bytes]")
-                        else:
-                            text_parts.append(f"[Image returned but not processed: {mime_type} - current model does not support vision]")
-                    elif hasattr(content_item, 'type') and content_item.type == "audio":
-                        mime_type = getattr(content_item, 'mime_type', 'unknown')
-                        data = getattr(content_item, 'data', '')
-                        text_parts.append(f"[Audio returned but not processed: {mime_type}, {len(data)} bytes - Ollama does not support audio input]")
-                    elif hasattr(content_item, 'type') and content_item.type == "resource" and hasattr(content_item, 'resource'):
-                        # TODO: Handle MCP resource content (type="resource") — extract text/blob from
-                        #       content_item.resource and forward to LLM once resource support is implemented.
-                        resource = content_item.resource
-                        uri = getattr(resource, 'uri', 'unknown')
-                        mime_type = getattr(resource, 'mime_type', 'unknown')
-                        text_parts.append(f"[Resource returned but not processed: {uri} ({mime_type}) - resource support not yet implemented]")
-                    elif hasattr(content_item, 'type') and content_item.type == "resource_link":
-                        # TODO: Handle MCP resource links (type="resource_link") — fetch content via
-                        #       resources/read using the URI once resource support is implemented.
-                        uri = getattr(content_item, 'uri', 'unknown')
-                        name = getattr(content_item, 'name', '')
-                        mime_type = getattr(content_item, 'mime_type', 'unknown')
-                        label = f" ({name})" if name else ""
-                        text_parts.append(f"[Resource link returned but not fetched: {uri}{label} ({mime_type}) - resource support not yet implemented]")
-                    elif hasattr(content_item, 'text'):
-                        text_parts.append(str(content_item.text))
-                    else:
-                        text_parts.append(str(content_item))
-
-                tool_response = "\n\n".join(text_parts) if text_parts else "Tool executed successfully (no text content returned)"
 
                 # Display tool response (independent of content extraction)
                 self.tool_display_manager.display_tool_response(
