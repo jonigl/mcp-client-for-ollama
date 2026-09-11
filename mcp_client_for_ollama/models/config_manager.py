@@ -224,7 +224,11 @@ class ModelConfigManager:
             Dict containing only the configured options as keyword arguments
         """
         if provider == "ollama":
-            return self.get_ollama_options()
+            options = self.get_ollama_options()
+            # any-llm defaults a missing num_ctx to 32000; pass None so Ollama keeps its default.
+            if "num_ctx" not in options:
+                options["num_ctx"] = None
+            return options
 
         # Standard OpenAI-compatible options only
         kwargs: Dict[str, Any] = {}
