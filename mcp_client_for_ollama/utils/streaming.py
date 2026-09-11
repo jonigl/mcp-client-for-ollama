@@ -428,92 +428,105 @@ class StreamingManager:
         render_markdown = render_mode in {"markdown", "both"}
         progressive_renderer = None
 
+        # One loop for both modes: everything that renders is gated on
+        # print_response, so the silent path cannot drift away from the live
+        # one again. As two copies it already had: an abort returned straight
+        # out of it, leaking the open stream and dropping tool calls that had
+        # already arrived. Silent still means silent, though: a stream that
+        # ends early is logged there, never printed.
+        thinking_started = False
+        # Show initial working spinner until first chunk arrives
+        first_chunk = True
+        # Buffer for incremental tool call deltas
+        tool_call_buffers = {}
+        aborted = False
+        status = None
+
         if print_response:
-            # Thinking header flag
-            thinking_started = False
-            # Show initial working spinner until first chunk arrives
-            first_chunk = True
             self.console.print("\n[bold bright_magenta](New!)[/bold bright_magenta] [yellow]You can press 'a' to abort generation.[/yellow]\n")
             status = self.console.status("[cyan]working...", spinner="dots")
             status.start()
 
-            # Buffer for incremental tool call deltas
-            tool_call_buffers = {}
+        try:
+            stream_iter = stream.__aiter__()
+            while True:
+                try:
+                    chunk = await stream_iter.__anext__()
+                except StopAsyncIteration:
+                    break
+                except Exception as e:
+                    # The stream is over: a provider's async generator is
+                    # closed once it raises, so there is no next chunk to
+                    # skip to. Keep whatever arrived and say what happened,
+                    # instead of returning an empty response in silence.
+                    stream_error = e
+                    logger.warning("Stream chunk failed: %s", e, exc_info=True)
+                    break
 
-            try:
-                stream_iter = stream.__aiter__()
-                while True:
-                    try:
-                        chunk = await stream_iter.__anext__()
-                    except StopAsyncIteration:
-                        break
-                    except Exception as e:
-                        # The stream is over: a provider's async generator is
-                        # closed once it raises, so there is no next chunk to
-                        # skip to. Keep whatever arrived and say what happened,
-                        # instead of returning an empty response in silence.
-                        stream_error = e
-                        logger.warning("Stream chunk failed: %s", e, exc_info=True)
-                        break
-
-                    # Check for cancellation
-                    if cancellation_check and cancellation_check():
+                # Check for cancellation
+                if cancellation_check and cancellation_check():
+                    aborted = True
+                    if print_response:
                         self.console.print("\n[yellow]Generation aborted by user.[/yellow]")
-                        return accumulated_text, tool_calls, metrics
+                    break
 
-                    # Capture metrics when chunk carries usage data
-                    extracted_metrics = extract_metrics(chunk)
-                    if extracted_metrics:
-                        metrics = extracted_metrics
+                # Capture metrics when chunk carries usage data
+                extracted_metrics = extract_metrics(chunk)
+                if extracted_metrics:
+                    metrics = extracted_metrics
 
-                    # A provider that fails once the stream is open reports it
-                    # as a chunk carrying an error rather than by dropping the
-                    # connection, and it may keep the connection alive
-                    # afterwards. Since such a chunk has no choices, skipping it
-                    # leaves us reading a stream that will never produce
-                    # anything, with nothing on screen to explain the wait.
-                    chunk_error = getattr(chunk, "error", None)
-                    if chunk_error:
-                        stream_error = StreamProviderError(_provider_error_message(chunk_error))
-                        logger.warning("Provider reported an error in the stream: %r", chunk_error)
-                        break
+                # A provider that fails once the stream is open reports it
+                # as a chunk carrying an error rather than by dropping the
+                # connection, and it may keep the connection alive
+                # afterwards. Since such a chunk has no choices, skipping it
+                # leaves us reading a stream that will never produce
+                # anything, with nothing on screen to explain the wait.
+                chunk_error = getattr(chunk, "error", None)
+                if chunk_error:
+                    stream_error = StreamProviderError(_provider_error_message(chunk_error))
+                    logger.warning("Provider reported an error in the stream: %r", chunk_error)
+                    break
 
-                    if not getattr(chunk, "choices", None):
-                        continue
+                if not getattr(chunk, "choices", None):
+                    continue
 
-                    choice = chunk.choices[0]
-                    delta = choice.delta
+                choice = chunk.choices[0]
+                delta = choice.delta
 
-                    # Handle thinking content
-                    thinking = None
-                    reasoning = getattr(delta, "reasoning", None)
-                    if reasoning is not None:
-                        thinking = reasoning.content if hasattr(reasoning, "content") else (reasoning if isinstance(reasoning, str) else None)
+                # Handle thinking content
+                thinking = None
+                reasoning = getattr(delta, "reasoning", None)
+                if reasoning is not None:
+                    thinking = reasoning.content if hasattr(reasoning, "content") else (reasoning if isinstance(reasoning, str) else None)
 
-                    if thinking_mode and thinking:
-                        if first_chunk and show_thinking:
-                            status.stop()
-                            first_chunk = False
-                        if not thinking_content:
-                            thinking_content = "🤔 **Thinking:**\n\n"
-                            if not thinking_started and show_thinking:
-                                self.console.print(Markdown("🤔 **Thinking:**\n"))
-                                self.console.print(Markdown("---"))
-                                self.console.print()
-                                thinking_started = True
-                        thinking_content += thinking
-                        if show_thinking:
-                            self.console.print(thinking, end="")
+                if thinking_mode and thinking:
+                    if print_response and first_chunk and show_thinking:
+                        status.stop()
+                        first_chunk = False
+                    if print_response and not thinking_content:
+                        # The header doubles as the first piece of the
+                        # transcript, so it only belongs to the rendered one.
+                        thinking_content = "🤔 **Thinking:**\n\n"
+                        if not thinking_started and show_thinking:
+                            self.console.print(Markdown("🤔 **Thinking:**\n"))
+                            self.console.print(Markdown("---"))
+                            self.console.print()
+                            thinking_started = True
+                    thinking_content += thinking
+                    if print_response and show_thinking:
+                        self.console.print(thinking, end="")
 
-                    # Handle regular content
-                    content = getattr(delta, "content", None) or ""
-                    if content:
+                # Handle regular content
+                content = getattr(delta, "content", None) or ""
+                if content:
+                    if print_response:
                         if first_chunk:
                             status.stop()
                             first_chunk = False
                         if not accumulated_text and stream_plain_text:
                             self._print_answer_transition_header(show_thinking, "plain")
-                        accumulated_text += content
+                    accumulated_text += content
+                    if print_response:
                         if stream_plain_text:
                             self.console.print(content, end="")
                         elif render_mode in {"markdown", "blocks"}:
@@ -527,38 +540,45 @@ class StreamingManager:
                                 progressive_renderer.start()
                             progressive_renderer.update(content)
 
-                    # Buffer incremental tool call deltas
-                    delta_tool_calls = getattr(delta, "tool_calls", None)
-                    if delta_tool_calls:
-                        if first_chunk:
-                            status.stop()
-                            first_chunk = False
-                        for tc in delta_tool_calls:
-                            idx = tc.index if hasattr(tc, "index") else 0
-                            if idx not in tool_call_buffers:
-                                tool_call_buffers[idx] = {"id": "", "name": "", "arguments": ""}
-                            buf = tool_call_buffers[idx]
-                            if getattr(tc, "id", None):
-                                buf["id"] = tc.id
-                            if hasattr(tc, "function") and tc.function:
-                                if getattr(tc.function, "name", None):
-                                    buf["name"] += tc.function.name
-                                if getattr(tc.function, "arguments", None):
-                                    buf["arguments"] += tc.function.arguments
+                # Buffer incremental tool call deltas
+                delta_tool_calls = getattr(delta, "tool_calls", None)
+                if delta_tool_calls:
+                    if print_response and first_chunk:
+                        status.stop()
+                        first_chunk = False
+                    for tc in delta_tool_calls:
+                        idx = tc.index if hasattr(tc, "index") else 0
+                        if idx not in tool_call_buffers:
+                            tool_call_buffers[idx] = {"id": "", "name": "", "arguments": ""}
+                        buf = tool_call_buffers[idx]
+                        if getattr(tc, "id", None):
+                            buf["id"] = tc.id
+                        if hasattr(tc, "function") and tc.function:
+                            if getattr(tc.function, "name", None):
+                                buf["name"] += tc.function.name
+                            if getattr(tc.function, "arguments", None):
+                                buf["arguments"] += tc.function.arguments
 
-                    # On finish, emit completed tool calls
-                    if getattr(choice, "finish_reason", None) and tool_call_buffers:
-                        _flush_tool_call_buffers(tool_call_buffers, tool_calls)
+                # On finish, emit completed tool calls
+                if getattr(choice, "finish_reason", None) and tool_call_buffers:
+                    _flush_tool_call_buffers(tool_call_buffers, tool_calls)
 
-            finally:
-                # The stream may have ended without a finish_reason (or died
-                # mid-flight); don't lose tool calls that already arrived.
-                _flush_tool_call_buffers(tool_call_buffers, tool_calls)
-                await _close_stream(stream)
-                if progressive_renderer is not None:
-                    progressive_renderer.finish()
+        finally:
+            # The stream may have ended without a finish_reason (or died
+            # mid-flight); don't lose tool calls that already arrived.
+            _flush_tool_call_buffers(tool_call_buffers, tool_calls)
+            await _close_stream(stream)
+            if progressive_renderer is not None:
+                progressive_renderer.finish()
+            if status is not None:
                 status.stop()
 
+        if aborted:
+            # Nothing left to render, and metrics for a run the user cut short
+            # would be misleading.
+            return accumulated_text, tool_calls, metrics
+
+        if print_response:
             if stream_error is not None:
                 # The message comes from the provider's library and often has
                 # brackets in it (pydantic's are full of them). Left unescaped,
@@ -586,71 +606,6 @@ class StreamingManager:
             # Render final markdown content properly (for "both" mode where progressive_renderer wasn't used)
             if accumulated_text and render_markdown and progressive_renderer is None:
                 self._render_final_markdown_answer(accumulated_text)
-
-        else:
-            # Silent processing without display
-            tool_call_buffers = {}
-            stream_iter = stream.__aiter__()
-            while True:
-                try:
-                    chunk = await stream_iter.__anext__()
-                except StopAsyncIteration:
-                    break
-                except Exception as e:
-                    stream_error = e
-                    logger.warning("Stream chunk failed: %s", e, exc_info=True)
-                    break
-
-                # Check for cancellation
-                if cancellation_check and cancellation_check():
-                    return accumulated_text, tool_calls, metrics
-
-                extracted_metrics = extract_metrics(chunk)
-                if extracted_metrics:
-                    metrics = extracted_metrics
-
-                chunk_error = getattr(chunk, "error", None)
-                if chunk_error:
-                    stream_error = StreamProviderError(_provider_error_message(chunk_error))
-                    logger.warning("Provider reported an error in the stream: %r", chunk_error)
-                    break
-
-                if not getattr(chunk, "choices", None):
-                    continue
-
-                choice = chunk.choices[0]
-                delta = choice.delta
-
-                reasoning = getattr(delta, "reasoning", None)
-                if thinking_mode and reasoning is not None:
-                    thinking = reasoning.content if hasattr(reasoning, "content") else (reasoning if isinstance(reasoning, str) else None)
-                    if thinking:
-                        thinking_content += thinking
-
-                content = getattr(delta, "content", None) or ""
-                if content:
-                    accumulated_text += content
-
-                delta_tool_calls = getattr(delta, "tool_calls", None)
-                if delta_tool_calls:
-                    for tc in delta_tool_calls:
-                        idx = tc.index if hasattr(tc, "index") else 0
-                        if idx not in tool_call_buffers:
-                            tool_call_buffers[idx] = {"id": "", "name": "", "arguments": ""}
-                        buf = tool_call_buffers[idx]
-                        if getattr(tc, "id", None):
-                            buf["id"] = tc.id
-                        if hasattr(tc, "function") and tc.function:
-                            if getattr(tc.function, "name", None):
-                                buf["name"] += tc.function.name
-                            if getattr(tc.function, "arguments", None):
-                                buf["arguments"] += tc.function.arguments
-
-                if getattr(choice, "finish_reason", None) and tool_call_buffers:
-                    _flush_tool_call_buffers(tool_call_buffers, tool_calls)
-
-            _flush_tool_call_buffers(tool_call_buffers, tool_calls)
-            await _close_stream(stream)
 
         # Display metrics if requested
         if show_metrics and metrics:
