@@ -287,6 +287,80 @@ class TestStreamingManager(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls[-1].args, ())
         self.assertEqual(calls[-1].kwargs, {})
 
+    async def test_whitespace_only_reasoning_prints_no_thinking_header(self):
+        # A provider that only ever sends whitespace in its reasoning deltas
+        # used to get the "Thinking:" header rendered above an empty body.
+        manager = StreamingManager(self.console)
+
+        with patch("mcp_client_for_ollama.utils.streaming.Markdown", side_effect=lambda text: f"MD::{text}"), patch(
+            "mcp_client_for_ollama.utils.streaming.extract_metrics",
+            return_value=None,
+        ):
+            response_text, _, _ = await manager.process_streaming_response(
+                _stream_chunks(
+                    DummyChunk(choices=[DummyChoice(DummyDelta(reasoning=" "))]),
+                    DummyChunk(choices=[DummyChoice(DummyDelta(reasoning="\n"))]),
+                    DummyChunk(choices=[DummyChoice(DummyDelta(content="answer"))]),
+                ),
+                thinking_mode=True,
+                show_thinking=True,
+                answer_render_mode="plain",
+            )
+
+        printed = [call.args[0] for call in self.console.print.call_args_list if call.args]
+        self.assertEqual(response_text, "answer")
+        self.assertFalse(any("\U0001f914" in str(item) for item in printed))
+
+    async def test_leading_whitespace_reasoning_flushes_with_first_visible_text(self):
+        # The whitespace held back before the first visible delta must not
+        # reappear as a gap under the header, but spacing between words does.
+        manager = StreamingManager(self.console)
+
+        with patch("mcp_client_for_ollama.utils.streaming.Markdown", side_effect=lambda text: f"MD::{text}"), patch(
+            "mcp_client_for_ollama.utils.streaming.extract_metrics",
+            return_value=None,
+        ):
+            await manager.process_streaming_response(
+                _stream_chunks(
+                    DummyChunk(choices=[DummyChoice(DummyDelta(reasoning="\n\n"))]),
+                    DummyChunk(choices=[DummyChoice(DummyDelta(reasoning="plan"))]),
+                    DummyChunk(choices=[DummyChoice(DummyDelta(reasoning=" "))]),
+                    DummyChunk(choices=[DummyChoice(DummyDelta(reasoning="ning"))]),
+                ),
+                thinking_mode=True,
+                show_thinking=True,
+                answer_render_mode="plain",
+            )
+
+        streamed = [
+            call.args[0] for call in self.console.print.call_args_list
+            if call.args and call.kwargs.get("end") == ""
+        ]
+        self.assertEqual(streamed, ["plan", " ning"])
+
+    async def test_bracketed_reasoning_is_escaped_before_printing(self):
+        # Rich would parse "[dim]" as markup and print nothing for it, and a
+        # raw ESC from the provider could spoof the terminal.
+        manager = StreamingManager(self.console)
+
+        with patch("mcp_client_for_ollama.utils.streaming.Markdown", side_effect=lambda text: f"MD::{text}"), patch(
+            "mcp_client_for_ollama.utils.streaming.extract_metrics",
+            return_value=None,
+        ):
+            await manager.process_streaming_response(
+                _stream_chunks(
+                    DummyChunk(choices=[DummyChoice(DummyDelta(reasoning="\x1b[2Jstep [dim]one"))]),
+                ),
+                thinking_mode=True,
+                show_thinking=True,
+                answer_render_mode="plain",
+            )
+
+        streamed = [
+            call.args[0] for call in self.console.print.call_args_list
+            if call.args and call.kwargs.get("end") == ""
+        ]
+        self.assertEqual(streamed, ["[2Jstep \\[dim]one"])
 
     async def test_tool_call_survives_stream_ending_without_finish_reason(self):
         # Some providers close the stream without ever sending a finish_reason.

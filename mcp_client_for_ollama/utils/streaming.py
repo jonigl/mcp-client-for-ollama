@@ -21,6 +21,7 @@ from rich.text import Text
 
 from .client_logs import client_log_path
 from .metrics import display_metrics, extract_metrics
+from .sanitize import strip_control_chars
 
 logger = logging.getLogger(__name__)
 
@@ -435,6 +436,8 @@ class StreamingManager:
         # already arrived. Silent still means silent, though: a stream that
         # ends early is logged there, never printed.
         thinking_started = False
+        # Reasoning deltas held back until one carries non-whitespace text
+        pending_thinking = ""
         # Show initial working spinner until first chunk arrives
         first_chunk = True
         # Buffer for incremental tool call deltas
@@ -500,21 +503,37 @@ class StreamingManager:
                     thinking = reasoning.content if hasattr(reasoning, "content") else (reasoning if isinstance(reasoning, str) else None)
 
                 if thinking_mode and thinking:
-                    if print_response and first_chunk and show_thinking:
-                        status.stop()
-                        first_chunk = False
-                    if print_response and not thinking_content:
-                        # The header doubles as the first piece of the
-                        # transcript, so it only belongs to the rendered one.
-                        thinking_content = "🤔 **Thinking:**\n\n"
-                        if not thinking_started and show_thinking:
-                            self.console.print(Markdown("🤔 **Thinking:**\n"))
-                            self.console.print(Markdown("---"))
-                            self.console.print()
-                            thinking_started = True
-                    thinking_content += thinking
-                    if print_response and show_thinking:
-                        self.console.print(thinking, end="")
+                    # A reasoning delta can carry nothing but whitespace (some
+                    # OpenAI-compatible providers open the stream that way).
+                    # Emitting on those printed the header with an empty body,
+                    # so they are held back until one carries something
+                    # visible, then flushed together to keep the spacing
+                    # between words intact.
+                    pending_thinking += thinking
+                    if pending_thinking.strip():
+                        if print_response and first_chunk and show_thinking:
+                            status.stop()
+                            first_chunk = False
+                        if print_response and not thinking_content:
+                            # Whitespace ahead of the first visible text would
+                            # render as a gap under the header.
+                            pending_thinking = pending_thinking.lstrip()
+                            # The header doubles as the first piece of the
+                            # transcript, so it only belongs to the rendered one.
+                            thinking_content = "🤔 **Thinking:**\n\n"
+                            if not thinking_started and show_thinking:
+                                self.console.print(Markdown("🤔 **Thinking:**\n"))
+                                self.console.print(Markdown("---"))
+                                self.console.print()
+                                thinking_started = True
+                        thinking_content += pending_thinking
+                        if print_response and show_thinking:
+                            # Reasoning text comes from the provider: left as
+                            # is, rich eats anything bracketed as markup (which
+                            # can empty the body on its own) and a raw ESC
+                            # could spoof the terminal.
+                            self.console.print(escape(strip_control_chars(pending_thinking)), end="")
+                        pending_thinking = ""
 
                 # Handle regular content
                 content = getattr(delta, "content", None) or ""
