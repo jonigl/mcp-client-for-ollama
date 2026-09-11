@@ -539,7 +539,7 @@ wheels = [
 
 [[package]]
 name = "mcp-client-for-ollama"
-version = "0.34.0"
+version = "0.35.0"
 source = { editable = "." }
 dependencies = [
     { name = "any-llm-sdk", extra = ["ollama"] },
