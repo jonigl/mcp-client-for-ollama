@@ -13,6 +13,7 @@ class TestClientInputRouting(unittest.TestCase):
         self.assertEqual(resolve_slash_command("mc"), "model-config")
         self.assertEqual(resolve_slash_command("ste"), "show-tool-execution")
         self.assertEqual(resolve_slash_command("im"), "input-mode")
+        self.assertEqual(resolve_slash_command("new"), "clear")
 
     def test_resolve_interactive_command_unknown(self):
         self.assertIsNone(resolve_slash_command("not-a-command"))
