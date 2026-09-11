@@ -49,10 +49,11 @@ class TestFZFStyleCompleter(unittest.TestCase):
         meta_texts = [text for _, text in clear.display_meta]
         self.assertTrue(any("/cc" in text for text in meta_texts))
 
-    def test_alias_commands_show_canonical_shortcut(self):
+    def test_alt_name_commands_show_canonical_shortcut(self):
         completions = self._complete("/exit")
-        exit_cmd = next(c for c in completions if c.text == "exit")
-        meta_texts = [text for _, text in exit_cmd.display_meta]
+        quit_cmd = next(c for c in completions if c.text == "quit")
+        self.assertEqual(quit_cmd.display[0][1], "/quit, /exit, /bye")
+        meta_texts = [text for _, text in quit_cmd.display_meta]
         self.assertTrue(any("/q" in text for text in meta_texts))
 
     def test_alt_name_completes_to_its_command(self):

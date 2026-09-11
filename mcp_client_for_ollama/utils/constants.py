@@ -83,12 +83,10 @@ OLLMCP_ASCII_ART = r"""
 
 # Interactive commands and their descriptions for autocomplete
 INTERACTIVE_COMMANDS = {
-    'bye': 'Exit the application',
     'clear-screen': 'Clear terminal screen',
     'clear': 'Clear conversation context',
     'context-info': 'Show context information',
     'context': 'Toggle context retention',
-    'exit': 'Exit the application',
     'export-history': 'Export chat history to JSON',
     'full-history': 'View full conversation history',
     'help': 'Show help information',
@@ -118,6 +116,7 @@ INTERACTIVE_COMMANDS = {
 # listed next to the canonical name (e.g. '/clear, /new').
 COMMAND_ALT_NAMES = {
     'clear': ['new'],
+    'quit': ['exit', 'bye'],
 }
 
 # Default completion menu style (used by prompt_toolkit in interactive mode)
