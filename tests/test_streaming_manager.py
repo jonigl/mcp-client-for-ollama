@@ -510,6 +510,66 @@ class TestStreamingManager(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response_text, "partial ")
         self.console.print.assert_not_called()
 
+    async def test_aborted_stream_is_closed_when_not_printing(self):
+        # Aborting used to return straight out of the silent path, leaving the
+        # stream open with its HTTP connection until the collector got there.
+        async def endless_stream():
+            while True:
+                yield DummyChunk(choices=[DummyChoice(DummyDelta(content="chunk "))])
+
+        stream = endless_stream()
+        manager = StreamingManager(self.console)
+        seen = 0
+
+        def cancelled():
+            nonlocal seen
+            seen += 1
+            return seen > 1
+
+        with patch("mcp_client_for_ollama.utils.streaming.extract_metrics", return_value=None):
+            response_text, _, _ = await manager.process_streaming_response(
+                stream,
+                print_response=False,
+                cancellation_check=cancelled,
+            )
+
+        self.assertEqual(response_text, "chunk ")
+        self.console.print.assert_not_called()
+        # A closed async generator refuses to resume.
+        with self.assertRaises(StopAsyncIteration):
+            await stream.__anext__()
+
+    async def test_aborted_stream_keeps_tool_calls_already_received(self):
+        # The abort leaves the loop before any finish_reason, so a tool call
+        # that arrived in full has to be flushed on the way out.
+        tool_call = SimpleNamespace(
+            index=0, id="call_1",
+            function=SimpleNamespace(name="time.get_current_time", arguments="{}"),
+        )
+
+        async def endless_stream():
+            yield DummyChunk(choices=[DummyChoice(DummyDelta(tool_calls=[tool_call]))])
+            while True:
+                yield DummyChunk(choices=[DummyChoice(DummyDelta(content="chunk "))])
+
+        manager = StreamingManager(self.console)
+        seen = 0
+
+        def cancelled():
+            nonlocal seen
+            seen += 1
+            return seen > 1
+
+        with patch("mcp_client_for_ollama.utils.streaming.extract_metrics", return_value=None):
+            _, tool_calls, _ = await manager.process_streaming_response(
+                endless_stream(),
+                print_response=False,
+                cancellation_check=cancelled,
+            )
+
+        self.assertEqual(len(tool_calls), 1)
+        self.assertEqual(tool_calls[0]["function"]["name"], "time.get_current_time")
+
 
 class TestBlockMarkdownRendererHelpers(unittest.TestCase):
     """Validate helper methods of the append-only block renderer."""
