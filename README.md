@@ -340,6 +340,9 @@ With no flag, no level is requested at all: the server decides what it emits and
 
 When a server fails to connect, the error points at its log file: whatever the server printed on its way out is in there, and that is usually the real reason.
 
+> [!NOTE]
+> What ollmcp itself reports goes to `~/.config/ollmcp/logs/<session>/ollmcp.log`, next to the server files. It is written on every run, no `--debug` needed, and it is the file the on-screen warning points at when a response stream ends early. Work in progress: for now it records mostly provider and streaming errors, and more will be logged there over time.
+
 ### Supported Inference Providers
 
 > [!WARNING]

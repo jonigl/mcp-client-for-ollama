@@ -344,6 +344,9 @@ LEVEL 为 `debug`、`info`、`notice`、`warning`、`error`、`critical`、`aler
 
 当服务器连接失败时，错误信息会指向它的日志文件：服务器退出前打印的内容都在里面，那通常才是真正的原因。
 
+> [!NOTE]
+> ollmcp 自身报告的内容写入 `~/.config/ollmcp/logs/<session>/ollmcp.log`，与服务器的日志文件放在同一目录。它每次运行都会写入，不需要 `--debug`；屏幕上提示响应流提前结束时，指向的就是这个文件。目前仍在完善中（work in progress）：现在主要记录提供商和流式输出的错误，以后会记录更多内容。
+
 ### 支持的推理提供商
 
 > [!WARNING]
