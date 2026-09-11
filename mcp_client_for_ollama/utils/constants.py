@@ -99,6 +99,7 @@ INTERACTIVE_COMMANDS = {
     'model-config': 'Configure model parameters',
     'reasoning-effort': 'Set reasoning effort level',
     'model': 'Select Ollama model',
+    'new': 'Start a new chat (clear conversation context)',
     'input-mode': 'Switch chat input between single-line and multiline',
     'prompts': 'Browse available MCP prompts',
     'resources': 'Browse available MCP resources',

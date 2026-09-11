@@ -55,6 +55,12 @@ class TestFZFStyleCompleter(unittest.TestCase):
         meta_texts = [text for _, text in exit_cmd.display_meta]
         self.assertTrue(any("/q" in text for text in meta_texts))
 
+    def test_new_alias_is_discoverable_and_shows_clear_shortcut(self):
+        completions = self._complete("/new")
+        new_cmd = next(c for c in completions if c.text == "new")
+        meta_texts = [text for _, text in new_cmd.display_meta]
+        self.assertTrue(any("/cc" in text for text in meta_texts))
+
     def test_uses_tmux_badge_white_text(self):
         with patch.dict("os.environ", {"TMUX": "1"}, clear=False):
             completions = self._complete("/he")

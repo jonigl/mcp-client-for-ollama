@@ -36,6 +36,7 @@ SLASH_COMMAND_ALIASES = {
     "im": "input-mode",
     "clear": "clear",
     "cc": "clear",
+    "new": "clear",
     "context-info": "context-info",
     "ci": "context-info",
     "clear-screen": "clear-screen",

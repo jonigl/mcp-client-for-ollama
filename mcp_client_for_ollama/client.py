@@ -1187,7 +1187,7 @@ class MCPClient:
 
             "[bold cyan]Context:[/bold cyan]\n"
             "• Type [bold]/context[/bold] or [bold]/c[/bold] to toggle context retention\n"
-            "• Type [bold]/clear[/bold] or [bold]/cc[/bold] to clear conversation context\n"
+            "• Type [bold]/clear[/bold], [bold]/cc[/bold] or [bold]/new[/bold] to clear conversation context\n"
             "• Type [bold]/context-info[/bold] or [bold]/ci[/bold] to display context info\n\n"
 
             "[bold cyan]History:[/bold cyan] \n"
@@ -1223,7 +1223,7 @@ class MCPClient:
             "• Type [bold]/server:prompt_name[/bold] to invoke an MCP server prompt\n"
             "• [bold bright_magenta](New!)[/bold bright_magenta] Type [bold]@resource_uri[/bold] to read a resource or [bold]@[/bold] for autocomplete suggestions\n"
             "• Type [bold]/input-mode[/bold] or [bold]/im[/bold] to switch single-line or multiline chat input\n"
-            "• Type [bold]/clear[/bold] or [bold]/cc[/bold] to clear conversation context\n"
+            "• Type [bold]/clear[/bold], [bold]/cc[/bold] or [bold]/new[/bold] to clear conversation context\n"
             "• Type [bold]/help[/bold] or [bold]/h[/bold] to see the [underline]full command list[/underline]\n"
             "• Type [bold]/quit[/bold] or [bold]/q[/bold] to exit the client\n",
             title="[bold]Startup Help[/bold]", border_style="yellow", expand=False))
