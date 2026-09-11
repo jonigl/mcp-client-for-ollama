@@ -99,7 +99,6 @@ INTERACTIVE_COMMANDS = {
     'model-config': 'Configure model parameters',
     'reasoning-effort': 'Set reasoning effort level',
     'model': 'Select Ollama model',
-    'new': 'Start a new chat (clear conversation context)',
     'input-mode': 'Switch chat input between single-line and multiline',
     'prompts': 'Browse available MCP prompts',
     'resources': 'Browse available MCP resources',
@@ -113,6 +112,12 @@ INTERACTIVE_COMMANDS = {
     'show-tool-execution': 'Toggle tool execution display',
     'thinking-mode': 'Toggle thinking mode',
     'tools': 'Configure available tools'
+}
+
+# Extra names that run the same command. They are matched by autocomplete and
+# listed next to the canonical name (e.g. '/clear, /new').
+COMMAND_ALT_NAMES = {
+    'clear': ['new'],
 }
 
 # Default completion menu style (used by prompt_toolkit in interactive mode)

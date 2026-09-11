@@ -543,7 +543,7 @@ During chat, use these commands:
 | Command          | Shortcut         | Description                                         |
 |------------------|------------------|-----------------------------------------------------|
 | `abort`          | `a`              | While model is generating, abort the current response generation |
-| `/clear`         | `/cc`, `/new`    | Clear conversation history and context              |
+| `/clear`, `/new` | `/cc`            | Clear conversation history and context              |
 | `/cls`           | `/clear-screen`  | Clear the terminal screen                           |
 | `/context`       | `/c`             | Toggle context retention                            |
 | `/context-info`  | `/ci`            | Display context statistics                          |

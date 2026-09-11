@@ -3,7 +3,7 @@ import shutil
 from prompt_toolkit.completion import Completer, Completion, FuzzyCompleter, WordCompleter
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import FormattedText
-from .constants import INTERACTIVE_COMMANDS
+from .constants import COMMAND_ALT_NAMES, INTERACTIVE_COMMANDS
 from ..prompts.routing import SLASH_COMMAND_ALIASES
 
 
@@ -20,6 +20,10 @@ def _build_command_shortcuts() -> dict:
 
 
 COMMAND_SHORTCUTS = _build_command_shortcuts()
+# Alternate name -> the command it completes to (e.g. new -> clear)
+ALT_NAME_COMMANDS = {
+    alt: command for command, alts in COMMAND_ALT_NAMES.items() for alt in alts
+}
 # Column width for the shortcut segment: '/' + longest alias
 _SHORTCUT_COL_WIDTH = max((len(s) for s in COMMAND_SHORTCUTS.values()), default=0) + 2
 
@@ -30,7 +34,7 @@ class FZFStyleCompleter(Completer):
     def __init__(self):
         # Wrap command names with FuzzyCompleter for slash command completion.
         self.command_completer = FuzzyCompleter(WordCompleter(
-            list(INTERACTIVE_COMMANDS.keys()),
+            list(INTERACTIVE_COMMANDS.keys()) + list(ALT_NAME_COMMANDS.keys()),
             ignore_case=True
         ))
         self.prompts = []  # List of prompt info dicts
@@ -235,16 +239,23 @@ class FZFStyleCompleter(Completer):
             Completion objects for matching commands
         """
         query_document = Document(text=prompt_query, cursor_position=len(prompt_query))
+        seen = set()
         for completion in self.command_completer.get_completions(query_document, complete_event):
-            cmd = completion.text
+            # Alternate names complete to the command they belong to, listed once.
+            cmd = ALT_NAME_COMMANDS.get(completion.text, completion.text)
+            if cmd in seen:
+                continue
+            seen.add(cmd)
+
             description = INTERACTIVE_COMMANDS.get(cmd, "")
             canonical = SLASH_COMMAND_ALIASES.get(cmd, cmd)
             shortcut = COMMAND_SHORTCUTS.get(canonical, "")
+            names = ", ".join(f"/{name}" for name in [cmd] + COMMAND_ALT_NAMES.get(cmd, []))
 
             yield Completion(
                 cmd,
                 start_position=completion.start_position,
-                display=f"/{cmd}",
+                display=names,
                 display_meta=self._build_action_meta("command", description, shortcut=shortcut)
             )
 

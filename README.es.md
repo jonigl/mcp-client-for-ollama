@@ -547,7 +547,7 @@ Durante el chat, usa estos comandos:
 | Comando          | Atajo            | Descripción                                         |
 |------------------|------------------|-----------------------------------------------------|
 | `abort`          | `a`              | Mientras el modelo genera, aborta la generación de la respuesta actual |
-| `/clear`         | `/cc`, `/new`    | Limpiar el historial de conversación y el contexto  |
+| `/clear`, `/new` | `/cc`            | Limpiar el historial de conversación y el contexto  |
 | `/cls`           | `/clear-screen`  | Limpiar la pantalla del terminal                    |
 | `/context`       | `/c`             | Alternar la retención de contexto                   |
 | `/context-info`  | `/ci`            | Mostrar estadísticas del contexto                   |
