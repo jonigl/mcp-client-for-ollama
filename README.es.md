@@ -344,6 +344,9 @@ Sin opciones no se pide ningún nivel: decide el servidor qué emite, y todo que
 
 Cuando un servidor no logra conectarse, el error apunta a su archivo de log: lo que el servidor haya impreso antes de morir está ahí, y suele ser la razón real.
 
+> [!NOTE]
+> Lo que reporta el propio ollmcp va a `~/.config/ollmcp/logs/<sesión>/ollmcp.log`, junto a los archivos de los servidores. Se escribe en cada ejecución, sin necesidad de `--debug`, y es el archivo al que apunta el aviso en pantalla cuando una respuesta se corta antes de terminar. Work in progress: por ahora registra sobre todo errores del proveedor y del streaming, y con el tiempo se irá loggeando más.
+
 ### Proveedores de inferencia soportados
 
 > [!WARNING]
