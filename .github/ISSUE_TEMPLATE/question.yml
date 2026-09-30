@@ -1,0 +1,23 @@
+name: Question
+description: Ask how to use ollmcp
+title: "[Question]: "
+labels: ["question", "pending to review"]
+body:
+  - type: markdown
+    value: |
+      Please check the [README](https://github.com/jonigl/mcp-client-for-ollama#readme) and the existing issues first.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: The ollmcp version (`ollmcp --version`) and what you already tried.
+    validations:
+      required: true
