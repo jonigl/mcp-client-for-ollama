@@ -1,0 +1,24 @@
+name: Feature request
+description: Suggest a new feature or an improvement to an existing one
+title: "[Feature]: "
+labels: ["enhancement", "pending to review"]
+body:
+  - type: markdown
+    value: |
+      Please search the existing issues first, and keep one request per issue.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that is not possible today, or what feels awkward about how it works now?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you would like to happen instead. Optional, but helpful.
+    validations:
+      required: false
