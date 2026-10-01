@@ -4,10 +4,11 @@ title: "[Bug]: "
 labels: ["bug", "pending to review"]
 body:
   - type: markdown
-    value: |
-      Please search the existing issues first — this may already be reported.
+    attributes:
+      value: |
+        Please search the existing issues first, in case this was already reported.
 
-      Do **not** report security vulnerabilities here, see [SECURITY.md](https://github.com/jonigl/mcp-client-for-ollama/blob/main/SECURITY.md).
+        Do **not** report security vulnerabilities here, see [SECURITY.md](https://github.com/jonigl/mcp-client-for-ollama/blob/main/SECURITY.md).
 
   - type: textarea
     id: what-happened
@@ -34,9 +35,9 @@ body:
     attributes:
       label: Environment
       description: |
-        - ollmcp version — `ollmcp --version`
-        - Python version — `python3 --version`
-        - Provider — `ollama`, `openai`, `atlascloud`, `openrouter`, ...
+        - ollmcp version: `ollmcp --version`
+        - Python version: `python3 --version`
+        - Provider: `ollama`, `openai`, `atlascloud`, `openrouter`, ...
         - MCP server(s) involved, and their version if relevant
         - Operating system
     validations:

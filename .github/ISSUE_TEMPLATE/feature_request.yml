@@ -4,8 +4,9 @@ title: "[Feature]: "
 labels: ["enhancement", "pending to review"]
 body:
   - type: markdown
-    value: |
-      Please search the existing issues first, and keep one request per issue.
+    attributes:
+      value: |
+        Please search the existing issues first, and keep one request per issue.
 
   - type: textarea
     id: problem

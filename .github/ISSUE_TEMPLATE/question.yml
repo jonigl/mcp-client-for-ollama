@@ -4,8 +4,9 @@ title: "[Question]: "
 labels: ["question", "pending to review"]
 body:
   - type: markdown
-    value: |
-      Please check the [README](https://github.com/jonigl/mcp-client-for-ollama#readme) and the existing issues first.
+    attributes:
+      value: |
+        Please check the [README](https://github.com/jonigl/mcp-client-for-ollama#readme) and the existing issues first.
 
   - type: textarea
     id: question
