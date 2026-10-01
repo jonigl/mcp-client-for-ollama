@@ -1,5 +1,1 @@
 blank_issues_enabled: false
-contact_links:
-  - name: Report a security vulnerability
-    url: https://github.com/jonigl/mcp-client-for-ollama/security/advisories/new
-    about: Report security issues privately instead. See SECURITY.md for details.
