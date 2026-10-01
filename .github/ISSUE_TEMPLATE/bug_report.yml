@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in ollmcp is not working as expected
+title: "[Bug]: "
+labels: ["bug", "pending to review"]
+body:
+  - type: markdown
+    value: |
+      Please search the existing issues first — this may already be reported.
+
+      Do **not** report security vulnerabilities here, see [SECURITY.md](https://github.com/jonigl/mcp-client-for-ollama/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What went wrong, and the exact steps to reproduce it.
+      placeholder: |
+        1. Run `ollmcp` with the server below
+        2. Send the prompt: ...
+        3. See the error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        - ollmcp version — `ollmcp --version`
+        - Python version — `python3 --version`
+        - Provider — `ollama`, `openai`, `atlascloud`, `openrouter`, ...
+        - MCP server(s) involved, and their version if relevant
+        - Operating system
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Relevant output, ideally from `~/.config/ollmcp/logs/<session>/`. Redact API keys and any sensitive data.
+      render: shell
+    validations:
+      required: false
