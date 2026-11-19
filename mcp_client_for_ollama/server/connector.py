@@ -245,14 +245,16 @@ class ServerConnector:
 
                     headers = self._get_headers_from_server(server)
 
-                    # streamable_http_client takes no transport-level options: headers,
-                    # timeouts and redirects are configured on the httpx2 client instead.
-                    # The values mirror the ones the SDK applies to a client of its own.
+                    # streamable_http_client takes no transport-level options: headers
+                    # and timeouts are configured on the httpx2 client instead. The
+                    # values mirror the ones the SDK applies to a client of its own.
+                    # Redirects are not ours to configure: since mcp 2.2 the SDK ignores
+                    # follow_redirects on this client and follows a redirect only within
+                    # the endpoint's origin; any other one fails the request.
                     http_client = await local_stack.enter_async_context(
                         httpx2.AsyncClient(
                             headers=headers,
                             timeout=httpx2.Timeout(30, read=300),
-                            follow_redirects=True,
                         )
                     )
                     transport = await local_stack.enter_async_context(
