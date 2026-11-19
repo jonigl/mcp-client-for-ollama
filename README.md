@@ -255,11 +255,13 @@ ollmcp mcp add --help
 
 ```bash
 ollmcp mcp add --transport http github https://api.githubcopilot.com/mcp/ --header "Authorization: Bearer $YOUR_GITHUB_PAT"
+ollmcp mcp add --transport http parallel-search https://search.parallel.ai/mcp
 ollmcp mcp add --transport stdio playwright npx @playwright/mcp@latest
 ollmcp mcp add filesystem -- npx -y @modelcontextprotocol/server-filesystem /allowed-dir1 ~/allowed-dir2 # stdio transport by default
 ollmcp mcp add --env API_KEY=YOUR_KEY --transport sse my-sse-server http://localhost:8000/sse
 ```
 
+Parallel Search does not require an API key. When enabled, selected search queries and requested URLs are sent to Parallel.
 
 ### mcp add options
 
