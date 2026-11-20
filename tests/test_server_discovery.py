@@ -3,6 +3,26 @@
 from mcp_client_for_ollama.server.discovery import process_server_urls, parse_server_config_mapping, deduplicate_servers
 
 
+def test_process_server_urls_sse_detection_uses_path_only():
+    """Only a URL whose path ends in /sse is SSE; "sse" inside a host or word is not."""
+    sse_urls = [
+        "http://localhost:8000/sse",
+        "http://localhost:8000/sse/",
+        "https://host.example.com/api/SSE",
+    ]
+    for url in sse_urls:
+        assert process_server_urls(url)[0]["type"] == "sse", url
+
+    http_urls = [
+        "https://assessment.example.com/mcp",
+        "https://example.com/classes/mcp",
+        "https://example.com/assessments",
+        "https://sse.example.com/mcp",
+    ]
+    for url in http_urls:
+        assert process_server_urls(url)[0]["type"] == "streamable_http", url
+
+
 def test_process_server_urls():
     """Test that server URL processing works correctly."""
     # Test single URL string

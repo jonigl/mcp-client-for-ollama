@@ -74,7 +74,7 @@ def process_server_urls(server_urls) -> List[Dict[str, Any]]:
 
         # Determine server type based on URL patterns
         server_type = "streamable_http"  # Default to streamable_http
-        if "sse" in url.lower() or "/sse" in parsed.path.lower():
+        if parsed.path.rstrip("/").lower().endswith("/sse"):
             server_type = "sse"
 
         # Create server entry with clean hostname-based name
